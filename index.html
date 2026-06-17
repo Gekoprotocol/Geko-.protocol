@@ -1,0 +1,182 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0B0E11">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="Geko Protocols: The world's leading Institutional Digital Asset Terminal. Secure, real-time trading with Exodus, Binance, and MetaMask integration. Join the elite protocol for digital asset management.">
+    <meta name="keywords" content="crypto trading, exodus wallet app, binance connect, institutional trading, geko protocols terminal, real transactions, blockchain trading protocol, bitcoin, ethereum, solana">
+    <meta name="author" content="Geko Protocols">
+    <meta name="publisher" content="Geko Protocols">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Geko Protocols">
+    <meta property="og:url" content="https://geko-protocols.replit.app/">
+    <meta property="og:title" content="Geko Protocols | Institutional Digital Asset Terminal">
+    <meta property="og:description" content="Institutional-grade digital asset terminal for real-time Mainnet trading. Join the elite protocol today.">
+    <meta property="og:image" content="https://geko-protocols.replit.app/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@GekoProtocols">
+    <meta name="twitter:title" content="Geko Protocols | Institutional Digital Asset Terminal">
+    <meta name="twitter:description" content="Real-time blockchain terminal for professional traders.">
+    <link rel="canonical" href="https://geko-protocols.replit.app/">
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+    <title>Geko Protocols | Institutional Digital Asset Terminal</title>
+    
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "@google/generative-ai": "https://esm.sh/@google/generative-ai@^0.21.0",
+        "lightweight-charts": "https://esm.sh/lightweight-charts@^5.1.0",
+        "@solana/wallet-adapter-react": "https://esm.sh/@solana/wallet-adapter-react",
+        "@solana/wallet-adapter-base": "https://esm.sh/@solana/wallet-adapter-base",
+        "@solana/wallet-adapter-react-ui": "https://esm.sh/@solana/wallet-adapter-react-ui",
+        "@solana/web3.js": "https://esm.sh/@solana/web3.js",
+        "lucide-react": "https://esm.sh/lucide-react",
+        "jsqr": "https://esm.sh/jsqr@^1.4.0",
+        "qrcode": "https://esm.sh/qrcode@1.5.3",
+        "vite": "https://esm.sh/vite@^7.3.1",
+        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+        "@emailjs/browser": "https://esm.sh/@emailjs/browser@^4.4.1",
+        "firebase/": "https://esm.sh/firebase@^12.8.0/"
+      }
+    }
+    </script>
+
+    <script type="module">
+        import { Buffer } from "https://esm.sh/buffer@6.0.3";
+        window.Buffer = Buffer;
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0B0E11; /* Dark Mode Background */
+            color: #EAECEF; /* Light Text */
+            margin: 0;
+            overflow-y: auto !important; /* Force overflow for scrolling */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        /* Institutional Grid Background - Dark Mode */
+        .bg-grid {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        }
+
+        /* Dark Mode Glass Effect */
+        .glass {
+            background: rgba(30, 35, 41, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Global Scrollbar - Dark */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0B0E11;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2B3139;
+            border-radius: 2px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #474D57;
+        }
+        
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Wallet Modal UI Fixes */
+        .wallet-adapter-modal-wrapper {
+            background: #181C25 !important;
+            border: 1px solid #2B3139 !important;
+            border-radius: 40px !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+        .wallet-adapter-modal-button-close {
+            background: #2B3139 !important;
+        }
+        .wallet-adapter-modal-title {
+            color: #EAECEF !important;
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            letter-spacing: -0.05em !important;
+        }
+        .wallet-adapter-modal-list .wallet-adapter-button {
+            border-radius: 20px !important;
+            background: #0B0E11 !important;
+            border: 1px solid #2B3139 !important;
+            margin-bottom: 8px !important;
+        }
+        .wallet-adapter-modal-list .wallet-adapter-button:hover {
+            background: #1E2329 !important;
+            border-color: #6366f1 !important;
+        }
+        
+        /* Force the "Install" link to open in new tab and be visible */
+        .wallet-adapter-modal-middle-button {
+            background: #6366f1 !important;
+            color: white !important;
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            border-radius: 16px !important;
+            margin-top: 10px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        /* Animations */
+        .animate-in {
+            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+    
+    <!-- Automatic detection hack for redirects -->
+    <script>
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.wallet-adapter-modal-middle-button');
+            if (btn && btn.innerText.toLowerCase().includes('install')) {
+                // The standard library uses internal state, but we can help it
+                console.log('Redirecting to wallet download...');
+            }
+        });
+    </script>
+</body>
+</html>

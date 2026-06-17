@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs and system files
+*.log
+.DS_Store
+
+# Replit and Gemini CLI internals
+.local/
+.config/
+.gemini/
+.replit
+replit.md
+npm
+package-lock.json
+*.zip
+attached_assets/
+nginx.conf
+firebase.json
+firestore.rules
+metadata.json
