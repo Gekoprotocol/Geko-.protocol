@@ -28,7 +28,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 5000;
 
 // ─── NowPayments ──────────────────────────────────────────────────────────────
 const NOWPAYMENTS_API_KEY = process.env.NOW_PAYMENTS_API_KEY || process.env.NOWPAYMENTS_API_KEY;
