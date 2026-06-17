@@ -1190,27 +1190,6 @@ app.use(express.static(distPath));
 app.use(express.static(publicPath));
 app.use(express.static(rootPath));
 
-app.get('*', (req, res) => {
-  // Safety check: Don't serve index.html for missing static assets (js, css, etc)
-  // This prevents the "Unexpected token '<'" error that makes the screen blank.
-  if (req.url.includes('.') && !req.url.endsWith('.html')) {
-    return res.status(404).send("Asset not found");
-  }
-
-  const possiblePaths = [
-    path.join(distPath, 'index.html'),
-    path.join(publicPath, 'index.html'),
-    path.join(rootPath, 'index.html')
-  ];
-
-  for (const indexPath of possiblePaths) {
-    if (fs.existsSync(indexPath)) {
-      return res.sendFile(indexPath);
-    }
-  }
-  res.status(404).send("<h1>Frontend Build Not Found</h1><p>Please ensure index.html exists in /dist, /public, or the project root.</p>");
-});
-
 // ─── KYC ────────────────────────────────────────────────────────────────────
 app.post('/api/kyc/submit', async (req, res) => {
   const { wallet_address, full_name, date_of_birth, country, id_type, id_number } = req.body;
@@ -1297,6 +1276,27 @@ app.get('/api/leaderboard', async (req, res) => {
       balance: parseFloat(r.balance)
     })));
   } catch (e) { console.error('Leaderboard error:', e.message); res.json([]); }
+});
+
+// Final catch-all for SPA: must be the LAST route
+app.get('*', (req, res) => {
+  // Safety check: Don't serve index.html for missing static assets (js, css, etc)
+  if (req.url.includes('.') && !req.url.endsWith('.html')) {
+    return res.status(404).send("Asset not found");
+  }
+
+  const possiblePaths = [
+    path.join(distPath, 'index.html'),
+    path.join(publicPath, 'index.html'),
+    path.join(rootPath, 'index.html')
+  ];
+
+  for (const indexPath of possiblePaths) {
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+  }
+  res.status(404).send("<h1>Frontend Build Not Found</h1><p>Please ensure index.html exists in /dist, /public, or the project root.</p>");
 });
 
 app.listen(port, '0.0.0.0', () => {
