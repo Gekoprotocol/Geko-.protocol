@@ -327,7 +327,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                       {`VERIFIED ${vipTier.name}`}
                    </div>
                 </div>
-                <div className="text-7xl font-mono font-bold text-gray-100 tracking-tighter">
+                <div className="text-4xl md:text-5xl lg:text-6xl font-mono font-bold text-gray-100 tracking-tighter truncate">
                    ${vaultUsdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
                 <div className="flex gap-8 mt-10 pt-10 border-t border-[#2B3139]">

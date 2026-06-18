@@ -265,10 +265,24 @@ async function recordTransaction({ wallet_address, asset_symbol, amount, type, p
   if (!dbAvailable || !pool) return null;
   const res = await pool.query(
     `INSERT INTO transactions (wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING *`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
     [wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status]
   );
+
+  // Sync with geko_users table for trading/available balances if asset is USDT
+  if (status === 'completed' && asset_symbol === 'USDT') {
+    const amt = parseFloat(amount || 0);
+    // types: trade, credit, interest, withdrawal, deposit (if asset is USDT)
+    // we want all USDT movements to reflect in trading_balance
+    await pool.query(
+      `UPDATE geko_users 
+       SET trading_balance = trading_balance + $1,
+           available_balance = available_balance + $1
+       WHERE wallet_address = $2`,
+      [amt, wallet_address]
+    );
+  }
+
   return res.rows[0];
 }
 
@@ -738,6 +752,7 @@ const handleNowPaymentsWebhook = async (req, res) => {
           // Check if this payment_id has already been recorded to prevent duplicates
           const existing = await pool.query('SELECT id FROM transactions WHERE payment_id = $1', [payment_id]);
           if (existing.rows.length === 0) {
+            // Record original asset deposit
             await recordTransaction({
               wallet_address: walletAddress,
               asset_symbol:   asset,
@@ -748,7 +763,34 @@ const handleNowPaymentsWebhook = async (req, res) => {
               status:         'completed'
             });
 
-            console.log(`[NowPayments Webhook] Credited ${amountPaid} ${asset} to ${walletAddress} | new balance recovery active`);
+            // Credit USDT equivalent for trading if not already USDT
+            if (asset !== 'USDT') {
+              let price = 1;
+              try {
+                const pRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${asset}USD`);
+                const r = pRes.data.result;
+                const pair = Object.keys(r)[0];
+                if (r[pair]?.c?.[0]) price = parseFloat(r[pair].c[0]);
+              } catch (_) {
+                // Fallbacks
+                if (asset === 'BTC') price = 65000;
+                if (asset === 'ETH') price = 3500;
+                if (asset === 'SOL') price = 145;
+              }
+
+              const usdtEquiv = parseFloat((amountPaid * price).toFixed(2));
+              await recordTransaction({
+                wallet_address: walletAddress,
+                asset_symbol:   'USDT',
+                amount:         usdtEquiv,
+                type:           'credit',
+                payment_id:     payment_id ? `equiv-${payment_id}` : null,
+                reference:      `${asset}-usd-equiv:${payment_id || 'manual'}`,
+                status:         'completed'
+              });
+            }
+
+            console.log(`[NowPayments Webhook] Credited ${amountPaid} ${asset} to ${walletAddress} | trade balance updated`);
           }
         }
       } catch (e) {
@@ -782,18 +824,36 @@ app.get('/api/user/balance', async (req, res) => {
               COALESCE(SUM(amount), 0) AS balance,
               COUNT(*) AS tx_count
          FROM transactions
-        WHERE wallet_address = $1 AND status = 'completed'
+        WHERE wallet_address = $1 AND status = 'completed' AND type != 'trade'
         GROUP BY asset_symbol
         ORDER BY asset_symbol`,
       [address]
     );
+
+    const balances = result.rows.map(r => ({
+      asset:    r.asset_symbol,
+      balance:  parseFloat(r.balance),
+      tx_count: parseInt(r.tx_count)
+    }));
+
+    // Calculate total USD value
+    let totalUsd = 0;
+    for (const b of balances) {
+      if (b.asset === 'USDT') {
+        totalUsd += b.balance;
+      } else {
+        let price = 1;
+        if (b.asset === 'SOL') price = 145;
+        if (b.asset === 'BTC') price = 65000;
+        if (b.asset === 'ETH') price = 3500;
+        totalUsd += b.balance * price;
+      }
+    }
+
     return res.json({
       wallet_address: address,
-      balances: result.rows.map(r => ({
-        asset:    r.asset_symbol,
-        balance:  parseFloat(r.balance),
-        tx_count: parseInt(r.tx_count)
-      }))
+      balances,
+      total_usd_value: totalUsd
     });
   } catch (e) {
     console.error('Balance query error:', e.message);
@@ -1252,10 +1312,9 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
         const sigHex  = crypto.createHmac('sha512', activeIpnSecret).update(bodyStr).digest('hex');
 
         const nowRes  = await axios.post('https://api.nowpayments.io/v1/payout', body, {
-          method:  'POST',
           headers: {
             'Content-Type':       'application/json',
-            'Authorization':      `Bearer ${activeApiKey}`,
+            'x-api-key':          activeApiKey,
             'x-nowpayments-sig':  sigHex
           }
         });

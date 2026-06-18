@@ -193,9 +193,9 @@ function TerminalLayout() {
       }
 
       // Get Vault Balance
-      const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}&asset=USDT`);
+      const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}`);
       const balJson = await balRes.json();
-      setVaultBalance(balJson.balance || 0);
+      setVaultBalance(balJson.total_usd_value || 0);
     } catch (err) {
       console.error("Data fetch error", err);
     } finally {
@@ -387,10 +387,10 @@ function NavItem({ active, icon, label, onClick }: any) {
 
 function BalanceWidget({ label, value, color }: any) {
   return (
-    <div className="flex flex-col group cursor-default">
-      <span className="text-[9px] uppercase font-black text-gray-500 tracking-[0.2em] mb-0.5 group-hover:text-gray-400 transition-colors">{label}</span>
-      <span className={`text-xl font-mono font-bold tracking-tighter ${color} drop-shadow-sm`}>
-        ${parseFloat(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    <div className="flex flex-col group cursor-default min-w-[120px]">
+      <span className="text-[9px] uppercase font-black text-gray-500 tracking-[0.2em] mb-0.5 group-hover:text-gray-400 transition-colors whitespace-nowrap">{label}</span>
+      <span className={`text-lg lg:text-xl font-mono font-bold tracking-tighter ${color} drop-shadow-sm tabular-nums`}>
+        ${parseFloat(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </span>
     </div>
   );
