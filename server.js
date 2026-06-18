@@ -28,7 +28,8 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-const port = process.env.PORT || 8080;
+// USE PORT 8080 FOR UNIFIED PREVIEW
+const port = 8080;
 
 // ─── Debug Logger ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {

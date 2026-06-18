@@ -11,18 +11,18 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0',
-      port: 8080,
+      port: 5173,
       strictPort: true,
       allowedHosts: true,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8081',
+          target: 'http://127.0.0.1:8080',
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path
         },
         '/manifest.json': {
-          target: 'http://127.0.0.1:8081',
+          target: 'http://127.0.0.1:8080',
           changeOrigin: true
         }
       }

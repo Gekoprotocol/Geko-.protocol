@@ -7,11 +7,8 @@
     "start": "node server.js",
     "dev": "vite",
     "backend": "node server.js",
-    "dev-fresh": "fuser -k 8080/tcp 8081/tcp 5000/tcp || true; node server.js & vite",
-    "rescue": "fuser -k 8080/tcp 8081/tcp 5000/tcp || true; npm run build && node server.js",
-    "build": "vite build",
-    "preview": "vite preview",
-    "preview-all": "npm run build && node server.js"
+    "FIX-PREVIEW": "fuser -k 8080/tcp 8081/tcp 5173/tcp || true; npm run build && node server.js",
+    "build": "vite build"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
