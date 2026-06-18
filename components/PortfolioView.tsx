@@ -250,10 +250,51 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const [isCopiedPopupOpen, setIsCopiedPopupOpen] = useState(false);
+
+  const triggerWalletPopup = () => {
+    setIsCopiedPopupOpen(true);
+    setTimeout(() => setIsCopiedPopupOpen(false), 5000);
+  };
+
+  const handleDepositClick = () => {
+    setActiveModal('deposit');
+    triggerWalletPopup();
+  };
+
+  const handleWithdrawClick = () => {
+    setActiveModal('withdraw');
+    triggerWalletPopup();
+  };
+
   if (!wallet) return null;
 
   return (
     <div className="h-full overflow-y-auto p-6 lg:p-10 bg-[#0B0E11] relative custom-scrollbar text-gray-200">
+      
+      {/* Active Wallet Popup Notification */}
+      {isCopiedPopupOpen && (
+          <div className="fixed top-24 right-10 z-[1000] animate-in slide-in-from-right-10 duration-500">
+              <div className="bg-[#181C25] border-2 border-indigo-500/50 p-6 rounded-[32px] shadow-2xl flex items-center space-x-4 backdrop-blur-xl">
+                  <div className="w-12 h-12 bg-indigo-600/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                      <svg className="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0012 3c1.22 0 2.383.218 3.46.616m.835 1.918A10.001 10.003 0 0121.25 10.5M12 11V3m0 8c0 2.5 1.5 4.5 3 4.5s3-2 3-4.5-1.5-4.5-3-4.5-3 2-3 4.5z" /></svg>
+                  </div>
+                  <div>
+                      <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Active Identity Link</div>
+                      <div className="flex items-center space-x-3">
+                          <span className="text-sm font-mono font-bold text-gray-100">{wallet.address.slice(0, 12)}...{wallet.address.slice(-8)}</span>
+                          <button onClick={() => { navigator.clipboard.writeText(wallet.address); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="text-indigo-400 hover:text-indigo-300">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                          </button>
+                      </div>
+                  </div>
+                  <button onClick={() => setIsCopiedPopupOpen(false)} className="text-gray-600 hover:text-white">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+              </div>
+          </div>
+      )}
+
       <div className="max-w-7xl mx-auto space-y-8 pb-20">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
@@ -268,8 +309,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
             </div>
           </div>
           <div className="flex space-x-3">
-             <button onClick={() => setActiveModal('deposit')} className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">Deposit</button>
-             <button onClick={() => setActiveModal('withdraw')} className="px-8 py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
+             <button onClick={handleDepositClick} className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">Deposit</button>
+             <button onClick={handleWithdrawClick} className="px-8 py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
              <button onClick={() => setActiveModal('kyc')} className="px-8 py-3 bg-amber-600/10 text-amber-500 font-black uppercase tracking-widest text-xs rounded-xl border border-amber-500/20 hover:bg-amber-600/20 transition-all">Verify KYC</button>
           </div>
         </div>
@@ -281,7 +322,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
              </div>
              <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
-                   <div className="text-xs text-gray-500 font-bold uppercase tracking-[0.3em]">Protocol Settlement Vault</div>
+                   <div className="text-xs text-gray-500 font-bold uppercase tracking-[0.3em]">Protocol Settlement Balance</div>
                    <div className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border border-current ${vipTier.color} ${vipTier.bg}`}>
                       {`VERIFIED ${vipTier.name}`}
                    </div>
@@ -319,7 +360,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
               <div className="text-[10px] text-gray-500 leading-relaxed px-2">Select an asset and get a secure, one-time deposit address generated by our payment gateway.</div>
             </div>
             <button
-              onClick={() => setActiveModal('deposit')}
+              onClick={handleDepositClick}
               className="w-full py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20"
             >
               Generate Address
@@ -552,7 +593,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                                <div className="space-y-2">
                                   <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Asset</label>
                                   <select value={withdrawAsset} onChange={e => setWithdrawAsset(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm h-14">
-                                     {['SOL'].map(s => <option key={s} value={s}>{s}</option>)}
+                                     {['SOL', 'USDT'].map(s => <option key={s} value={s}>{s}</option>)}
                                   </select>
                                </div>
                                <div className="space-y-2">

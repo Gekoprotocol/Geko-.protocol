@@ -70,6 +70,27 @@ const TradeView: React.FC<TradeViewProps> = ({
         if (wallet.isDemo && uData.demo_balance !== undefined) setTradingBalance(parseFloat(uData.demo_balance));
         else if (uData.trading_balance !== undefined) setTradingBalance(parseFloat(uData.trading_balance));
       }
+
+      // Fetch Active Trades from server
+      const tRes = await fetch(`/api/user/active-trades?address=${encodeURIComponent(wallet.address)}`);
+      const tData = await tRes.json();
+      if (tRes.ok) {
+        const syncedTrades: ActiveTrade[] = tData.map((t: any) => ({
+          id: t.id,
+          symbol: t.symbol,
+          userName: 'Local_Node',
+          direction: t.direction.toLowerCase() as 'up' | 'down',
+          amount: t.amount.toString(),
+          entryPrice: parseFloat(t.entry_price),
+          startTime: new Date(t.created_at).getTime(),
+          duration: t.duration,
+          status: t.status,
+          forceOutcome: t.force_outcome
+        }));
+        
+        // Merge with local trades that haven't been saved yet (though we save immediately now)
+        setLocalActiveTrades(syncedTrades);
+      }
     } catch (_) {}
     finally { setBalLoading(false); }
   };
@@ -161,7 +182,10 @@ const TradeView: React.FC<TradeViewProps> = ({
             tradeSize:     amount,
             leverage,
             type:          direction === 'up' ? 'LONG' : 'SHORT',
-            isDemo:        wallet.isDemo
+            isDemo:        wallet.isDemo,
+            entryPrice:    selectedAsset.price,
+            duration:      duration,
+            tradeId:       tradeId
           })
         });
         const data = await res.json();
@@ -189,11 +213,15 @@ const TradeView: React.FC<TradeViewProps> = ({
       if (toSettle.length === 0) return;
 
       for (const trade of toSettle) {
-        // Simulation Outcome Logic: 50/50 or biased
-        const isWin = Math.random() > 0.45;
+        // Settlement Logic: Check for forceOutcome from admin, otherwise simulate
+        let isWin = false;
+        if (trade.forceOutcome === 'win') isWin = true;
+        else if (trade.forceOutcome === 'loss') isWin = false;
+        else isWin = Math.random() > 0.45;
+
         const pnl = isWin ? parseFloat(trade.amount) * (1 + PAYOUT_RATE) : 0;
         
-        if (isWin && wallet?.address) {
+        if (wallet?.address) {
           try {
             await fetch('/api/settle-trade', {
               method: 'POST',
@@ -203,10 +231,11 @@ const TradeView: React.FC<TradeViewProps> = ({
                 asset: trade.symbol,
                 payout: pnl.toFixed(2),
                 tradeRef: trade.id,
-                isDemo: wallet.isDemo
+                isDemo: wallet.isDemo,
+                status: isWin ? 'won' : 'lost'
               })
             });
-            setTradingBalance(prev => prev + pnl);
+            if (isWin) setTradingBalance(prev => prev + pnl);
           } catch (e) {
             console.error('Settlement sync failed');
           }
@@ -315,7 +344,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                 {/* Trading Balance Card */}
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="flex justify-between items-center mb-1">
-                        <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Demo Balance' : 'Trading Balance'}</div>
+                        <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Available Balance (DEMO)' : 'Available Balance'}</div>
                         <button onClick={() => setShowTransferModal(true)} className="text-[8px] text-indigo-500 font-black uppercase hover:text-indigo-400 transition-colors">Transfer</button>
                     </div>
                     {balLoading && tradingBalance === 0 ? (
@@ -332,10 +361,10 @@ const TradeView: React.FC<TradeViewProps> = ({
                         </div>
                     )}
                     {!hasSufficient && tradingBalance > 0 && (
-                        <div className="text-[8px] text-rose-400 font-black mt-1">Exceeds trading balance</div>
+                        <div className="text-[8px] text-rose-400 font-black mt-1">Exceeds available balance</div>
                     )}
                     <div className="mt-2 pt-2 border-t border-[#2B3139] flex justify-between items-center">
-                        <span className="text-[7px] text-gray-600 font-black uppercase">Vault (Ready)</span>
+                        <span className="text-[7px] text-gray-600 font-black uppercase">Protocol Balance</span>
                         <span className="text-[8px] text-indigo-400 font-mono font-bold">${vaultBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                 </div>
@@ -543,7 +572,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Internal Transfer</h2>
-                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Move funds between Vault and Trading</p>
+                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Move funds between Protocol and Available</p>
               </div>
               <button onClick={() => setShowTransferModal(false)} className="text-gray-500 hover:text-white transition-colors">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -556,19 +585,19 @@ const TradeView: React.FC<TradeViewProps> = ({
                   onClick={() => setTransferDirection('vault_to_trade')}
                   className={`py-3 text-[10px] font-black uppercase rounded-xl transition-all ${transferDirection === 'vault_to_trade' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                  To Trading
+                  To Available
                 </button>
                 <button 
                   onClick={() => setTransferDirection('trade_to_vault')}
                   className={`py-3 text-[10px] font-black uppercase rounded-xl transition-all ${transferDirection === 'trade_to_vault' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                  To Vault
+                  To Protocol
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                  <span className="text-gray-500">Available {transferDirection === 'vault_to_trade' ? 'Vault' : 'Trading'}</span>
+                  <span className="text-gray-500">Available {transferDirection === 'vault_to_trade' ? 'Protocol' : 'Available'}</span>
                   <span className="text-indigo-400">
                     ${(transferDirection === 'vault_to_trade' ? vaultBalance : tradingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>

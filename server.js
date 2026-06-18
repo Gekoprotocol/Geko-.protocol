@@ -28,7 +28,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 8080;
 
 // ─── NowPayments ──────────────────────────────────────────────────────────────
 const NOWPAYMENTS_API_KEY = process.env.NOW_PAYMENTS_API_KEY || process.env.NOWPAYMENTS_API_KEY;
@@ -62,23 +62,51 @@ if (process.env.DATABASE_URL) {
           wallet_address TEXT UNIQUE,
           wallet_data JSONB DEFAULT '{}',
           balance_override TEXT,
-          trading_balance DECIMAL(24, 8) DEFAULT 0,
+          trading_balance DECIMAL(24, 8) DEFAULT 10000,
           demo_balance DECIMAL(24, 8) DEFAULT 10000,
+          available_balance DECIMAL(24, 8) DEFAULT 0,
+          available_demo_balance DECIMAL(24, 8) DEFAULT 10000,
+          nickname TEXT,
           force_win BOOLEAN DEFAULT FALSE,
           ip_address TEXT,
           last_seen TIMESTAMPTZ DEFAULT NOW(),
           created_at TIMESTAMPTZ DEFAULT NOW(),
+          last_interest_at TIMESTAMPTZ DEFAULT NOW(),
           referral_code TEXT,
           referred_by TEXT,
           kyc_status TEXT DEFAULT 'none'
         )
       `);
 
-      // Ensure demo_balance and force_win columns exist for existing tables
+      // Ensure new columns exist for existing tables
       await pool.query(`
+        ALTER TABLE geko_users ALTER COLUMN trading_balance SET DEFAULT 10000;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS demo_balance DECIMAL(24, 8) DEFAULT 10000;
+        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS available_balance DECIMAL(24, 8) DEFAULT 0;
+        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS available_demo_balance DECIMAL(24, 8) DEFAULT 10000;
+        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS nickname TEXT;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS force_win BOOLEAN DEFAULT FALSE;
+        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS last_interest_at TIMESTAMPTZ DEFAULT NOW();
       `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS trades (
+          id TEXT PRIMARY KEY,
+          wallet_address TEXT NOT NULL,
+          symbol TEXT NOT NULL,
+          direction TEXT NOT NULL,
+          amount DECIMAL(24, 8) NOT NULL,
+          entry_price DECIMAL(24, 8) NOT NULL,
+          duration INTEGER NOT NULL,
+          status TEXT DEFAULT 'pending',
+          force_outcome TEXT,
+          is_demo BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          settled_at TIMESTAMPTZ
+        )
+      `);
+
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_trades_wallet ON trades (wallet_address, status)`);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS geko_visitors (
@@ -163,6 +191,10 @@ if (process.env.DATABASE_URL) {
       dbAvailable = true;
       console.log('[DB] Database ready and all tables verified.');
       startSolanaListener();
+      
+      // Start 2% daily interest processor
+      setInterval(processDailyInterest, 60 * 60 * 1000); // Check every hour
+      processDailyInterest(); // Run once on startup
     } catch (err) {
       console.error('[DB Error] Failed to initialize database. Check your DATABASE_URL environment variable.');
       console.error('[DB Error] Details:', err.stack);
@@ -185,6 +217,47 @@ async function getUserBalance(walletAddress, assetSymbol) {
     [walletAddress, assetSymbol]
   );
   return parseFloat(res.rows[0]?.balance ?? 0);
+}
+
+// ─── Daily 2% Interest Processor ──────────────────────────────────────────
+async function processDailyInterest() {
+  if (!dbAvailable || !pool) return;
+  try {
+    console.log('[Interest] Checking for eligible users for 2% daily increase...');
+    // Find users who haven't received interest in last 24 hours
+    const res = await pool.query(
+      `SELECT wallet_address, last_interest_at 
+       FROM geko_users 
+       WHERE last_interest_at <= NOW() - INTERVAL '24 hours'`
+    );
+
+    for (const user of res.rows) {
+      const vaultBal = await getUserBalance(user.wallet_address, 'USDT');
+      if (vaultBal > 0) {
+        const interestAmt = vaultBal * 0.02;
+        await recordTransaction({
+          wallet_address: user.wallet_address,
+          asset_symbol:   'USDT',
+          amount:         interestAmt,
+          type:           'interest',
+          reference:      '2%_daily_vault_increase'
+        });
+        await pool.query(
+          'UPDATE geko_users SET last_interest_at = NOW() WHERE wallet_address = $1',
+          [user.wallet_address]
+        );
+        console.log(`[Interest] Credited ${interestAmt.toFixed(4)} USDT to ${user.wallet_address}`);
+      } else {
+        // Even if balance is 0, update last_interest_at to avoid re-checking every hour
+        await pool.query(
+          'UPDATE geko_users SET last_interest_at = NOW() WHERE wallet_address = $1',
+          [user.wallet_address]
+        );
+      }
+    }
+  } catch (err) {
+    console.error('[Interest Error] Failed to process daily interest:', err.message);
+  }
 }
 
 // ─── Transaction insert helper ─────────────────────────────────────────────
@@ -215,6 +288,35 @@ app.use('/api/ipn', express.raw({ type: '*/*' }));
 app.use('/webhook',  express.raw({ type: '*/*' }));
 
 app.use(express.json());
+
+// ─── PWA Manifest ───────────────────────────────────────────────────────────
+app.get('/manifest.json', (req, res) => {
+  res.json({
+    "short_name": "Geko",
+    "name": "Geko Institutional Terminal",
+    "icons": [
+      {
+        "src": "favicon.ico",
+        "sizes": "64x64 32x32 24x24 16x16",
+        "type": "image/x-icon"
+      },
+      {
+        "src": "logo192.png",
+        "type": "image/png",
+        "sizes": "192x192"
+      },
+      {
+        "src": "logo512.png",
+        "type": "image/png",
+        "sizes": "512x512"
+      }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#0B0E11",
+    "background_color": "#0B0E11"
+  });
+});
 
 // ─── Config endpoints ──────────────────────────────────────────────────────
 app.get('/api/config', (req, res) => {
@@ -317,7 +419,12 @@ app.get('/api/binance/prices', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
   if (dbAvailable && pool) {
     try {
-      const result = await pool.query('SELECT * FROM geko_users ORDER BY last_seen DESC');
+      const result = await pool.query(`
+        SELECT u.*, 
+               (SELECT COUNT(*) FROM trades t WHERE t.wallet_address = u.wallet_address AND t.status = 'pending') as active_trades_count
+        FROM geko_users u 
+        ORDER BY last_seen DESC
+      `);
       return res.json(result.rows);
     } catch (e) {
       console.error('DB users error:', e.message);
@@ -354,21 +461,25 @@ app.post('/api/admin/users/update', async (req, res) => {
 
 // Register / upsert a user (called on wallet connect)
 app.post('/api/users/upsert', async (req, res) => {
-  const { wallet_address, wallet_data, ip_address } = req.body;
+  const { wallet_address, wallet_data, ip_address, nickname } = req.body;
   if (!wallet_address) return res.status(400).json({ error: 'wallet_address required' });
 
   if (dbAvailable && pool) {
     try {
-      const result = await pool.query(
-        `INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (wallet_address) DO UPDATE
-         SET wallet_data = EXCLUDED.wallet_data,
-             ip_address = EXCLUDED.ip_address,
-             last_seen = NOW()
-         RETURNING *`,
-        [wallet_address, JSON.stringify(wallet_data || {}), ip_address || null]
-      );
+      const updates = [];
+      const values = [wallet_address, JSON.stringify(wallet_data || {}), ip_address || null];
+      let query = `
+        INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen${nickname ? ', nickname' : ''})
+        VALUES ($1, $2, $3, NOW()${nickname ? ', $4' : ''})
+        ON CONFLICT (wallet_address) DO UPDATE
+        SET wallet_data = EXCLUDED.wallet_data,
+            ip_address = EXCLUDED.ip_address,
+            last_seen = NOW()${nickname ? ', nickname = EXCLUDED.nickname' : ''}
+        RETURNING *`;
+      
+      if (nickname) values.push(nickname);
+
+      const result = await pool.query(query, values);
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
       console.error('Upsert error:', e.message);
@@ -615,7 +726,6 @@ const handleNowPaymentsWebhook = async (req, res) => {
     if (dbAvailable && pool && order_id) {
       try {
         // order_id format: "geko-<walletAddress>-<timestamp>"
-        // Strip the "geko-" prefix and the trailing "-<13-digit timestamp>"
         const walletAddress = order_id.startsWith('geko-')
           ? order_id.replace(/^geko-/, '').replace(/-\d{10,}$/, '')
           : order_id;
@@ -625,17 +735,21 @@ const handleNowPaymentsWebhook = async (req, res) => {
             .replace('USDTTRC20', 'USDT').replace('USDTERC20', 'USDT')
             .replace('BNBBSC', 'BNB').replace('MATICMAINNET', 'MATIC');
 
-          await recordTransaction({
-            wallet_address: walletAddress,
-            asset_symbol:   asset,
-            amount:         amountPaid,
-            type:           'deposit',
-            payment_id:     payment_id || null,
-            reference:      `nowpayments:${payment_id}`
-          });
+          // Check if this payment_id has already been recorded to prevent duplicates
+          const existing = await pool.query('SELECT id FROM transactions WHERE payment_id = $1', [payment_id]);
+          if (existing.rows.length === 0) {
+            await recordTransaction({
+              wallet_address: walletAddress,
+              asset_symbol:   asset,
+              amount:         amountPaid,
+              type:           'deposit',
+              payment_id:     payment_id || null,
+              reference:      `nowpayments:${payment_id}`,
+              status:         'completed'
+            });
 
-          const newBalance = await getUserBalance(walletAddress, asset);
-          console.log(`[NowPayments Webhook] Credited ${amountPaid} ${asset} to ${walletAddress} | new balance: ${newBalance}`);
+            console.log(`[NowPayments Webhook] Credited ${amountPaid} ${asset} to ${walletAddress} | new balance recovery active`);
+          }
         }
       } catch (e) {
         console.error('[NowPayments Webhook] DB credit error:', e.message);
@@ -738,7 +852,7 @@ app.get('/api/admin/transactions', async (req, res) => {
 // ─── Static files & SPA ───────────────────────────────────────────────────
 
 app.post('/api/execute-trade', async (req, res) => {
-    const { walletAddress, asset, tradeSize, leverage, type, isDemo } = req.body;
+    const { walletAddress, asset, tradeSize, leverage, type, isDemo, entryPrice, duration, tradeId } = req.body;
 
     if (!dbAvailable || !pool) {
         return res.status(503).json({ success: false, error: "Database unavailable." });
@@ -756,13 +870,22 @@ app.post('/api/execute-trade', async (req, res) => {
             return res.status(400).json({ success: false, error: `Insufficient ${isDemo ? 'demo ' : ''}balance. Available: ${currentBalance}` });
         }
 
+        const id = tradeId || Math.random().toString(36).substring(7);
+
+        // Record the trade in the trades table
+        await pool.query(
+          `INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, duration, is_demo, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')`,
+          [id, walletAddress, asset, type, amt, entryPrice || 0, duration || 60, isDemo || false]
+        );
+
         // Debit correct balance
         await pool.query(
             `UPDATE geko_users SET ${balanceColumn} = ${balanceColumn} - $1 WHERE wallet_address = $2`,
             [amt, walletAddress]
         );
 
-        // Record for auditing (optional for demo, but good for history)
+        // Record for auditing
         await recordTransaction({
           wallet_address: walletAddress,
           asset_symbol:   'USDT',
@@ -771,10 +894,11 @@ app.post('/api/execute-trade', async (req, res) => {
           reference:      `${isDemo ? 'demo-' : ''}trade-open:${leverage}x-${type}-${asset}`
         });
 
-        console.log(`Trade executed: ${walletAddress} opened ${leverage}x ${type} on ${asset} | margin: ${tradeSize} USDT`);
+        console.log(`Trade executed: ${walletAddress} opened ${leverage}x ${type} on ${asset} | margin: ${tradeSize} USDT | tradeId: ${id}`);
 
         return res.status(200).json({
             success: true,
+            tradeId: id,
             message: `Successfully opened ${leverage}x ${type} position!`,
             new_trading_balance: currentBalance - amt
         });
@@ -959,25 +1083,39 @@ app.post('/api/execute-withdrawal', async (req, res) => {
 });
 // ─── Trade Settlement — credit win payout back to trading_balance ──────────
 app.post('/api/settle-trade', async (req, res) => {
-  const { walletAddress, asset, payout, tradeRef, isDemo } = req.body;
-  if (!walletAddress || !payout) return res.status(400).json({ error: 'walletAddress and payout required' });
+  const { walletAddress, asset, payout, tradeRef, isDemo, status, pnl } = req.body;
+  if (!walletAddress) return res.status(400).json({ error: 'walletAddress required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const amt = parseFloat(payout);
+    const amt = parseFloat(payout || 0);
     const balanceColumn = isDemo ? 'demo_balance' : 'trading_balance';
-    await pool.query(
-      `UPDATE geko_users SET ${balanceColumn} = ${balanceColumn} + $1 WHERE wallet_address = $2`,
-      [amt, walletAddress]
-    );
+
+    if (amt > 0) {
+      await pool.query(
+        `UPDATE geko_users SET ${balanceColumn} = ${balanceColumn} + $1 WHERE wallet_address = $2`,
+        [amt, walletAddress]
+      );
+    }
+
+    // Update trade record
+    if (tradeRef) {
+      await pool.query(
+        `UPDATE trades SET status = $1, settled_at = NOW(), force_outcome = NULL WHERE id = $2`,
+        [status || (amt > 0 ? 'won' : 'lost'), tradeRef]
+      );
+    }
 
     // Record for auditing
-    await recordTransaction({
-      wallet_address: walletAddress,
-      asset_symbol:   'USDT',
-      amount:         amt,
-      type:           'trade',
-      reference:      `${isDemo ? 'demo-' : ''}trade-settle:${tradeRef}`
-    });
+    if (amt > 0) {
+      await recordTransaction({
+        wallet_address: walletAddress,
+        asset_symbol:   'USDT',
+        amount:         amt,
+        type:           'trade',
+        reference:      `${isDemo ? 'demo-' : ''}trade-settle:${tradeRef}`
+      });
+    }
+
     const userRes = await pool.query(`SELECT ${balanceColumn} FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
     
     if (userRes.rows.length === 0) {
@@ -986,6 +1124,40 @@ app.post('/api/settle-trade', async (req, res) => {
     return res.json({ success: true, new_balance: userRes.rows[0][balanceColumn] });
   } catch (e) {
     console.error('settle-trade error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/admin/active-trades', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const result = await pool.query(`SELECT * FROM trades WHERE status = 'pending' ORDER BY created_at DESC`);
+    return res.json(result.rows);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/force-outcome', async (req, res) => {
+  const { tradeId, forceOutcome } = req.body;
+  if (!tradeId || !forceOutcome) return res.status(400).json({ error: 'tradeId and forceOutcome required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await pool.query(`UPDATE trades SET force_outcome = $1 WHERE id = $2`, [forceOutcome, tradeId]);
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/user/active-trades', async (req, res) => {
+  const { address } = req.query;
+  if (!address) return res.status(400).json({ error: 'address required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const result = await pool.query(`SELECT * FROM trades WHERE wallet_address = $1 AND status = 'pending'`, [address]);
+    return res.json(result.rows);
+  } catch (e) {
     return res.status(500).json({ error: e.message });
   }
 });
@@ -1021,12 +1193,13 @@ app.get('/api/admin/withdrawal-requests', async (req, res) => {
   if (!dbAvailable) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const result = await pool.query(
-      `SELECT wr.*,
+      `SELECT wr.*, u.nickname,
               COALESCE(SUM(t.amount) FILTER (WHERE t.status = 'completed'), 0) AS current_balance
          FROM withdrawal_requests wr
+         LEFT JOIN geko_users u ON u.wallet_address = wr.wallet_address
          LEFT JOIN transactions t
            ON t.wallet_address = wr.wallet_address AND t.asset_symbol = wr.asset
-         GROUP BY wr.id
+         GROUP BY wr.id, u.nickname
          ORDER BY wr.created_at DESC
          LIMIT 200`
     );
