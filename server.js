@@ -28,8 +28,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-// Force port 8081 for backend in Cloud Shell dev mode
-const port = 8081;
+const port = process.env.PORT || 8080;
 
 // ─── Debug Logger ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -1423,12 +1422,12 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
   }
 });
 
-// Serve static files from dist
-const distPath = path.resolve(process.cwd(), 'dist');
-const publicPath = path.resolve(process.cwd(), 'public');
-const rootPath = process.cwd();
+// ─── Path Configuration ─────────────────────────────────────────────────────
+const distPath = path.resolve(__dirname, 'dist');
+const publicPath = path.resolve(__dirname, 'public');
+const rootPath = __dirname;
 
-console.log(`[Static] Checking paths:`);
+console.log(`[Static] Resolving from: ${__dirname}`);
 console.log(` - Dist:   ${distPath} (${fs.existsSync(distPath) ? 'EXISTS ✅' : 'MISSING ❌'})`);
 console.log(` - Public: ${publicPath} (${fs.existsSync(publicPath) ? 'EXISTS ✅' : 'MISSING ❌'})`);
 
