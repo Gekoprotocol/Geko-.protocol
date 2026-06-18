@@ -30,6 +30,26 @@ process.on('unhandledRejection', (reason, promise) => {
 const app = express();
 const port = process.env.PORT || 8080;
 
+app.use(cors());
+// Allow framing and basic security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,x-api-key,x-nowpayments-sig');
+  
+  // Force correct MIME types for TypeScript and JSX files to fix "blank screen" issues
+  const url = req.url.toLowerCase();
+  if (url.endsWith('.ts') || url.endsWith('.tsx') || url.endsWith('.jsx')) {
+    res.setHeader('Content-Type', 'application/javascript');
+  }
+  next();
+});
+
+app.use('/api/ipn', express.raw({ type: '*/*' }));
+app.use('/webhook',  express.raw({ type: '*/*' }));
+app.use(express.json());
+
 // ─── NowPayments ──────────────────────────────────────────────────────────────
 const NOWPAYMENTS_API_KEY = process.env.NOW_PAYMENTS_API_KEY || process.env.NOWPAYMENTS_API_KEY;
 const IPN_SECRET = process.env.NOW_PAYMENTS_IPN_SECRET || process.env.IPN_SECRET;
@@ -286,23 +306,7 @@ async function recordTransaction({ wallet_address, asset_symbol, amount, type, p
   return res.rows[0];
 }
 
-app.use(cors());
-
-// Force correct MIME types for TypeScript and JSX files to fix "blank screen" issues
-app.use((req, res, next) => {
-  const url = req.url.toLowerCase();
-  if (url.endsWith('.ts') || url.endsWith('.tsx') || url.endsWith('.jsx')) {
-    res.setHeader('Content-Type', 'application/javascript');
-  }
-  next();
-});
-
-// Raw body capture for IPN signature verification — must come before express.json()
-app.use('/api/ipn', express.raw({ type: '*/*' }));
-app.use('/webhook',  express.raw({ type: '*/*' }));
-
-app.use(express.json());
-
+// All middleware moved to the top.
 // ─── PWA Manifest ───────────────────────────────────────────────────────────
 app.get('/manifest.json', (req, res) => {
   res.json({
@@ -1413,10 +1417,13 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
 });
 
 // Serve static files from dist
-// Robust static file serving: Try 'dist', then 'public', then project root
 const distPath = path.resolve(process.cwd(), 'dist');
 const publicPath = path.resolve(process.cwd(), 'public');
 const rootPath = process.cwd();
+
+console.log(`[Static] Checking paths:`);
+console.log(` - Dist:   ${distPath} (${fs.existsSync(distPath) ? 'EXISTS ✅' : 'MISSING ❌'})`);
+console.log(` - Public: ${publicPath} (${fs.existsSync(publicPath) ? 'EXISTS ✅' : 'MISSING ❌'})`);
 
 app.use(express.static(distPath));
 app.use(express.static(publicPath));
