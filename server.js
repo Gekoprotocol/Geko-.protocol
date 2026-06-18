@@ -28,7 +28,8 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-const port = process.env.PORT || 8080;
+// Force port 8081 for backend in Cloud Shell dev mode
+const port = 8081;
 
 // ─── Debug Logger ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {

@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "vite",
     "backend": "node server.js",
+    "dev-fresh": "fuser -k 8080/tcp 8081/tcp 5000/tcp || true; node server.js & vite",
     "build": "vite build",
     "preview": "vite preview",
     "preview-all": "npm run build && node server.js"

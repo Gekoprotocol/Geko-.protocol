@@ -11,20 +11,19 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0',
-      port: 5000,
+      port: 8080,
       strictPort: true,
       allowedHosts: true,
       proxy: {
         '/api': {
-          target: `http://127.0.0.1:${process.env.PORT || 8080}`,
+          target: 'http://127.0.0.1:8081',
           changeOrigin: true,
           secure: false,
-          rewrite: (path) => path,
-          configure: (proxy, _options) => {
-            proxy.on('error', (err, _req, _res) => {
-              console.log('proxy error', err);
-            });
-          },
+          rewrite: (path) => path
+        },
+        '/manifest.json': {
+          target: 'http://127.0.0.1:8081',
+          changeOrigin: true
         }
       }
     },
