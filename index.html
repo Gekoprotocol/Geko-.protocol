@@ -23,9 +23,20 @@
     <meta name="twitter:site" content="@GekoProtocols">
     <meta name="twitter:title" content="Geko Protocols | Institutional Digital Asset Terminal">
     <meta name="twitter:description" content="Real-time blockchain terminal for professional traders.">
-    <link rel="canonical" href="https://geko-protocols.replit.app/">
-    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+    <link rel="manifest" href="/manifest.json">
     <title>Geko Protocols | Institutional Digital Asset Terminal</title>
+    
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(reg => {
+            console.log('SW Registered', reg);
+          }).catch(err => {
+            console.log('SW Registration failed', err);
+          });
+        });
+      }
+    </script>
     
     <script type="importmap">
     {

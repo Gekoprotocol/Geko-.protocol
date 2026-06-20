@@ -58,23 +58,19 @@ const TradeView: React.FC<TradeViewProps> = ({
     if (!wallet?.address) return;
     setBalLoading(true);
     try {
-      // Fetch Vault Balance (USDT)
+      // Fetch USDT Balances (Protocol, Trading, Demo) in one call
       const vRes = await fetch(`/api/user/balance?address=${encodeURIComponent(wallet.address)}&asset=USDT`);
-      const vData = await vRes.json();
-      if (vRes.ok && vData.balance !== undefined) setVaultBalance(parseFloat(vData.balance));
-
-      // Fetch Trading Balance
-      const uRes = await fetch(`/api/user/data?address=${encodeURIComponent(wallet.address)}`);
-      const uData = await uRes.json();
-      if (uRes.ok) {
-        if (wallet.isDemo && uData.demo_balance !== undefined) setTradingBalance(parseFloat(uData.demo_balance));
-        else if (uData.trading_balance !== undefined) setTradingBalance(parseFloat(uData.trading_balance));
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        if (vData.balance !== undefined) setVaultBalance(parseFloat(vData.balance));
+        if (wallet.isDemo && vData.demo_balance !== undefined) setTradingBalance(parseFloat(vData.demo_balance));
+        else if (vData.trading_balance !== undefined) setTradingBalance(parseFloat(vData.trading_balance));
       }
 
       // Fetch Active Trades from server
       const tRes = await fetch(`/api/user/active-trades?address=${encodeURIComponent(wallet.address)}`);
-      const tData = await tRes.json();
       if (tRes.ok) {
+        const tData = await tRes.json();
         const syncedTrades: ActiveTrade[] = tData.map((t: any) => ({
           id: t.id,
           symbol: t.symbol,
@@ -88,7 +84,6 @@ const TradeView: React.FC<TradeViewProps> = ({
           forceOutcome: t.force_outcome
         }));
         
-        // Merge with local trades that haven't been saved yet (though we save immediately now)
         setLocalActiveTrades(syncedTrades);
       }
     } catch (_) {}
@@ -121,6 +116,7 @@ const TradeView: React.FC<TradeViewProps> = ({
           direction: transferDirection
         })
       });
+      if (!res.ok) throw new Error("Transfer failed");
       const data = await res.json();
       if (res.ok) {
         setVaultBalance(parseFloat(data.vault_balance));
@@ -188,6 +184,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             tradeId:       tradeId
           })
         });
+        if (!res.ok) throw new Error("Trade execution failed");
         const data = await res.json();
         if (!res.ok) {
           setTradeStatus({ msg: data.error || 'Order rejected', ok: false });
@@ -585,7 +582,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                   onClick={() => setTransferDirection('vault_to_trade')}
                   className={`py-3 text-[10px] font-black uppercase rounded-xl transition-all ${transferDirection === 'vault_to_trade' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                  To Available
+                  To Trading
                 </button>
                 <button 
                   onClick={() => setTransferDirection('trade_to_vault')}
@@ -597,7 +594,7 @@ const TradeView: React.FC<TradeViewProps> = ({
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                  <span className="text-gray-500">Available {transferDirection === 'vault_to_trade' ? 'Protocol' : 'Available'}</span>
+                  <span className="text-gray-500">Available {transferDirection === 'vault_to_trade' ? 'Protocol' : 'Trading'}</span>
                   <span className="text-indigo-400">
                     ${(transferDirection === 'vault_to_trade' ? vaultBalance : tradingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>

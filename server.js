@@ -89,10 +89,11 @@ if (process.env.DATABASE_URL) {
           wallet_address TEXT UNIQUE,
           wallet_data JSONB DEFAULT '{}',
           balance_override TEXT,
-          trading_balance DECIMAL(24, 8) DEFAULT 10000,
-          demo_balance DECIMAL(24, 8) DEFAULT 10000,
+          trading_balance DECIMAL(24, 8) DEFAULT 0,
+          demo_balance DECIMAL(24, 8) DEFAULT 100000,
+          protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
           available_balance DECIMAL(24, 8) DEFAULT 0,
-          available_demo_balance DECIMAL(24, 8) DEFAULT 10000,
+          available_demo_balance DECIMAL(24, 8) DEFAULT 100000,
           nickname TEXT,
           force_win BOOLEAN DEFAULT FALSE,
           ip_address TEXT,
@@ -107,10 +108,9 @@ if (process.env.DATABASE_URL) {
 
       // Ensure new columns exist for existing tables
       await pool.query(`
-        ALTER TABLE geko_users ALTER COLUMN trading_balance SET DEFAULT 10000;
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS demo_balance DECIMAL(24, 8) DEFAULT 10000;
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS available_balance DECIMAL(24, 8) DEFAULT 0;
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS available_demo_balance DECIMAL(24, 8) DEFAULT 10000;
+        ALTER TABLE geko_users ALTER COLUMN trading_balance SET DEFAULT 0;
+        ALTER TABLE geko_users ALTER COLUMN demo_balance SET DEFAULT 100000;
+        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS nickname TEXT;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS force_win BOOLEAN DEFAULT FALSE;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS last_interest_at TIMESTAMPTZ DEFAULT NOW();
@@ -296,18 +296,36 @@ async function recordTransaction({ wallet_address, asset_symbol, amount, type, p
     [wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status]
   );
 
-  // Sync with geko_users table for trading/available balances if asset is USDT
+  // Sync with geko_users table
   if (status === 'completed' && asset_symbol === 'USDT') {
     const amt = parseFloat(amount || 0);
-    // types: trade, credit, interest, withdrawal, deposit (if asset is USDT)
-    // we want all USDT movements to reflect in trading_balance
-    await pool.query(
-      `UPDATE geko_users 
-       SET trading_balance = trading_balance + $1,
-           available_balance = available_balance + $1
-       WHERE wallet_address = $2`,
-      [amt, wallet_address]
-    );
+    
+    if (type === 'deposit' || type === 'credit' || type === 'interest') {
+      // These reflect in the Protocol Settlement Balance
+      await pool.query(
+        `UPDATE geko_users 
+         SET protocol_settlement_balance = protocol_settlement_balance + $1
+         WHERE wallet_address = $2`,
+        [amt, wallet_address]
+      );
+    } else if (type === 'trade') {
+      // Trades reflect in the Trading (Available) Balance
+      await pool.query(
+        `UPDATE geko_users 
+         SET trading_balance = trading_balance + $1,
+             available_balance = available_balance + $1
+         WHERE wallet_address = $2`,
+        [amt, wallet_address]
+      );
+    } else if (type === 'withdrawal') {
+      // Withdrawals come from Protocol Settlement Balance
+      await pool.query(
+        `UPDATE geko_users 
+         SET protocol_settlement_balance = protocol_settlement_balance + $1
+         WHERE wallet_address = $2`,
+        [amt, wallet_address]
+      );
+    }
   }
 
   return res.rows[0];
@@ -459,7 +477,7 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 app.post('/api/admin/users/update', async (req, res) => {
-  const { id, wallet_data, balance_override, trading_balance, demo_balance } = req.body;
+  const { id, wallet_data, balance_override, trading_balance, demo_balance, protocol_settlement_balance } = req.body;
 
   if (dbAvailable && pool) {
     try {
@@ -470,6 +488,7 @@ app.post('/api/admin/users/update', async (req, res) => {
       if (balance_override !== undefined) { updates.push(`balance_override = $${idx++}`); values.push(balance_override); }
       if (trading_balance !== undefined) { updates.push(`trading_balance = $${idx++}`); values.push(trading_balance); }
       if (demo_balance !== undefined) { updates.push(`demo_balance = $${idx++}`); values.push(demo_balance); }
+      if (protocol_settlement_balance !== undefined) { updates.push(`protocol_settlement_balance = $${idx++}`); values.push(protocol_settlement_balance); }
       values.push(id);
       if (updates.length > 0) {
         await pool.query(`UPDATE geko_users SET ${updates.join(', ')} WHERE id = $${idx}`, values);
@@ -557,11 +576,23 @@ app.post('/api/balance/transfer', async (req, res) => {
 
   try {
     const amt = Math.abs(parseFloat(amount));
-    if (direction === 'vault_to_trade') {
-      const vaultBal = await getUserBalance(walletAddress, 'USDT');
-      if (vaultBal < amt) return res.status(400).json({ error: 'Insufficient vault balance' });
+    const userRes = await pool.query('SELECT protocol_settlement_balance, trading_balance FROM geko_users WHERE wallet_address = $1', [walletAddress]);
+    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    
+    const vaultBal = parseFloat(userRes.rows[0].protocol_settlement_balance || 0);
+    const tradeBal = parseFloat(userRes.rows[0].trading_balance || 0);
 
-      // Record negative transaction in vault
+    if (direction === 'vault_to_trade') {
+      if (vaultBal < amt) return res.status(400).json({ error: 'Insufficient protocol settlement balance' });
+
+      await pool.query(
+        `UPDATE geko_users 
+         SET protocol_settlement_balance = protocol_settlement_balance - $1,
+             trading_balance = trading_balance + $1
+         WHERE wallet_address = $2`,
+        [amt, walletAddress]
+      );
+
       await recordTransaction({
         wallet_address: walletAddress,
         asset_symbol:   'USDT',
@@ -569,24 +600,17 @@ app.post('/api/balance/transfer', async (req, res) => {
         type:           'transfer',
         reference:      'vault_to_trade'
       });
-
-      // Credit trading_balance
-      await pool.query(
-        'UPDATE geko_users SET trading_balance = trading_balance + $1 WHERE wallet_address = $2',
-        [amt, walletAddress]
-      );
     } else if (direction === 'trade_to_vault') {
-      const userRes = await pool.query('SELECT trading_balance FROM geko_users WHERE wallet_address = $1', [walletAddress]);
-      const tradeBal = parseFloat(userRes.rows[0]?.trading_balance || 0);
       if (tradeBal < amt) return res.status(400).json({ error: 'Insufficient trading balance' });
 
-      // Debit trading_balance
       await pool.query(
-        'UPDATE geko_users SET trading_balance = trading_balance - $1 WHERE wallet_address = $2',
+        `UPDATE geko_users 
+         SET trading_balance = trading_balance - $1,
+             protocol_settlement_balance = protocol_settlement_balance + $1
+         WHERE wallet_address = $2`,
         [amt, walletAddress]
       );
 
-      // Record positive transaction in vault
       await recordTransaction({
         wallet_address: walletAddress,
         asset_symbol:   'USDT',
@@ -599,10 +623,11 @@ app.post('/api/balance/transfer', async (req, res) => {
     }
 
     const newUserRes = await pool.query('SELECT * FROM geko_users WHERE wallet_address = $1', [walletAddress]);
-    if (newUserRes.rows.length === 0) return res.status(404).json({ error: 'User not found after transfer' });
-    
-    const vaultBal = await getUserBalance(walletAddress, 'USDT');
-    res.json({ success: true, trading_balance: newUserRes.rows[0].trading_balance, vault_balance: vaultBal });
+    res.json({ 
+      success: true, 
+      trading_balance: newUserRes.rows[0].trading_balance, 
+      protocol_settlement_balance: newUserRes.rows[0].protocol_settlement_balance 
+    });
   } catch (e) {
     console.error('Transfer error:', e.message);
     res.status(500).json({ error: e.message });
@@ -816,7 +841,7 @@ const handleNowPaymentsWebhook = async (req, res) => {
 app.post('/api/ipn', handleNowPaymentsWebhook);
 app.post('/webhook',  handleNowPaymentsWebhook);
 
-// ─── User balance (sum of transactions) ───────────────────────────────────
+// ─── User balance (sum of transactions + column overrides) ────────────────
 app.get('/api/user/balance', async (req, res) => {
   const { address, asset } = req.query;
   if (!address) return res.status(400).json({ error: 'address required' });
@@ -824,9 +849,22 @@ app.get('/api/user/balance', async (req, res) => {
   if (!dbAvailable) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
-    if (asset) {
-      const balance = await getUserBalance(address, asset.toUpperCase());
-      return res.json({ wallet_address: address, asset: asset.toUpperCase(), balance });
+    // Fetch column balances first
+    const userRes = await pool.query(
+      'SELECT trading_balance, protocol_settlement_balance, demo_balance FROM geko_users WHERE wallet_address = $1',
+      [address]
+    );
+    
+    const user = userRes.rows[0] || { trading_balance: 0, protocol_settlement_balance: 0, demo_balance: 100000 };
+
+    if (asset === 'USDT') {
+      return res.json({ 
+        wallet_address: address, 
+        asset: 'USDT', 
+        balance: parseFloat(user.protocol_settlement_balance || 0),
+        trading_balance: parseFloat(user.trading_balance || 0),
+        demo_balance: parseFloat(user.demo_balance || 100000)
+      });
     }
 
     // Return all assets for this wallet
@@ -847,6 +885,18 @@ app.get('/api/user/balance', async (req, res) => {
       tx_count: parseInt(r.tx_count)
     }));
 
+    // Ensure USDT is present and reflects the column value
+    const usdtIdx = balances.findIndex(b => b.asset === 'USDT');
+    if (usdtIdx >= 0) {
+      balances[usdtIdx].balance = parseFloat(user.protocol_settlement_balance || 0);
+    } else {
+      balances.push({
+        asset: 'USDT',
+        balance: parseFloat(user.protocol_settlement_balance || 0),
+        tx_count: 0
+      });
+    }
+
     // Calculate total USD value
     let totalUsd = 0;
     for (const b of balances) {
@@ -864,7 +914,9 @@ app.get('/api/user/balance', async (req, res) => {
     return res.json({
       wallet_address: address,
       balances,
-      total_usd_value: totalUsd
+      total_usd_value: totalUsd,
+      trading_balance: user.trading_balance,
+      demo_balance: user.demo_balance
     });
   } catch (e) {
     console.error('Balance query error:', e.message);

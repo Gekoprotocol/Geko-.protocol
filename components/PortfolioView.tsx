@@ -33,9 +33,17 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
 
   // Protocol Balance — live from DB (sum of transactions)
   const [protocolBalances, setProtocolBalances] = useState<{ asset: string; balance: number; tx_count: number }[]>([]);
+  const [tradingBalance, setTradingBalance] = useState(0);
+  const [demoBalance, setDemoBalance] = useState(100000);
   const [balLoading, setBalLoading] = useState(false);
   const [dbTransactions, setDbTransactions]     = useState<any[]>([]);
   const [txLoading, setTxLoading]               = useState(false);
+
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDirection, setTransferDirection] = useState<'vault_to_trade' | 'trade_to_vault'>('vault_to_trade');
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [tradeStatus, setTradeStatus] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const [broadcastProgress, setBroadcastProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
@@ -70,6 +78,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
           order_description: 'Geko Protocols deposit',
         }),
       });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText.includes("<!DOCTYPE html>") ? "API Route Not Found (404). Check Vercel deployment." : `Server Error (${res.status})`);
+      }
+
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed to generate address');
       setNowPayAddress(data.payment?.pay_address || null);
@@ -94,12 +108,50 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     setBalLoading(true);
     try {
       const res = await fetch(`/api/user/balance?address=${encodeURIComponent(wallet.address)}`);
+      if (!res.ok) throw new Error("Failed to fetch protocol balance");
       const data = await res.json();
-      if (res.ok && data.balances) setProtocolBalances(data.balances);
+      if (res.ok && data.balances) {
+        setProtocolBalances(data.balances);
+        setTradingBalance(data.trading_balance || 0);
+        setDemoBalance(data.demo_balance || 100000);
+      }
     } catch (e) {
       console.error('Protocol balance fetch failed', e);
     } finally {
       setBalLoading(false);
+    }
+  };
+
+  const handleTransfer = async () => {
+    if (!wallet?.address || !transferAmount) return;
+    setTransferLoading(true);
+    try {
+      const res = await fetch('/api/balance/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: wallet.address,
+          amount: transferAmount,
+          direction: transferDirection
+        })
+      });
+      if (!res.ok) throw new Error("Transfer failed");
+      const data = await res.json();
+      if (res.ok) {
+        fetchProtocolBalance();
+        setShowTransferModal(false);
+        setTransferAmount('');
+        setTradeStatus({ msg: 'Transfer Successful', ok: true });
+        setTimeout(() => setTradeStatus(null), 3000);
+      } else {
+        setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
+        setTimeout(() => setTradeStatus(null), 3000);
+      }
+    } catch (e) {
+      setTradeStatus({ msg: 'Network error during transfer', ok: false });
+      setTimeout(() => setTradeStatus(null), 3000);
+    } finally {
+      setTransferLoading(false);
     }
   };
 
@@ -108,6 +160,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     setTxLoading(true);
     try {
       const res = await fetch(`/api/user/transactions?address=${encodeURIComponent(wallet.address)}&limit=30`);
+      if (!res.ok) throw new Error("Failed to fetch transactions");
       const data = await res.json();
       if (res.ok && data.transactions) setDbTransactions(data.transactions);
     } catch (e) {
@@ -188,6 +241,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                     asset:              withdrawAsset
                 })
             });
+            
+            if (!res.ok) {
+                throw new Error(`Withdrawal Request Failed (${res.status})`);
+            }
+
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Withdrawal request failed');
             txHash = `pending-approval-#${data.requestId}`;
@@ -310,6 +368,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
           </div>
           <div className="flex space-x-3">
              <button onClick={handleDepositClick} className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">Deposit</button>
+             <button onClick={() => setShowTransferModal(true)} className="px-8 py-3 bg-emerald-600/20 text-emerald-500 font-black uppercase tracking-widest text-xs rounded-xl border border-emerald-500/20 hover:bg-emerald-600/20 transition-all">Transfer</button>
              <button onClick={handleWithdrawClick} className="px-8 py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
              <button onClick={() => setActiveModal('kyc')} className="px-8 py-3 bg-amber-600/10 text-amber-500 font-black uppercase tracking-widest text-xs rounded-xl border border-amber-500/20 hover:bg-amber-600/20 transition-all">Verify KYC</button>
           </div>
@@ -737,6 +796,91 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
            </div>
            )}
         </div>
+
+        {/* Transfer Modal */}
+        {showTransferModal && (
+            <div className="fixed inset-0 z-[600] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="absolute inset-0" onClick={() => setShowTransferModal(false)} />
+            <div className="relative w-full max-w-md bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
+                <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
+                <div>
+                    <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Internal Transfer</h2>
+                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Move funds between Protocol and Available</p>
+                </div>
+                <button onClick={() => setShowTransferModal(false)} className="text-gray-500 hover:text-white transition-colors">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+                </div>
+                
+                <div className="p-8 space-y-6">
+                <div className="grid grid-cols-2 gap-3 p-1 bg-[#0B0E11] rounded-2xl border border-[#2B3139]">
+                    <button 
+                    onClick={() => setTransferDirection('vault_to_trade')}
+                    className={`py-3 text-[10px] font-black uppercase rounded-xl transition-all ${transferDirection === 'vault_to_trade' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                    To Trading
+                    </button>
+                    <button 
+                    onClick={() => setTransferDirection('trade_to_vault')}
+                    className={`py-3 text-[10px] font-black uppercase rounded-xl transition-all ${transferDirection === 'trade_to_vault' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                    To Protocol
+                    </button>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                    <span className="text-gray-500">Available {transferDirection === 'vault_to_trade' ? 'Protocol' : 'Trading'}</span>
+                    <span className="text-indigo-400">
+                        ${(transferDirection === 'vault_to_trade' ? vaultUsdtBalance : tradingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    </div>
+                    
+                    <div className="relative">
+                    <input 
+                        type="number"
+                        value={transferAmount}
+                        onChange={(e) => setTransferAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-5 text-lg font-mono font-bold text-gray-100 outline-none transition-all"
+                    />
+                    <button 
+                        onClick={() => setTransferAmount((transferDirection === 'vault_to_trade' ? vaultUsdtBalance : tradingBalance).toString())}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase text-indigo-500 hover:text-indigo-400"
+                    >
+                        Max
+                    </button>
+                    </div>
+                </div>
+
+                <button 
+                    onClick={handleTransfer}
+                    disabled={transferLoading || !transferAmount || parseFloat(transferAmount) <= 0}
+                    className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black uppercase italic tracking-[0.2em] rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-3"
+                >
+                    {transferLoading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                    <>
+                        <span>Confirm Transfer</span>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                    </>
+                    )}
+                </button>
+
+                {tradeStatus && (
+                    <div className={`text-[9px] font-black uppercase tracking-widest text-center px-3 py-2 rounded-xl border ${tradeStatus.ok ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-400' : 'bg-rose-900/30 border-rose-500/30 text-rose-400'}`}>
+                        {tradeStatus.msg}
+                    </div>
+                )}
+                </div>
+
+                <div className="p-4 bg-[#0B0E11] border-t border-[#2B3139] text-center">
+                <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Secure Protocol Settlement Layer</span>
+                </div>
+            </div>
+            </div>
+        )}
       </div>
     </div>
   );

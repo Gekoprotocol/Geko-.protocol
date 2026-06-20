@@ -5,30 +5,14 @@ import { WalletData } from '../types';
 interface LandingPageProps {
   onLoginSuccess: (data: WalletData) => void;
   onConnectWalletClick: () => void;
+  canInstall?: boolean;
+  onInstall?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConnectWalletClick }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConnectWalletClick, canInstall, onInstall }) => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-
-  useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    });
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
-    }
-    setDeferredPrompt(null);
-  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,9 +56,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConn
                 </div>
            </div>
 
-           {deferredPrompt && (
+           {canInstall && (
               <button 
-                  onClick={handleInstallClick}
+                  onClick={onInstall}
                   className="w-fit bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center space-x-2"
               >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>

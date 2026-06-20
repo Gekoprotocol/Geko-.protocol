@@ -169,6 +169,23 @@ function TerminalLayout() {
     return assets.find(a => a.symbol === selectedSymbol) || assets[0] || { symbol: 'BTC', name: 'Bitcoin', price: 0, change24h: 0, marketCap: '0', volume24h: '0' };
   }, [assets, selectedSymbol]);
 
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setDeferredPrompt(null);
+    }
+  };
+
   // Fetch User Data & Balances
   const refreshData = useCallback(async (nickname?: string) => {
     if (!publicKey) return;
@@ -181,19 +198,20 @@ function TerminalLayout() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: address, nickname })
       });
+      if (!upsertRes.ok) throw new Error("API Offline");
       const userJson = await upsertRes.json();
       const user = userJson.user;
       setUserData(user);
 
       if (!user.nickname && !nickname) {
-        const name = prompt("Establish Protocol Nickname (Required for first-time entry):");
-        if (name) {
-          refreshData(name);
-        }
+        setIsNicknameModalOpen(true);
+      } else if (nickname) {
+        setIsNicknameModalOpen(false);
       }
 
       // Get Vault Balance
       const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}`);
+      if (!balRes.ok) throw new Error("Balance API Offline");
       const balJson = await balRes.json();
       setVaultBalance(balJson.total_usd_value || 0);
     } catch (err) {
@@ -203,11 +221,19 @@ function TerminalLayout() {
     }
   }, [publicKey]);
 
+  const handleNicknameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (nicknameInput.trim()) {
+      refreshData(nicknameInput.trim());
+    }
+  };
+
   // Price Feed
   useEffect(() => {
     const fetchPrices = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/binance/prices`);
+        if (!res.ok) return;
         const data = await res.json();
         setPrices(data);
       } catch (e) {
@@ -308,19 +334,7 @@ function TerminalLayout() {
         {/* TOP BAR */}
         <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 glass shrink-0 z-40">
           <div className="flex gap-10">
-            <BalanceWidget 
-              label={isDemo ? "Available Balance (DEMO)" : "Available Balance"} 
-              value={walletData?.trading_balance || 0} 
-              color={isDemo ? "text-amber-400" : "text-emerald-400"} 
-            />
-
-            <BalanceWidget 
-              label={isDemo ? "Trade Balance (DEMO)" : "Trade Balance"} 
-              value={walletData?.trading_balance || 0} 
-              color={isDemo ? "text-amber-400" : "text-emerald-400"} 
-            />
-
-            <BalanceWidget label="Protocol Balance" value={vaultBalance} color="text-indigo-400" />
+            {/* Balances removed from top per user request */}
           </div>
           <div className="flex items-center gap-6">
              <div className="hidden lg:flex items-center space-x-6">
@@ -367,6 +381,45 @@ function TerminalLayout() {
 
       {isIdentityOpen && walletData && (
           <WalletDashboard wallet={walletData} onClose={() => setIsIdentityOpen(false)} onDisconnect={disconnect} />
+      )}
+
+      {isNicknameModalOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-[#181C25] border border-[#2B3139] rounded-[40px] max-w-md w-full p-10 shadow-2xl relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
+            <div className="text-center space-y-6">
+              <div className="w-20 h-20 bg-indigo-600/20 rounded-3xl flex items-center justify-center mx-auto border border-indigo-500/30">
+                <ShieldCheck size={40} className="text-indigo-400" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-black text-white italic uppercase tracking-tight">Identity Uplink</h2>
+                <p className="text-xs text-gray-500 font-bold uppercase tracking-[0.2em]">Protocol Entry Authorization Required</p>
+              </div>
+              <form onSubmit={handleNicknameSubmit} className="space-y-4 text-left">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Establish Protocol Nickname</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={nicknameInput}
+                    onChange={(e) => setNicknameInput(e.target.value)}
+                    placeholder="e.g. ALPHA_TRADER"
+                    className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-5 text-base font-mono font-bold text-gray-100 outline-none transition-all shadow-inner"
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase italic tracking-[0.2em] rounded-2xl shadow-xl transition-all"
+                >
+                  Finalize Authorization
+                </button>
+              </form>
+              <div className="pt-4 border-t border-white/5">
+                 <p className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Connected Wallet: {publicKey?.toBase58().slice(0,16)}...</p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
