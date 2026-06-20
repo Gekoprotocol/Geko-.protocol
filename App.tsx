@@ -170,6 +170,8 @@ function TerminalLayout() {
   }, [assets, selectedSymbol]);
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
+  const [nicknameInput, setNicknameInput] = useState('');
 
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
