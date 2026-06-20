@@ -1597,11 +1597,24 @@ app.get('*', (req, res) => {
   res.status(404).send("<h1>Frontend Build Not Found</h1><p>Please ensure index.html exists in /dist, /public, or the project root.</p>");
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log('---------------------------------------------');
-  console.log(`🚀 Geko Protocols Server: http://0.0.0.0:${port}`);
-  console.log(`📂 Static Paths: dist, public, root`);
-  console.log(`🗄️  Database Status: ${dbAvailable ? 'CONNECTED ✅' : 'DISCONNECTED ❌'}`);
-  console.log(`💳 NowPayments Ready: ${!!npApi}`);
-  console.log('---------------------------------------------');
+try {
+  app.listen(port, '0.0.0.0', () => {
+    console.log('---------------------------------------------');
+    console.log(`🚀 Geko Protocols Server: http://0.0.0.0:${port}`);
+    console.log(`📂 Static Paths: dist, public, root`);
+    console.log(`🗄️  Database Status: ${dbAvailable ? 'CONNECTED ✅' : 'DISCONNECTED ❌'}`);
+    console.log(`💳 NowPayments Ready: ${!!npApi}`);
+    console.log('---------------------------------------------');
+  });
+} catch (listenError) {
+  console.error('FATAL: Server failed to start:', listenError);
+  process.exit(1);
+}
+
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL: Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
 });
