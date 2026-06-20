@@ -38,6 +38,13 @@
       }
     </script>
 
+    <script type="module">
+      import { Buffer } from 'https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm';
+      window.Buffer = Buffer;
+      window.global = window;
+      window.process = { env: {} };
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
