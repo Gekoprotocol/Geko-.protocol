@@ -19,7 +19,7 @@
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",
     "@solana/wallet-adapter-wallets": "^0.19.38",
-    "@solana/web3.js": "^1.98.4",
+    "@solana/web3.js": "1.91.1",
     "@supabase/supabase-js": "^2.48.0",
     "@vitejs/plugin-react": "^6.0.2",
     "body-parser": "^2.2.2",
@@ -34,6 +34,8 @@
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "rpc-websockets": "7.5.0",
+    "uuid": "8.3.2",
     "vite": "^8.0.13"
   },
   "devDependencies": {
@@ -42,8 +44,16 @@
     "typescript": "^5.2.2"
   },
   "overrides": {
-    "axios": "^1.16.1",
+    "@solana/web3.js": {
+      "rpc-websockets": "7.5.0"
+    },
     "rpc-websockets": "7.5.0",
-    "uuid": "8.3.2"
+    "uuid": "8.3.2",
+    "ws": "8.17.1"
+  },
+  "resolutions": {
+    "rpc-websockets": "7.5.0",
+    "uuid": "8.3.2",
+    "ws": "8.17.1"
   }
 }
