@@ -105,6 +105,13 @@ const TradeView: React.FC<TradeViewProps> = ({
 
   const handleTransfer = async () => {
     if (!wallet?.address || !transferAmount) return;
+    
+    if (wallet.isDemo) {
+      setTradeStatus({ msg: 'Transfers only available in Live mode', ok: false });
+      setTimeout(() => setTradeStatus(null), 3000);
+      return;
+    }
+
     setTransferLoading(true);
     try {
       const res = await fetch('/api/balance/transfer', {
@@ -184,8 +191,9 @@ const TradeView: React.FC<TradeViewProps> = ({
             tradeId:       tradeId
           })
         });
-        if (!res.ok) throw new Error("Trade execution failed");
+        
         const data = await res.json();
+
         if (!res.ok) {
           setTradeStatus({ msg: data.error || 'Order rejected', ok: false });
           setLocalActiveTrades(prev => prev.filter(t => t.id !== tradeId));
@@ -193,7 +201,7 @@ const TradeView: React.FC<TradeViewProps> = ({
           setTradeStatus({ msg: `Order placed · -$${parsedAmount} margin`, ok: true });
           setTradingBalance(prev => prev - parsedAmount);
         }
-      } catch {
+      } catch (e) {
         setTradeStatus({ msg: 'Ledger sync failed', ok: false });
         setLocalActiveTrades(prev => prev.filter(t => t.id !== tradeId));
       }
