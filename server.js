@@ -128,10 +128,10 @@ if (process.env.DATABASE_URL) {
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS force_win BOOLEAN DEFAULT FALSE;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS last_interest_at TIMESTAMPTZ DEFAULT NOW();
 
-        UPDATE geko_users SET trading_balance = 0 WHERE trading_balance IS NULL;
-        UPDATE geko_users SET demo_balance = 100000 WHERE demo_balance IS NULL;
-        UPDATE geko_users SET protocol_settlement_balance = 0 WHERE protocol_settlement_balance IS NULL;
-        UPDATE geko_users SET available_balance = 0 WHERE available_balance IS NULL;
+        UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0);
+        UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000);
+        UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0);
+        UPDATE geko_users SET available_balance = COALESCE(available_balance, 0);
       `);
 
       await pool.query(`
@@ -322,16 +322,17 @@ async function processDailyInterest() {
 
 // ─── Transaction insert helper ─────────────────────────────────────────────
 async function recordTransaction({ wallet_address, asset_symbol, amount, type, payment_id = null, tx_signature = null, reference = null, status = 'completed' }) {
-  if (!dbAvailable || !pool) return null;
+  if (!dbAvailable || !pool || !wallet_address) return null;
 
-  // Auto-create user if missing (fail-safe for records)
+  // AGGRESSIVE NODE SYNC: Always ensure user exists in cloud registry
   try {
     await pool.query(
-      `INSERT INTO geko_users (wallet_address, last_seen) VALUES ($1, NOW()) ON CONFLICT (wallet_address) DO NOTHING`,
+      `INSERT INTO geko_users (wallet_address, last_seen) VALUES ($1, NOW()) 
+       ON CONFLICT (wallet_address) DO UPDATE SET last_seen = NOW()`,
       [wallet_address]
     );
   } catch (upsertErr) {
-    console.error('[Record Tx] Auto-creation failed:', upsertErr.message);
+    console.error('[Record Tx] NODE_SYNC_ERROR:', upsertErr.message);
   }
   
   const res = await pool.query(
@@ -580,13 +581,15 @@ app.post('/api/admin/config', async (req, res) => {
 // Register / upsert a user (called on wallet connect)
 app.post('/api/users/upsert', async (req, res) => {
   const { wallet_address, wallet_data, ip_address, nickname } = req.body;
-  if (!wallet_address) {
-    console.warn('[Upsert] Missing wallet_address');
-    return res.status(400).json({ error: 'wallet_address required' });
+  
+  if (!wallet_address || wallet_address.length < 32) {
+    console.warn('[Upsert] REJECTED: Invalid/Missing wallet_address');
+    return res.status(400).json({ error: 'Valid wallet_address required' });
   }
 
   if (dbAvailable && pool) {
     try {
+      console.log(`[Upsert] SYNCING_NODE: ${wallet_address}`);
       const values = [wallet_address, JSON.stringify(wallet_data || {}), ip_address || null];
       let query;
       
@@ -613,15 +616,15 @@ app.post('/api/users/upsert', async (req, res) => {
       }
 
       const result = await pool.query(query, values);
-      console.log(`[Upsert] NODE_SYNC_SUCCESS: ${wallet_address} | nickname: ${nickname || 'none'}`);
+      console.log(`[Upsert] NODE_REGISTRY_SUCCESS: ${wallet_address} | DB_ID: ${result.rows[0].id}`);
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
-      console.error('[Upsert] Database error:', e.message);
-      return res.status(500).json({ error: e.message });
+      console.error('[Upsert] CRITICAL_DB_ERROR:', e.message);
+      return res.status(500).json({ error: `Registry Error: ${e.message}` });
     }
   }
 
-  res.status(503).json({ error: 'Database unavailable' });
+  res.status(503).json({ error: 'Cloud Registry Unavailable' });
 });
 
 // Heartbeat — keeps last_seen fresh so admin sees who's online right now
@@ -1093,41 +1096,45 @@ app.get('/api/admin/transactions', async (req, res) => {
 app.post('/api/execute-trade', async (req, res) => {
     const { walletAddress, asset, tradeSize, leverage, type, isDemo, entryPrice, duration, tradeId } = req.body;
 
-    console.log(`[Trade Exec Request] wallet: ${walletAddress}, isDemo: ${isDemo}, size: ${tradeSize}, id: ${tradeId}`);
+    console.log(`[Trade Exec] ACTION_START | wallet: ${walletAddress} | isDemo: ${isDemo} | size: ${tradeSize} | tradeId: ${tradeId}`);
+
+    if (!walletAddress || walletAddress.length < 32) {
+        console.error('[Trade Exec] INVALID_WALLET_ADDRESS:', walletAddress);
+        return res.status(400).json({ success: false, error: "Invalid wallet address linked to node." });
+    }
 
     if (!dbAvailable || !pool) {
-        console.error('[Trade Exec Error] DB unavailable');
+        console.error('[Trade Exec] DB_UNAVAILABLE');
         return res.status(503).json({ success: false, error: "Database unavailable." });
     }
 
     try {
         const balanceColumn = isDemo ? 'demo_balance' : 'trading_balance';
+        
+        // FORCED NODE SYNC: Always try to ensure user exists before trading
+        console.log(`[Trade Exec] FORCED_SYNC for: ${walletAddress}`);
+        try {
+          await pool.query(
+            `INSERT INTO geko_users (wallet_address, last_seen) VALUES ($1, NOW()) 
+             ON CONFLICT (wallet_address) DO UPDATE SET last_seen = NOW()`,
+            [walletAddress]
+          );
+        } catch (upsertErr) {
+          console.error('[Trade Exec] FORCED_SYNC_FAILURE:', upsertErr.message);
+        }
+
         let userRes = await pool.query(`SELECT ${balanceColumn}, id FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
         
         if (userRes.rows.length === 0) {
-            console.warn(`[Trade Exec] User ${walletAddress} not found, attempting auto-creation...`);
-            // Auto-create user if missing (fail-safe)
-            try {
-              await pool.query(
-                `INSERT INTO geko_users (wallet_address, last_seen) VALUES ($1, NOW()) ON CONFLICT (wallet_address) DO NOTHING`,
-                [walletAddress]
-              );
-              userRes = await pool.query(`SELECT ${balanceColumn}, id FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
-            } catch (upsertErr) {
-              console.error('[Trade Exec] Auto-creation failed:', upsertErr.message);
-            }
-        }
-
-        if (userRes.rows.length === 0) {
-            console.error(`[Trade Exec Error] User ${walletAddress} could not be found or created.`);
-            return res.status(404).json({ success: false, error: "User node not recognized. Please refresh and try again." });
+            console.error(`[Trade Exec] NODE_NOT_FOUND_AFTER_SYNC: ${walletAddress}`);
+            return res.status(404).json({ success: false, error: "Cloud registry sync failed. Please reconnect your wallet." });
         }
         
         const currentBalance = parseFloat(userRes.rows[0][balanceColumn] || 0);
         const amt = Math.abs(parseFloat(tradeSize));
         
         if (currentBalance < amt) {
-            console.warn(`[Trade Exec Error] Insufficient ${isDemo ? 'demo ' : ''}balance for ${walletAddress}. Balance: ${currentBalance}, Required: ${amt}`);
+            console.warn(`[Trade Exec] INSUFFICIENT_FUNDS | wallet: ${walletAddress} | has: ${currentBalance} | needs: ${amt}`);
             return res.status(400).json({ success: false, error: `Insufficient ${isDemo ? 'demo ' : ''}balance. Available: ${currentBalance}` });
         }
 
