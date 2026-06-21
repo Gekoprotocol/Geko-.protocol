@@ -57,6 +57,7 @@ import WalletDashboard from './components/WalletDashboard';
 import GraphsView from './components/GraphsView';
 import { SupportWidget } from './components/SupportWidget';
 import AdminDesk from './components/AdminDesk';
+import TransactionHistory from './components/TransactionHistory';
 import { WalletData, AssetInfo, ActiveTrade } from './types';
 
 const API_BASE = window.location.origin;
@@ -324,6 +325,7 @@ function TerminalLayout() {
           <NavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade Engine" />
           <NavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Visualizer" />
           <NavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Equity Center" />
+          <NavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
           
           <div className="pt-6 pb-2 text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] pl-4">Compliance</div>
           <NavItem active={activeTab === 'kyc'} onClick={() => setActiveTab('kyc')} icon={<ShieldCheck size={18}/>} label="KYC Attestation" />
@@ -388,6 +390,7 @@ function TerminalLayout() {
           {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={connected} onPlaceTrade={() => {}} activeTrades={[]} wallet={walletData} />}
           {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
           {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress="" onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
           {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress="" onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'support' && <div className="p-20 text-center space-y-4">
               <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Support Node</h2>

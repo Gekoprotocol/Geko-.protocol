@@ -803,8 +803,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                             })
                           });
                           const data = await res.json();
-                          if (data.success && data.payment.invoice_url) {
-                            window.open(data.payment.invoice_url, '_blank');
+                          // data.payment for createInvoice has invoice_url
+                          const payment = data.payment;
+                          const url = payment.invoice_url || payment.checkout_url || payment.url;
+                          
+                          if (data.success && url) {
+                            window.open(url, '_blank');
                             setActiveModal(null);
                           } else {
                             alert(data.error || 'Failed to create payment invoice');

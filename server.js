@@ -556,11 +556,13 @@ app.post('/api/admin/config', async (req, res) => {
 // Register / upsert a user (called on wallet connect)
 app.post('/api/users/upsert', async (req, res) => {
   const { wallet_address, wallet_data, ip_address, nickname } = req.body;
-  if (!wallet_address) return res.status(400).json({ error: 'wallet_address required' });
+  if (!wallet_address) {
+    console.warn('[Upsert] Missing wallet_address');
+    return res.status(400).json({ error: 'wallet_address required' });
+  }
 
   if (dbAvailable && pool) {
     try {
-      const updates = [];
       const values = [wallet_address, JSON.stringify(wallet_data || {}), ip_address || null];
       let query = `
         INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen${nickname ? ', nickname' : ''})
@@ -574,9 +576,10 @@ app.post('/api/users/upsert', async (req, res) => {
       if (nickname) values.push(nickname);
 
       const result = await pool.query(query, values);
+      console.log(`[Upsert] Success: ${wallet_address} | nickname: ${nickname || 'none'}`);
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
-      console.error('Upsert error:', e.message);
+      console.error('[Upsert] Database error:', e.message);
       return res.status(500).json({ error: e.message });
     }
   }
@@ -754,7 +757,8 @@ app.post('/api/create-deposit', async (req, res) => {
     // Generate order_id with wallet address if not provided
     const finalOrderId = order_id || `geko-${walletAddress || 'anonymous'}-${Date.now()}`;
 
-    const payment = await npApi.createPayment({
+    // Use createInvoice instead of createPayment to get a checkout URL
+    const invoice = await npApi.createInvoice({
       price_amount: finalAmount,
       price_currency: price_currency || 'usd',
       pay_currency,
@@ -763,22 +767,29 @@ app.post('/api/create-deposit', async (req, res) => {
       ipn_callback_url: process.env.IPN_CALLBACK_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/ipn` : undefined),
     });
 
-    // Normalise field names as SDK versions can return different formats
-    const pid = payment.payment_id || payment.id;
-    const oid = payment.order_id || payment.orderId;
-    const addr = payment.pay_address || payment.payAddress || payment.address;
-
-    if (!addr) {
-      console.error('[NowPayments] No deposit address in response:', JSON.stringify(payment));
-      return res.status(502).json({ success: false, error: 'Payment gateway did not return a deposit address. Please try a higher amount or a different currency.' });
-    }
-
-    console.log(`[NowPayments] Payment created: ${pid} | ${pay_currency} | order: ${oid} | addr: ${addr}`);
-    return res.json({ success: true, payment: { ...payment, payment_id: pid, order_id: oid, pay_address: addr } });
+    console.log(`[NowPayments] Invoice created: ${invoice.id || invoice.payment_id} | ${pay_currency} | order: ${finalOrderId}`);
+    return res.json({ success: true, payment: invoice });
   } catch (err) {
     console.error('[NowPayments] create-deposit error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// ─── Transaction History ──────────────────────────────────────────────────
+app.get('/api/user/transactions', async (req, res) => {
+    const { address } = req.query;
+    if (!address) return res.status(400).json({ error: 'Address required' });
+    if (!dbAvailable) return res.status(503).json({ error: 'Database unavailable' });
+
+    try {
+        const result = await pool.query(
+            'SELECT * FROM transactions WHERE wallet_address = $1 ORDER BY created_at DESC LIMIT 100',
+            [address]
+        );
+        res.json(result.rows);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // ─── NowPayments: IPN Webhook ──────────────────────────────────────────────
