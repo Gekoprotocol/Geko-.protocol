@@ -106,7 +106,7 @@ if (process.env.DATABASE_URL) {
         )
       `);
 
-      // Ensure new columns exist for existing tables
+      // Ensure new columns exist for existing tables and fix NULL balances
       await pool.query(`
         ALTER TABLE geko_users ALTER COLUMN trading_balance SET DEFAULT 0;
         ALTER TABLE geko_users ALTER COLUMN demo_balance SET DEFAULT 100000;
@@ -114,6 +114,11 @@ if (process.env.DATABASE_URL) {
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS nickname TEXT;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS force_win BOOLEAN DEFAULT FALSE;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS last_interest_at TIMESTAMPTZ DEFAULT NOW();
+
+        UPDATE geko_users SET trading_balance = 0 WHERE trading_balance IS NULL;
+        UPDATE geko_users SET demo_balance = 100000 WHERE demo_balance IS NULL;
+        UPDATE geko_users SET protocol_settlement_balance = 0 WHERE protocol_settlement_balance IS NULL;
+        UPDATE geko_users SET available_balance = 0 WHERE available_balance IS NULL;
       `);
 
       await pool.query(`
@@ -134,6 +139,21 @@ if (process.env.DATABASE_URL) {
       `);
 
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_trades_wallet ON trades (wallet_address, status)`);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS geko_config (
+          key TEXT PRIMARY KEY,
+          value TEXT,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      // Initialize default config
+      await pool.query(`
+        INSERT INTO geko_config (key, value)
+        VALUES ('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw')
+        ON CONFLICT (key) DO NOTHING
+      `);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS geko_visitors (
@@ -290,6 +310,7 @@ async function processDailyInterest() {
 // ─── Transaction insert helper ─────────────────────────────────────────────
 async function recordTransaction({ wallet_address, asset_symbol, amount, type, payment_id = null, tx_signature = null, reference = null, status = 'completed' }) {
   if (!dbAvailable || !pool) return null;
+  
   const res = await pool.query(
     `INSERT INTO transactions (wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
@@ -297,34 +318,31 @@ async function recordTransaction({ wallet_address, asset_symbol, amount, type, p
   );
 
   // Sync with geko_users table
-  if (status === 'completed' && asset_symbol === 'USDT') {
+  if (status === 'completed') {
     const amt = parseFloat(amount || 0);
     
-    if (type === 'deposit' || type === 'credit' || type === 'interest') {
-      // These reflect in the Protocol Settlement Balance
-      await pool.query(
-        `UPDATE geko_users 
-         SET protocol_settlement_balance = protocol_settlement_balance + $1
-         WHERE wallet_address = $2`,
-        [amt, wallet_address]
-      );
-    } else if (type === 'trade') {
-      // Trades reflect in the Trading (Available) Balance
-      await pool.query(
-        `UPDATE geko_users 
-         SET trading_balance = trading_balance + $1,
-             available_balance = available_balance + $1
-         WHERE wallet_address = $2`,
-        [amt, wallet_address]
-      );
-    } else if (type === 'withdrawal') {
-      // Withdrawals come from Protocol Settlement Balance
-      await pool.query(
-        `UPDATE geko_users 
-         SET protocol_settlement_balance = protocol_settlement_balance + $1
-         WHERE wallet_address = $2`,
-        [amt, wallet_address]
-      );
+    // For Protocol Settlement Balance, we primarily track USDT equivalent
+    // If the asset is NOT USDT, we should still reflect its impact if it was a direct deposit/withdrawal
+    if (asset_symbol === 'USDT') {
+      if (type === 'deposit' || type === 'credit' || type === 'interest' || type === 'withdrawal') {
+        await pool.query(
+          `UPDATE geko_users 
+           SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0) + $1
+           WHERE wallet_address = $2`,
+          [amt, wallet_address]
+        );
+      } else if (type === 'trade') {
+        await pool.query(
+          `UPDATE geko_users 
+           SET trading_balance = COALESCE(trading_balance, 0) + $1,
+               available_balance = COALESCE(available_balance, 0) + $1
+           WHERE wallet_address = $2`,
+          [amt, wallet_address]
+        );
+      }
+    } else {
+      // If it's a non-USDT deposit/withdrawal, we might want to log it specifically
+      // but Protocol Settlement Balance is currently displayed as USDT-only in UI
     }
   }
 
@@ -500,6 +518,38 @@ app.post('/api/admin/users/update', async (req, res) => {
     }
   }
 
+  res.status(503).json({ error: 'Database unavailable' });
+});
+
+app.get('/api/config', async (req, res) => {
+  if (dbAvailable && pool) {
+    try {
+      const result = await pool.query('SELECT key, value FROM geko_config');
+      const config = result.rows.reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
+      return res.json(config);
+    } catch (e) { console.error('Config fetch error:', e.message); }
+  }
+  res.json({ solana_deposit_address: '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw' });
+});
+
+app.post('/api/admin/config', async (req, res) => {
+  const { solana_deposit_address } = req.body;
+  if (!solana_deposit_address) return res.status(400).json({ error: 'solana_deposit_address required' });
+
+  if (dbAvailable && pool) {
+    try {
+      await pool.query(
+        `INSERT INTO geko_config (key, value, updated_at)
+         VALUES ('solana_deposit_address', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [solana_deposit_address]
+      );
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('Config update error:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  }
   res.status(503).json({ error: 'Database unavailable' });
 });
 
@@ -685,7 +735,7 @@ app.post('/api/create-deposit', async (req, res) => {
     return res.status(503).json({ success: false, error: 'Payment gateway not configured.' });
   }
 
-  const { pay_currency, price_amount, price_currency, order_id, order_description } = req.body;
+  const { pay_currency, price_amount, price_currency, order_id, order_description, walletAddress } = req.body;
 
   if (!pay_currency) {
     return res.status(400).json({ success: false, error: 'pay_currency is required.' });
@@ -701,11 +751,14 @@ app.post('/api/create-deposit', async (req, res) => {
   const finalAmount = Math.max(parseFloat(price_amount) || 0, minAmount);
 
   try {
+    // Generate order_id with wallet address if not provided
+    const finalOrderId = order_id || `geko-${walletAddress || 'anonymous'}-${Date.now()}`;
+
     const payment = await npApi.createPayment({
       price_amount: finalAmount,
       price_currency: price_currency || 'usd',
       pay_currency,
-      order_id: order_id || `geko-${Date.now()}`,
+      order_id: finalOrderId,
       order_description: order_description || 'Geko Protocols deposit',
       ipn_callback_url: process.env.IPN_CALLBACK_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/ipn` : undefined),
     });
@@ -776,9 +829,13 @@ const handleNowPaymentsWebhook = async (req, res) => {
     if (dbAvailable && pool && order_id) {
       try {
         // order_id format: "geko-<walletAddress>-<timestamp>"
-        const walletAddress = order_id.startsWith('geko-')
-          ? order_id.replace(/^geko-/, '').replace(/-\d{10,}$/, '')
-          : order_id;
+        let walletAddress = order_id;
+        if (order_id.startsWith('geko-')) {
+          const parts = order_id.split('-');
+          if (parts.length >= 2) {
+            walletAddress = parts[1];
+          }
+        }
 
         if (walletAddress && walletAddress.length > 10) {
           const asset = (pay_currency || 'SOL').toUpperCase()
@@ -977,19 +1034,26 @@ app.get('/api/admin/transactions', async (req, res) => {
 app.post('/api/execute-trade', async (req, res) => {
     const { walletAddress, asset, tradeSize, leverage, type, isDemo, entryPrice, duration, tradeId } = req.body;
 
+    console.log(`[Trade Exec Request] wallet: ${walletAddress}, isDemo: ${isDemo}, size: ${tradeSize}, id: ${tradeId}`);
+
     if (!dbAvailable || !pool) {
+        console.error('[Trade Exec Error] DB unavailable');
         return res.status(503).json({ success: false, error: "Database unavailable." });
     }
 
     try {
         const balanceColumn = isDemo ? 'demo_balance' : 'trading_balance';
         const userRes = await pool.query(`SELECT ${balanceColumn} FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
-        if (userRes.rows.length === 0) return res.status(404).json({ success: false, error: "User not found." });
+        if (userRes.rows.length === 0) {
+            console.warn(`[Trade Exec Error] User ${walletAddress} not found in DB`);
+            return res.status(404).json({ success: false, error: "User not found." });
+        }
         
         const currentBalance = parseFloat(userRes.rows[0][balanceColumn] || 0);
         const amt = Math.abs(parseFloat(tradeSize));
         
         if (currentBalance < amt) {
+            console.warn(`[Trade Exec Error] Insufficient ${isDemo ? 'demo ' : ''}balance for ${walletAddress}. Balance: ${currentBalance}, Required: ${amt}`);
             return res.status(400).json({ success: false, error: `Insufficient ${isDemo ? 'demo ' : ''}balance. Available: ${currentBalance}` });
         }
 

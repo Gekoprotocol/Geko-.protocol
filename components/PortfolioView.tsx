@@ -23,15 +23,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
   const [withdrawAsset, setWithdrawAsset] = useState('SOL');
   const [withdrawDestination, setWithdrawDestination] = useState('');
   
-  const [depositAsset, setDepositAsset] = useState('btc');
-
-  // NowPayments dynamic address state
-  const [nowPayAddress, setNowPayAddress]   = useState<string | null>(null);
-  const [nowPayAmount,  setNowPayAmount]    = useState<string | null>(null);
-  const [nowPayLoading, setNowPayLoading]   = useState(false);
-  const [nowPayError,   setNowPayError]     = useState('');
-
-  // Protocol Balance — live from DB (sum of transactions)
   const [protocolBalances, setProtocolBalances] = useState<{ asset: string; balance: number; tx_count: number }[]>([]);
   const [tradingBalance, setTradingBalance] = useState(0);
   const [demoBalance, setDemoBalance] = useState(100000);
@@ -50,59 +41,17 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
   const [copied, setCopied] = useState(false);
   const [gasPrice, setGasPrice] = useState(24);
 
-  const DEPOSIT_ASSETS = [
-    { label: 'Bitcoin',        code: 'btc',          network: 'BTC'     },
-    { label: 'Ethereum',       code: 'eth',          network: 'ERC-20'  },
-    { label: 'Solana',         code: 'sol',          network: 'SOL'     },
-    { label: 'USDT (TRC-20)', code: 'usdttrc20',    network: 'TRC-20'  },
-    { label: 'USDT (ERC-20)', code: 'usdterc20',    network: 'ERC-20'  },
-    { label: 'BNB',            code: 'bnbbsc',       network: 'BEP-20'  },
-    { label: 'Litecoin',       code: 'ltc',          network: 'LTC'     },
-    { label: 'MATIC',          code: 'maticmainnet', network: 'Polygon' },
-  ];
+  const [solanaDepositAddress, setSolanaDepositAddress] = useState('6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
 
-  const fetchDepositAddress = async (assetCode: string) => {
-    setNowPayLoading(true);
-    setNowPayError('');
-    setNowPayAddress(null);
-    setNowPayAmount(null);
-    try {
-      const res = await fetch('/api/create-deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pay_currency: assetCode,
-          price_amount: 1,
-          price_currency: 'usd',
-          order_id: `geko-${wallet?.address || 'anon'}-${Date.now()}`,
-          order_description: 'Geko Protocols deposit',
-        }),
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText.includes("<!DOCTYPE html>") ? "API Route Not Found (404). Check Vercel deployment." : `Server Error (${res.status})`);
-      }
-
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to generate address');
-      setNowPayAddress(data.payment?.pay_address || null);
-      setNowPayAmount(data.payment?.pay_amount ? String(data.payment.pay_amount) : null);
-    } catch (e: any) {
-      setNowPayError(e.message || 'Could not fetch deposit address');
-    } finally {
-      setNowPayLoading(false);
-    }
-  };
-
-  // Fetch address whenever deposit modal opens or asset changes
   useEffect(() => {
-    if (activeModal === 'deposit') {
-      fetchDepositAddress(depositAsset);
-    }
-  }, [activeModal, depositAsset]);
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.solana_deposit_address) setSolanaDepositAddress(data.solana_deposit_address);
+      })
+      .catch(() => {});
+  }, []);
 
-  // ── Protocol Balance fetch (sum of all DB transactions) ──────────────────
   const fetchProtocolBalance = async () => {
     if (!wallet) return;
     setBalLoading(true);
@@ -124,6 +73,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
 
   const handleTransfer = async () => {
     if (!wallet?.address || !transferAmount) return;
+
+    if (wallet.isDemo) {
+        setTradeStatus({ msg: 'Transfers only available in Live mode', ok: false });
+        setTimeout(() => setTradeStatus(null), 3000);
+        return;
+    }
+
     setTransferLoading(true);
     try {
       const res = await fetch('/api/balance/transfer', {
@@ -170,7 +126,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     }
   };
 
-  // Load once when wallet is available and refresh every 30s
   useEffect(() => {
     if (!wallet?.address) return;
     fetchProtocolBalance();
@@ -276,7 +231,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
 
         setStep('success');
         audioSynth.playSuccess();
-        // Refresh live balance immediately after any successful operation
         fetchProtocolBalance();
         fetchDbTransactions();
         setTimeout(() => {
@@ -301,13 +255,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     runBroadcastSequence('withdraw');
   };
 
-  const copyAddress = () => {
-    if (!nowPayAddress) return;
-    navigator.clipboard.writeText(nowPayAddress);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const [isCopiedPopupOpen, setIsCopiedPopupOpen] = useState(false);
 
   const triggerWalletPopup = () => {
@@ -330,7 +277,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
   return (
     <div className="h-full overflow-y-auto p-6 lg:p-10 bg-[#0B0E11] relative custom-scrollbar text-gray-200">
       
-      {/* Active Wallet Popup Notification */}
       {isCopiedPopupOpen && (
           <div className="fixed top-24 right-10 z-[1000] animate-in slide-in-from-right-10 duration-500">
               <div className="bg-[#181C25] border-2 border-indigo-500/50 p-6 rounded-[32px] shadow-2xl flex items-center space-x-4 backdrop-blur-xl">
@@ -416,22 +362,29 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
             </div>
             <div className="space-y-1">
               <div className="text-sm font-black text-gray-200 uppercase tracking-tight">Deposit Crypto</div>
-              <div className="text-[10px] text-gray-500 leading-relaxed px-2">Select an asset and get a secure, one-time deposit address generated by our payment gateway.</div>
+              <div className="text-[10px] text-gray-500 leading-relaxed px-2">Securely fund your protocol account using Solana Mainnet settlement layer.</div>
             </div>
-            <button
-              onClick={handleDepositClick}
-              className="w-full py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20"
-            >
-              Generate Address
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={handleDepositClick}
+                className="w-full py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20"
+              >
+                Deposit SOL
+              </button>
+              <button
+                onClick={() => { setActiveModal('nowpayments'); triggerWalletPopup(); }}
+                className="w-full py-4 bg-[#262B36] text-gray-300 font-black uppercase tracking-widest text-xs rounded-2xl border border-[#363C45] hover:bg-[#2F3642] transition-colors shadow-lg"
+              >
+                Other Assets
+              </button>
+            </div>
             <div className="flex items-center space-x-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Gateway · Secured</span>
+              <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Live Link · Secured</span>
             </div>
           </div>
         </div>
 
-        {/* ── Protocol Balance Card ─────────────────────────────────────── */}
         <div className="bg-[#181C25] rounded-[40px] border border-[#2B3139] overflow-hidden shadow-xl">
           <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
             <div>
@@ -459,7 +412,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
               </div>
               <p className="text-sm font-black text-gray-400 uppercase italic">No deposits recorded yet</p>
               <p className="text-[10px] text-gray-600 leading-relaxed max-w-xs">
-                Deposits made via the gateway or direct SOL transfers will appear here once confirmed on-chain.
+                Deposits made to the protocol address will appear here once confirmed on-chain.
               </p>
               <button
                 onClick={() => setActiveModal('deposit')}
@@ -482,12 +435,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
               {protocolBalances.map(b => {
                 const ASSET_COLORS: Record<string, string> = {
                   SOL: 'text-purple-400 border-purple-500/20 bg-purple-900/10',
-                  BTC: 'text-amber-400 border-amber-500/20 bg-amber-900/10',
-                  ETH: 'text-blue-400 border-blue-500/20 bg-blue-900/10',
                   USDT: 'text-emerald-400 border-emerald-500/20 bg-emerald-900/10',
-                  BNB: 'text-yellow-400 border-yellow-500/20 bg-yellow-900/10',
-                  LTC: 'text-gray-400 border-gray-500/20 bg-gray-900/10',
-                  MATIC: 'text-violet-400 border-violet-500/20 bg-violet-900/10',
                 };
                 const colorClass = ASSET_COLORS[b.asset] || 'text-indigo-400 border-indigo-500/20 bg-indigo-900/10';
                 return (
@@ -508,146 +456,88 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                   </div>
                 );
               })}
-
-              {/* Total USDT value row */}
-              {protocolBalances.some(b => b.asset === 'USDT') && (
-                <div className="col-span-full mt-2 p-5 rounded-3xl border border-indigo-500/20 bg-indigo-900/10 flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="text-[9px] font-black uppercase tracking-widest text-gray-500">Total Protocol Deposits (USDT)</div>
-                    <div className="font-mono font-black text-3xl text-indigo-300">
-                      ${(protocolBalances.find(b => b.asset === 'USDT')?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 bg-indigo-950/40 px-4 py-2 rounded-2xl border border-indigo-500/10">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Live</span>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
 
         {activeModal && (
           <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in fade-in duration-300">
-             <div className="bg-[#181C25] border border-[#2B3139] rounded-[48px] max-w-lg w-full p-10 shadow-2xl relative overflow-y-auto max-h-[90vh] no-scrollbar">
+             <div className="bg-[#181C25] border border-[#2B3139] rounded-[48px] max-w-lg w-full shadow-2xl relative overflow-hidden flex flex-col">
                 <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600 shrink-0"></div>
                 
                 {step === 'form' && (
-                   <div className="space-y-8">
-                      <div className="flex justify-between items-center">
-                         <h2 className="text-2xl font-black text-gray-100 uppercase italic tracking-tight">{activeModal} Assets</h2>
-                         <button onClick={() => setActiveModal(null)} className="text-gray-500 hover:text-white transition-colors">
+                   <div className="flex flex-col">
+                      <div className="flex items-center justify-between p-8 bg-[#181C25] border-b border-[#2B3139]">
+                         <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Identity Uplink</h2>
+                         <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-[#2B3139] rounded-full transition-colors">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                          </button>
                       </div>
 
                       {activeModal === 'deposit' && (
-                        <div className="flex flex-col space-y-6">
-
-                          {/* Asset selector — scrollable vertical list */}
-                          <div className="space-y-3">
-                            <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Select Deposit Asset</label>
-                            <div className="max-h-48 overflow-y-auto pr-2 custom-scrollbar space-y-2">
-                              {DEPOSIT_ASSETS.map(a => (
-                                <button
-                                  key={a.code}
-                                  type="button"
-                                  onClick={() => setDepositAsset(a.code)}
-                                  disabled={nowPayLoading}
-                                  className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                    depositAsset === a.code 
-                                      ? 'bg-indigo-600 border-indigo-500 text-white' 
-                                      : 'bg-[#0B0E11] border-[#2B3139] text-gray-400 hover:border-gray-600'
-                                  }`}
-                                >
-                                  <div className="flex items-center space-x-3">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${depositAsset === a.code ? 'bg-white/20' : 'bg-[#181C25] border border-[#2B3139]'}`}>
-                                      {a.code.substring(0,2).toUpperCase()}
-                                    </div>
-                                    <div className="text-left">
-                                      <div className="text-[11px] font-black uppercase tracking-tight">{a.label}</div>
-                                      <div className={`text-[8px] font-bold uppercase ${depositAsset === a.code ? 'text-white/60' : 'text-gray-600'}`}>{a.network} Network</div>
-                                    </div>
+                        <div className="p-10 space-y-10">
+                          <div className="flex flex-col items-center text-center space-y-6">
+                             <div className="p-6 bg-indigo-600/10 border-2 border-indigo-500/20 rounded-[40px] shadow-inner relative group">
+                                  <QRCodeSVG 
+                                      value={solanaDepositAddress} 
+                                      size={200} 
+                                      bgColor="transparent" 
+                                      fgColor="#818cf8" 
+                                      level="H" 
+                                      includeMargin={false}
+                                  />
+                             </div>
+                             
+                             <div className="space-y-2">
+                                  <div className="flex items-center justify-center space-x-3">
+                                      <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white font-black text-[10px]">SOL</div>
+                                      <span className="text-xl font-black text-gray-100 tracking-tight italic">SOLANA NETWORK</span>
                                   </div>
-                                  {depositAsset === a.code && <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
-                                </button>
-                              ))}
+                                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Protocol strictly accepts SOL for settlement</p>
+                             </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="flex justify-between items-center px-1">
+                              <label className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Destination Node Address</label>
+                              <span className="text-[8px] text-emerald-500 font-black uppercase flex items-center">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1.5"></div>
+                                  Live Link Secured
+                              </span>
+                            </div>
+                            <div className="relative group">
+                              <input 
+                                readOnly
+                                value={solanaDepositAddress}
+                                className="w-full bg-[#0B0E11] border-2 border-[#2B3139] group-hover:border-indigo-500/50 rounded-2xl p-6 text-sm font-mono font-bold text-indigo-300 outline-none transition-all shadow-inner truncate pr-20"
+                              />
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(solanaDepositAddress);
+                                  setCopied(true);
+                                  setTimeout(() => setCopied(false), 2000);
+                                }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
+                              >
+                                {copied ? 'Copied' : 'Copy'}
+                              </button>
                             </div>
                           </div>
 
-                          {/* QR + address area */}
-                          {nowPayLoading && (
-                            <div className="flex flex-col items-center space-y-3 py-6">
-                              <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                              <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Generating address…</span>
-                            </div>
-                          )}
-
-                          {nowPayError && !nowPayLoading && (
-                            <div className="w-full p-4 bg-rose-900/20 border border-rose-500/30 rounded-2xl text-xs text-rose-400 font-bold text-center space-y-3">
-                              <p>{nowPayError}</p>
-                              <button
-                                onClick={() => fetchDepositAddress(depositAsset)}
-                                className="px-4 py-2 bg-rose-600 text-white font-black uppercase text-[10px] rounded-xl hover:bg-rose-500 transition-colors"
-                              >
-                                Retry
-                              </button>
-                            </div>
-                          )}
-
-                          {nowPayAddress && !nowPayLoading && (
-                            <>
-                              <div className="bg-white p-4 rounded-3xl shadow-xl flex flex-col items-center">
-                                <QRCodeSVG value={nowPayAddress} size={192} level="H" includeMargin={true} className="rounded-2xl" />
-                                <div className="mt-2 flex items-center space-x-1">
-                                  <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                                  <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Gateway Address Verified</span>
-                                </div>
+                          <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-3xl p-6 flex items-start space-x-4">
+                              <div className="w-10 h-10 bg-indigo-600/20 rounded-2xl flex items-center justify-center shrink-0 border border-indigo-500/30">
+                                  <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                               </div>
-
-                              <div className="w-full p-4 bg-indigo-900/20 border border-indigo-500/30 rounded-2xl flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="text-[9px] text-indigo-400 font-black uppercase tracking-widest mb-1">Your Connected Wallet</div>
-                                  <div className="font-mono text-[10px] text-gray-300 break-all select-all">
-                                    {wallet.address}
-                                  </div>
-                                </div>
-                                <button type="button" onClick={() => { navigator.clipboard.writeText(wallet.address); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="ml-4 text-indigo-500 hover:text-indigo-400 transition-colors">
-                                  {copied ? <span className="text-[8px] font-black uppercase text-emerald-400">Copied</span> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
-                                </button>
+                              <div className="space-y-1">
+                                  <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Automatic Settlement</h4>
+                                  <p className="text-[9px] text-gray-500 font-bold uppercase leading-relaxed tracking-wider">Deposits are monitored in real-time. Once confirmed on-chain, USDT equivalent is credited to your Protocol Settlement Balance automatically.</p>
                               </div>
-
-                              <div className="w-full space-y-2">
-                                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Deposit Address (Send any amount)</label>
-                                <div className="flex items-center space-x-3 bg-[#0B0E11] p-4 rounded-2xl border border-[#2B3139]">
-                                  <span className="flex-1 font-mono text-[10px] text-gray-400 break-all select-all leading-relaxed">{nowPayAddress}</span>
-                                  <button type="button" onClick={copyAddress} className="text-indigo-500 hover:text-indigo-400 shrink-0">
-                                    {copied
-                                      ? <span className="text-[8px] font-black uppercase text-emerald-400">Copied</span>
-                                      : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                    }
-                                  </button>
-                                </div>
-                              </div>
-
-                              <button
-                                onClick={() => { setActiveModal(null); audioSynth.playPing(); }}
-                                className="w-full py-5 bg-indigo-600 text-white font-black uppercase italic tracking-widest rounded-3xl shadow-xl hover:bg-indigo-500 transition-all"
-                              >
-                                I've Sent the Payment
-                              </button>
-                              <p className="text-[9px] text-gray-600 text-center leading-relaxed">
-                                Your balance will be credited automatically once the transaction is confirmed on-chain.
-                              </p>
-                            </>
-                          )}
-
+                          </div>
                         </div>
                       )}
 
                       {activeModal === 'withdraw' && (
-                         <form onSubmit={handleWithdrawSubmit} className="space-y-6">
+                         <form onSubmit={handleWithdrawSubmit} className="space-y-6 p-10">
                             <div className="grid grid-cols-2 gap-4">
                                <div className="space-y-2">
                                   <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Asset</label>
@@ -676,7 +566,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                       )}
                       
                       {activeModal === 'kyc' && (
-                         <div className="space-y-6">
+                         <div className="space-y-6 p-10">
                             <div className="p-6 bg-[#0B0E11] rounded-3xl border border-[#2B3139] space-y-4">
                                <h3 className="text-sm font-black text-gray-100 uppercase italic">Identification Attestation</h3>
                                <p className="text-[10px] text-gray-500 leading-relaxed">Geko Protocols requires high-fidelity identification to comply with cross-chain regulatory frameworks.</p>
@@ -797,7 +687,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
            )}
         </div>
 
-        {/* Transfer Modal */}
         {showTransferModal && (
             <div className="fixed inset-0 z-[600] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
             <div className="absolute inset-0" onClick={() => setShowTransferModal(false)} />
@@ -880,6 +769,64 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                 </div>
             </div>
             </div>
+        )}
+        {activeModal === 'nowpayments' && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[40px] max-w-md w-full p-10 shadow-2xl relative">
+              <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
+              <button onClick={() => setActiveModal(null)} className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              
+              <div className="text-center space-y-6">
+                <div className="w-20 h-20 bg-indigo-600/20 rounded-3xl flex items-center justify-center mx-auto border border-indigo-500/30">
+                  <svg className="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-black text-white italic uppercase tracking-tight">Multi-Asset Deposit</h2>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-[0.2em]">Powered by NowPayments Gateway</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {['BTC', 'ETH', 'USDTTRC20', 'LTC', 'XRP', 'DOGE'].map(asset => (
+                    <button
+                      key={asset}
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/create-deposit', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                              pay_currency: asset.toLowerCase(),
+                              price_amount: 50, // Default min
+                              walletAddress: wallet?.address
+                            })
+                          });
+                          const data = await res.json();
+                          if (data.success && data.payment.invoice_url) {
+                            window.open(data.payment.invoice_url, '_blank');
+                            setActiveModal(null);
+                          } else {
+                            alert(data.error || 'Failed to create payment invoice');
+                          }
+                        } catch (e) {
+                          alert('Network error initiating deposit');
+                        }
+                      }}
+                      className="bg-[#0B0E11] border border-[#2B3139] hover:border-indigo-500/50 p-4 rounded-2xl flex flex-col items-center justify-center transition-all group"
+                    >
+                      <span className="text-sm font-black text-gray-200 uppercase group-hover:text-indigo-400">{asset.replace('TRC20', '')}</span>
+                      <span className="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-1">{asset.includes('TRC20') ? 'Tron' : 'Mainnet'}</span>
+                    </button>
+                  ))}
+                </div>
+                
+                <div className="pt-4 border-t border-white/5 text-[9px] text-gray-600 font-bold uppercase leading-relaxed">
+                  Choose an asset to generate a secure payment link. Protocol balance credits upon network confirmation.
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

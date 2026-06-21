@@ -148,7 +148,7 @@ function TerminalLayout() {
   };
 
   const activeTradingBalance = useMemo(() => {
-    const bal = isDemo ? parseFloat(userData?.demo_balance || 10000) : parseFloat(userData?.trading_balance || 0);
+    const bal = isDemo ? parseFloat(userData?.demo_balance ?? 100000) : parseFloat(userData?.trading_balance ?? 0);
     console.log(`[Balance Debug] isDemo: ${isDemo}, userData.demo: ${userData?.demo_balance}, Final: ${bal}`);
     return bal;
   }, [isDemo, userData]);
@@ -212,10 +212,18 @@ function TerminalLayout() {
       }
 
       // Get Vault Balance
-      const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}`);
+      const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}&asset=USDT`);
       if (!balRes.ok) throw new Error("Balance API Offline");
       const balJson = await balRes.json();
-      setVaultBalance(balJson.total_usd_value || 0);
+      setVaultBalance(balJson.balance || 0);
+      
+      // Update userData with latest balances
+      setUserData((prev: any) => ({
+        ...prev,
+        trading_balance: balJson.trading_balance,
+        demo_balance: balJson.demo_balance,
+        protocol_settlement_balance: balJson.balance
+      }));
     } catch (err) {
       console.error("Data fetch error", err);
     } finally {
@@ -248,7 +256,28 @@ function TerminalLayout() {
   }, []);
 
   useEffect(() => {
-    if (connected) refreshData();
+    if (connected && publicKey) {
+      const address = publicKey.toBase58();
+      // Heartbeat every 20 seconds
+      const interval = setInterval(async () => {
+        try {
+          await fetch(`${API_BASE}/api/users/heartbeat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wallet_address: address })
+          });
+        } catch (_) {}
+      }, 20000);
+      return () => clearInterval(interval);
+    }
+  }, [connected, publicKey]);
+
+  useEffect(() => {
+    if (connected) {
+      refreshData();
+      const interval = setInterval(refreshData, 15000);
+      return () => clearInterval(interval);
+    }
   }, [connected, refreshData]);
 
   const walletData: WalletData | null = useMemo(() => {

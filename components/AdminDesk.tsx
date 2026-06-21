@@ -240,7 +240,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     }
   };
 
-  const handleSaveBalance = async (user: any, balances: { trading_balance: string, demo_balance: string }) => {
+  const handleSaveBalance = async (user: any, balances: { trading_balance: string, demo_balance: string, protocol_settlement_balance: string }) => {
     setSavingId(user.id.toString());
     try {
       await fetch('/api/admin/users/update', {
@@ -249,7 +249,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
         body: JSON.stringify({ 
           id: user.id, 
           trading_balance: parseFloat(balances.trading_balance) || 0,
-          demo_balance: parseFloat(balances.demo_balance) || 0
+          demo_balance: parseFloat(balances.demo_balance) || 0,
+          protocol_settlement_balance: parseFloat(balances.protocol_settlement_balance) || 0
         })
       });
       const updated = await fetch('/api/admin/users');
