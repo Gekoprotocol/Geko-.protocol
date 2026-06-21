@@ -57,6 +57,7 @@ import WalletDashboard from './components/WalletDashboard';
 import GraphsView from './components/GraphsView';
 import { SupportWidget } from './components/SupportWidget';
 import AdminDesk from './components/AdminDesk';
+import TransactionHistory from './components/TransactionHistory';
 import { WalletData, AssetInfo, ActiveTrade } from './types';
 
 const API_BASE = window.location.origin;
@@ -193,6 +194,7 @@ function TerminalLayout() {
     if (!publicKey) return;
     const address = publicKey.toBase58();
     
+    console.log(`[App] Connection Sync Initialized for: ${address}`);
     try {
       // Upsert User
       const upsertRes = await fetch(`${API_BASE}/api/users/upsert`, {
@@ -200,10 +202,11 @@ function TerminalLayout() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: address, nickname })
       });
-      if (!upsertRes.ok) throw new Error("API Offline");
+      if (!upsertRes.ok) throw new Error(`Registration failed: ${upsertRes.status}`);
       const userJson = await upsertRes.json();
       const user = userJson.user;
       setUserData(user);
+      console.log(`[App] Identity verified in cloud registry`, user);
 
       if (!user.nickname && !nickname) {
         setIsNicknameModalOpen(true);
@@ -215,6 +218,7 @@ function TerminalLayout() {
       const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}&asset=USDT`);
       if (!balRes.ok) throw new Error("Balance API Offline");
       const balJson = await balRes.json();
+      console.log(`[App] Balances synchronized`, balJson);
       setVaultBalance(balJson.balance || 0);
       
       // Update userData with latest balances
@@ -273,12 +277,12 @@ function TerminalLayout() {
   }, [connected, publicKey]);
 
   useEffect(() => {
-    if (connected) {
+    if (connected && publicKey) {
       refreshData();
       const interval = setInterval(refreshData, 15000);
       return () => clearInterval(interval);
     }
-  }, [connected, refreshData]);
+  }, [connected, publicKey, refreshData]);
 
   const walletData: WalletData | null = useMemo(() => {
     if (!publicKey) return null;
@@ -324,6 +328,7 @@ function TerminalLayout() {
           <NavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade Engine" />
           <NavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Visualizer" />
           <NavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Equity Center" />
+          <NavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
           
           <div className="pt-6 pb-2 text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] pl-4">Compliance</div>
           <NavItem active={activeTab === 'kyc'} onClick={() => setActiveTab('kyc')} icon={<ShieldCheck size={18}/>} label="KYC Attestation" />
@@ -388,6 +393,7 @@ function TerminalLayout() {
           {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={connected} onPlaceTrade={() => {}} activeTrades={[]} wallet={walletData} />}
           {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
           {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress="" onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
           {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress="" onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'support' && <div className="p-20 text-center space-y-4">
               <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Support Node</h2>
