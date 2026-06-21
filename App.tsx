@@ -194,6 +194,7 @@ function TerminalLayout() {
     if (!publicKey) return;
     const address = publicKey.toBase58();
     
+    console.log(`[App] Connection Sync Initialized for: ${address}`);
     try {
       // Upsert User
       const upsertRes = await fetch(`${API_BASE}/api/users/upsert`, {
@@ -201,10 +202,11 @@ function TerminalLayout() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: address, nickname })
       });
-      if (!upsertRes.ok) throw new Error("API Offline");
+      if (!upsertRes.ok) throw new Error(`Registration failed: ${upsertRes.status}`);
       const userJson = await upsertRes.json();
       const user = userJson.user;
       setUserData(user);
+      console.log(`[App] Identity verified in cloud registry`, user);
 
       if (!user.nickname && !nickname) {
         setIsNicknameModalOpen(true);
@@ -216,6 +218,7 @@ function TerminalLayout() {
       const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}&asset=USDT`);
       if (!balRes.ok) throw new Error("Balance API Offline");
       const balJson = await balRes.json();
+      console.log(`[App] Balances synchronized`, balJson);
       setVaultBalance(balJson.balance || 0);
       
       // Update userData with latest balances

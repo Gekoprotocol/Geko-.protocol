@@ -10,7 +10,9 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL, Keypair, Transaction, SystemPr
 import { sendAndConfirmTransaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import crypto from 'crypto';
-import NowPaymentsApi from '@nowpaymentsio/nowpayments-api-js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const NowPaymentsApi = require('@nowpaymentsio/nowpayments-api-js');
 
 dotenv.config();
 
@@ -60,7 +62,18 @@ app.use(express.json());
 // ─── NowPayments ──────────────────────────────────────────────────────────────
 const NOWPAYMENTS_API_KEY = process.env.NOW_PAYMENTS_API_KEY || process.env.NOWPAYMENTS_API_KEY;
 const IPN_SECRET = process.env.NOW_PAYMENTS_IPN_SECRET || process.env.IPN_SECRET;
-const npApi = NOWPAYMENTS_API_KEY ? new NowPaymentsApi({ apiKey: NOWPAYMENTS_API_KEY }) : null;
+let npApi = null;
+
+try {
+  if (NOWPAYMENTS_API_KEY) {
+    npApi = new NowPaymentsApi({ apiKey: NOWPAYMENTS_API_KEY });
+    console.log(`💳 NowPayments initialized (Type: ${typeof NowPaymentsApi})`);
+  } else {
+    console.warn('⚠️ NOWPAYMENTS_API_KEY missing from environment');
+  }
+} catch (e) {
+  console.error('❌ NowPayments initialization failed:', e.message);
+}
 
 let globalConfig = {
   vault_balance: "0.00",
@@ -486,9 +499,10 @@ app.get('/api/admin/users', async (req, res) => {
         FROM geko_users u 
         ORDER BY last_seen DESC
       `);
+      console.log(`[Admin] Fetched ${result.rows.length} user nodes`);
       return res.json(result.rows);
     } catch (e) {
-      console.error('DB users error:', e.message);
+      console.error('[Admin] DB users error:', e.message);
     }
   }
   res.status(503).json({ error: 'Database unavailable' });
@@ -754,6 +768,8 @@ app.post('/api/create-deposit', async (req, res) => {
   const finalAmount = Math.max(parseFloat(price_amount) || 0, minAmount);
 
   try {
+    console.log(`[NowPayments] Creating invoice: ${finalAmount} ${pay_currency} for ${walletAddress}`);
+    
     // Generate order_id with wallet address if not provided
     const finalOrderId = order_id || `geko-${walletAddress || 'anonymous'}-${Date.now()}`;
 
@@ -767,10 +783,19 @@ app.post('/api/create-deposit', async (req, res) => {
       ipn_callback_url: process.env.IPN_CALLBACK_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/ipn` : undefined),
     });
 
-    console.log(`[NowPayments] Invoice created: ${invoice.id || invoice.payment_id} | ${pay_currency} | order: ${finalOrderId}`);
+    console.log(`[NowPayments] Invoice API Response:`, JSON.stringify(invoice));
+
+    const url = invoice.invoice_url || invoice.checkout_url || invoice.url;
+    if (!url) {
+      console.error('[NowPayments] No invoice URL in response:', JSON.stringify(invoice));
+      return res.status(502).json({ success: false, error: 'Payment gateway did not return a valid invoice URL. Please check your API key and permissions.' });
+    }
+
+    console.log(`[NowPayments] Invoice created successfully: ${invoice.id || invoice.payment_id} | order: ${finalOrderId}`);
     return res.json({ success: true, payment: invoice });
   } catch (err) {
-    console.error('[NowPayments] create-deposit error:', err.message);
+    console.error('[NowPayments] create-deposit CRITICAL error:', err.message);
+    if (err.response) console.error('[NowPayments] Error Response:', JSON.stringify(err.response.data));
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1054,10 +1079,25 @@ app.post('/api/execute-trade', async (req, res) => {
 
     try {
         const balanceColumn = isDemo ? 'demo_balance' : 'trading_balance';
-        const userRes = await pool.query(`SELECT ${balanceColumn} FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
+        let userRes = await pool.query(`SELECT ${balanceColumn}, id FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
+        
         if (userRes.rows.length === 0) {
-            console.warn(`[Trade Exec Error] User ${walletAddress} not found in DB`);
-            return res.status(404).json({ success: false, error: "User not found." });
+            console.warn(`[Trade Exec] User ${walletAddress} not found, attempting auto-creation...`);
+            // Auto-create user if missing (fail-safe)
+            try {
+              await pool.query(
+                `INSERT INTO geko_users (wallet_address, last_seen) VALUES ($1, NOW()) ON CONFLICT (wallet_address) DO NOTHING`,
+                [walletAddress]
+              );
+              userRes = await pool.query(`SELECT ${balanceColumn}, id FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
+            } catch (upsertErr) {
+              console.error('[Trade Exec] Auto-creation failed:', upsertErr.message);
+            }
+        }
+
+        if (userRes.rows.length === 0) {
+            console.error(`[Trade Exec Error] User ${walletAddress} could not be found or created.`);
+            return res.status(404).json({ success: false, error: "User node not recognized. Please refresh and try again." });
         }
         
         const currentBalance = parseFloat(userRes.rows[0][balanceColumn] || 0);

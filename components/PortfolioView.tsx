@@ -462,7 +462,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
 
         {activeModal && (
           <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in fade-in duration-300">
-             <div className="bg-[#181C25] border border-[#2B3139] rounded-[48px] max-w-lg w-full shadow-2xl relative overflow-hidden flex flex-col">
+             <div className="bg-[#181C25] border border-[#2B3139] rounded-[48px] max-w-lg w-full max-h-[90vh] shadow-2xl relative overflow-y-auto custom-scrollbar flex flex-col">
                 <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600 shrink-0"></div>
                 
                 {step === 'form' && (
