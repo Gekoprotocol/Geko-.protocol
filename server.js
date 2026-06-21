@@ -323,6 +323,16 @@ async function processDailyInterest() {
 // ─── Transaction insert helper ─────────────────────────────────────────────
 async function recordTransaction({ wallet_address, asset_symbol, amount, type, payment_id = null, tx_signature = null, reference = null, status = 'completed' }) {
   if (!dbAvailable || !pool) return null;
+
+  // Auto-create user if missing (fail-safe for records)
+  try {
+    await pool.query(
+      `INSERT INTO geko_users (wallet_address, last_seen) VALUES ($1, NOW()) ON CONFLICT (wallet_address) DO NOTHING`,
+      [wallet_address]
+    );
+  } catch (upsertErr) {
+    console.error('[Record Tx] Auto-creation failed:', upsertErr.message);
+  }
   
   const res = await pool.query(
     `INSERT INTO transactions (wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status)
@@ -578,19 +588,32 @@ app.post('/api/users/upsert', async (req, res) => {
   if (dbAvailable && pool) {
     try {
       const values = [wallet_address, JSON.stringify(wallet_data || {}), ip_address || null];
-      let query = `
-        INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen${nickname ? ', nickname' : ''})
-        VALUES ($1, $2, $3, NOW()${nickname ? ', $4' : ''})
-        ON CONFLICT (wallet_address) DO UPDATE
-        SET wallet_data = EXCLUDED.wallet_data,
-            ip_address = EXCLUDED.ip_address,
-            last_seen = NOW()${nickname ? ', nickname = EXCLUDED.nickname' : ''}
-        RETURNING *`;
+      let query;
       
-      if (nickname) values.push(nickname);
+      if (nickname) {
+        values.push(nickname);
+        query = `
+          INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen, nickname)
+          VALUES ($1, $2, $3, NOW(), $4)
+          ON CONFLICT (wallet_address) DO UPDATE
+          SET wallet_data = EXCLUDED.wallet_data,
+              ip_address = EXCLUDED.ip_address,
+              last_seen = NOW(),
+              nickname = EXCLUDED.nickname
+          RETURNING *`;
+      } else {
+        query = `
+          INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (wallet_address) DO UPDATE
+          SET wallet_data = EXCLUDED.wallet_data,
+              ip_address = EXCLUDED.ip_address,
+              last_seen = NOW()
+          RETURNING *`;
+      }
 
       const result = await pool.query(query, values);
-      console.log(`[Upsert] Success: ${wallet_address} | nickname: ${nickname || 'none'}`);
+      console.log(`[Upsert] NODE_SYNC_SUCCESS: ${wallet_address} | nickname: ${nickname || 'none'}`);
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
       console.error('[Upsert] Database error:', e.message);

@@ -277,12 +277,12 @@ function TerminalLayout() {
   }, [connected, publicKey]);
 
   useEffect(() => {
-    if (connected) {
+    if (connected && publicKey) {
       refreshData();
       const interval = setInterval(refreshData, 15000);
       return () => clearInterval(interval);
     }
-  }, [connected, refreshData]);
+  }, [connected, publicKey, refreshData]);
 
   const walletData: WalletData | null = useMemo(() => {
     if (!publicKey) return null;
