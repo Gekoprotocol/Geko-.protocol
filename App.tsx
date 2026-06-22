@@ -219,9 +219,10 @@ function TerminalLayout() {
       if (!balRes.ok) throw new Error("Balance API Offline");
       const balJson = await balRes.json();
       console.log(`[App] Balances synchronized`, balJson);
+      
       setVaultBalance(balJson.balance || 0);
       
-      // Update userData with latest balances
+      // Update userData with latest balances from cloud node
       setUserData((prev: any) => ({
         ...prev,
         trading_balance: balJson.trading_balance,

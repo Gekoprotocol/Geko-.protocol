@@ -16,7 +16,7 @@ interface PortfolioViewProps {
 }
 
 export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, depositAddress, onConnect, onUpdateWallet, onDisconnect, onRefreshBalances }) => {
-  const [activeModal, setActiveModal] = useState<'deposit' | 'withdraw' | 'kyc' | null>(null);
+  const [activeModal, setActiveModal] = useState<'withdraw' | 'kyc' | 'nowpayments' | null>(null);
   const [step, setStep] = useState<'form' | 'broadcasting' | 'confirming' | 'success'>('form');
   
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -262,11 +262,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     setTimeout(() => setIsCopiedPopupOpen(false), 5000);
   };
 
-  const handleDepositClick = () => {
-    setActiveModal('deposit');
-    triggerWalletPopup();
-  };
-
   const handleWithdrawClick = () => {
     setActiveModal('withdraw');
     triggerWalletPopup();
@@ -313,7 +308,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
             </div>
           </div>
           <div className="flex space-x-3">
-             <button onClick={handleDepositClick} className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">Deposit</button>
+             <button onClick={() => setActiveModal('nowpayments')} className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">Add Liquidity</button>
              <button onClick={() => setShowTransferModal(true)} className="px-8 py-3 bg-emerald-600/20 text-emerald-500 font-black uppercase tracking-widest text-xs rounded-xl border border-emerald-500/20 hover:bg-emerald-600/20 transition-all">Transfer</button>
              <button onClick={handleWithdrawClick} className="px-8 py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
              <button onClick={() => setActiveModal('kyc')} className="px-8 py-3 bg-amber-600/10 text-amber-500 font-black uppercase tracking-widest text-xs rounded-xl border border-amber-500/20 hover:bg-amber-600/20 transition-all">Verify KYC</button>
@@ -361,26 +356,18 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
               </svg>
             </div>
             <div className="space-y-1">
-              <div className="text-sm font-black text-gray-200 uppercase tracking-tight">Deposit Crypto</div>
-              <div className="text-[10px] text-gray-500 leading-relaxed px-2">Securely fund your protocol account using Solana Mainnet settlement layer.</div>
+              <div className="text-sm font-black text-gray-200 uppercase tracking-tight">Consolidated Funding</div>
+              <div className="text-[10px] text-gray-500 leading-relaxed px-2">Securely fund your protocol account with any major crypto asset via NowPayments.</div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={handleDepositClick}
-                className="w-full py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20"
-              >
-                Deposit SOL
-              </button>
-              <button
+            <button
                 onClick={() => { setActiveModal('nowpayments'); triggerWalletPopup(); }}
-                className="w-full py-4 bg-[#262B36] text-gray-300 font-black uppercase tracking-widest text-xs rounded-2xl border border-[#363C45] hover:bg-[#2F3642] transition-colors shadow-lg"
-              >
-                Other Assets
-              </button>
-            </div>
+                className="w-full py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20"
+            >
+                Add Protocol Liquidity
+            </button>
             <div className="flex items-center space-x-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Live Link · Secured</span>
+              <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">NowPayments Secured Gateway</span>
             </div>
           </div>
         </div>
@@ -412,13 +399,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
               </div>
               <p className="text-sm font-black text-gray-400 uppercase italic">No deposits recorded yet</p>
               <p className="text-[10px] text-gray-600 leading-relaxed max-w-xs">
-                Deposits made to the protocol address will appear here once confirmed on-chain.
+                Provide liquidity to your protocol account via our secure NOWPayments gateway.
               </p>
               <button
-                onClick={() => setActiveModal('deposit')}
+                onClick={() => setActiveModal('nowpayments')}
                 className="mt-2 px-6 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-indigo-500 transition-colors"
               >
-                Make a Deposit
+                Add Liquidity Now
               </button>
             </div>
           )}
@@ -473,68 +460,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                          </button>
                       </div>
-
-                      {activeModal === 'deposit' && (
-                        <div className="p-10 space-y-10">
-                          <div className="flex flex-col items-center text-center space-y-6">
-                             <div className="p-6 bg-indigo-600/10 border-2 border-indigo-500/20 rounded-[40px] shadow-inner relative group">
-                                  <QRCodeSVG 
-                                      value={solanaDepositAddress} 
-                                      size={200} 
-                                      bgColor="transparent" 
-                                      fgColor="#818cf8" 
-                                      level="H" 
-                                      includeMargin={false}
-                                  />
-                             </div>
-                             
-                             <div className="space-y-2">
-                                  <div className="flex items-center justify-center space-x-3">
-                                      <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white font-black text-[10px]">SOL</div>
-                                      <span className="text-xl font-black text-gray-100 tracking-tight italic">SOLANA NETWORK</span>
-                                  </div>
-                                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Protocol strictly accepts SOL for settlement</p>
-                             </div>
-                          </div>
-
-                          <div className="space-y-4">
-                            <div className="flex justify-between items-center px-1">
-                              <label className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Destination Node Address</label>
-                              <span className="text-[8px] text-emerald-500 font-black uppercase flex items-center">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1.5"></div>
-                                  Live Link Secured
-                              </span>
-                            </div>
-                            <div className="relative group">
-                              <input 
-                                readOnly
-                                value={solanaDepositAddress}
-                                className="w-full bg-[#0B0E11] border-2 border-[#2B3139] group-hover:border-indigo-500/50 rounded-2xl p-6 text-sm font-mono font-bold text-indigo-300 outline-none transition-all shadow-inner truncate pr-20"
-                              />
-                              <button 
-                                onClick={() => {
-                                  navigator.clipboard.writeText(solanaDepositAddress);
-                                  setCopied(true);
-                                  setTimeout(() => setCopied(false), 2000);
-                                }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
-                              >
-                                {copied ? 'Copied' : 'Copy'}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-3xl p-6 flex items-start space-x-4">
-                              <div className="w-10 h-10 bg-indigo-600/20 rounded-2xl flex items-center justify-center shrink-0 border border-indigo-500/30">
-                                  <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                              </div>
-                              <div className="space-y-1">
-                                  <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Automatic Settlement</h4>
-                                  <p className="text-[9px] text-gray-500 font-bold uppercase leading-relaxed tracking-wider">Deposits are monitored in real-time. Once confirmed on-chain, USDT equivalent is credited to your Protocol Settlement Balance automatically.</p>
-                              </div>
-                          </div>
-                        </div>
-                      )}
 
                       {activeModal === 'withdraw' && (
                          <form onSubmit={handleWithdrawSubmit} className="space-y-6 p-10">
@@ -772,62 +697,45 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
         )}
         {activeModal === 'nowpayments' && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="bg-[#181C25] border border-[#2B3139] rounded-[40px] max-w-md w-full p-10 shadow-2xl relative">
-              <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
-              <button onClick={() => setActiveModal(null)} className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-              
-              <div className="text-center space-y-6">
-                <div className="w-20 h-20 bg-indigo-600/20 rounded-3xl flex items-center justify-center mx-auto border border-indigo-500/30">
-                  <svg className="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+            <div className="relative w-full max-w-md bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
+              <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Instant Liquidity</h2>
+                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Institutional Gateway via NowPayments</p>
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-black text-white italic uppercase tracking-tight">Multi-Asset Deposit</h2>
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-[0.2em]">Powered by NowPayments Gateway</p>
+                <button onClick={() => setActiveModal(null)} className="text-gray-500 hover:text-white transition-colors">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              
+              <div className="p-8 space-y-6">
+                <div className="bg-[#0B0E11] p-6 rounded-3xl border border-indigo-500/20 text-center space-y-4">
+                  <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Gateway Access</div>
+                  
+                  <div className="flex flex-col items-center space-y-6">
+                    <a href="https://nowpayments.io/payment/?iid=5744574859&source=button" target="_blank" rel="noreferrer noopener" className="hover:scale-105 transition-transform">
+                      <img src="https://nowpayments.io/images/embeds/payment-button-white.svg" alt="Cryptocurrency & Bitcoin payment button by NOWPayments" className="w-64" />
+                    </a>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  {['BTC', 'ETH', 'USDTTRC20', 'LTC', 'XRP', 'DOGE'].map(asset => (
+                  {['USDT', 'BTC', 'ETH', 'LTC'].map(asset => (
                     <button
                       key={asset}
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/create-deposit', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ 
-                              pay_currency: asset.toLowerCase(),
-                              price_amount: 50, // Default min
-                              walletAddress: wallet?.address
-                            })
-                          });
-                          const data = await res.json();
-                          // data.payment for createInvoice has invoice_url
-                          const payment = data.payment;
-                          const url = payment.invoice_url || payment.checkout_url || payment.url;
-                          
-                          if (data.success && url) {
-                            window.open(url, '_blank');
-                            setActiveModal(null);
-                          } else {
-                            alert(data.error || 'Failed to create payment invoice');
-                          }
-                        } catch (e) {
-                          alert('Network error initiating deposit');
-                        }
-                      }}
-                      className="bg-[#0B0E11] border border-[#2B3139] hover:border-indigo-500/50 p-4 rounded-2xl flex flex-col items-center justify-center transition-all group"
+                      onClick={() => window.open('https://nowpayments.io/payment/?iid=5744574859&source=button', '_blank')}
+                      className="flex items-center justify-between p-4 bg-[#0B0E11] border border-[#2B3139] rounded-2xl hover:border-indigo-500/50 transition-all group"
                     >
-                      <span className="text-sm font-black text-gray-200 uppercase group-hover:text-indigo-400">{asset.replace('TRC20', '')}</span>
-                      <span className="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-1">{asset.includes('TRC20') ? 'Tron' : 'Mainnet'}</span>
+                      <span className="text-xs font-black text-gray-100 group-hover:text-indigo-400">{asset}</span>
+                      <svg className="w-4 h-4 text-gray-600 group-hover:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                     </button>
                   ))}
                 </div>
-                
-                <div className="pt-4 border-t border-white/5 text-[9px] text-gray-600 font-bold uppercase leading-relaxed">
-                  Choose an asset to generate a secure payment link. Protocol balance credits upon network confirmation.
-                </div>
+              </div>
+
+              <div className="p-4 bg-[#0B0E11] border-t border-[#2B3139] text-center">
+                <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Secure Settlement Layer</span>
               </div>
             </div>
           </div>
