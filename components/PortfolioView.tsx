@@ -41,16 +41,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
   const [copied, setCopied] = useState(false);
   const [gasPrice, setGasPrice] = useState(24);
 
-  const [solanaDepositAddress, setSolanaDepositAddress] = useState('6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
-
-  useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data.solana_deposit_address) setSolanaDepositAddress(data.solana_deposit_address);
-      })
-      .catch(() => {});
-  }, []);
+  const solanaDepositAddress = depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw';
 
   const fetchProtocolBalance = async () => {
     if (!wallet) return;
