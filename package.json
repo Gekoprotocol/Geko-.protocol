@@ -14,7 +14,6 @@
     "@emailjs/browser": "^4.4.1",
     "@google/genai": "^2.8.0",
     "@google/generative-ai": "^0.21.0",
-    "@nowpaymentsio/nowpayments-api-js": "^1.0.5",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",

@@ -10,9 +10,6 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL, Keypair, Transaction, SystemPr
 import { sendAndConfirmTransaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import crypto from 'crypto';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const NowPaymentsApi = require('@nowpaymentsio/nowpayments-api-js');
 
 dotenv.config();
 
@@ -45,7 +42,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'ALLOWALL');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,x-api-key,x-nowpayments-sig');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
   
   // Force correct MIME types for TypeScript and JSX files to fix "blank screen" issues
   const url = req.url.toLowerCase();
@@ -55,34 +52,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api/ipn', express.raw({ type: '*/*' }));
-app.use('/webhook',  express.raw({ type: '*/*' }));
 app.use(express.json());
-
-// ─── NowPayments ──────────────────────────────────────────────────────────────
-const NOWPAYMENTS_API_KEY = process.env.NOW_PAYMENTS_API_KEY || 'HG3FVSQ-13J4J7D-QHSGX11-86ANN01';
-const IPN_SECRET = process.env.NOW_PAYMENTS_IPN_SECRET || 'erG9BMjORF01C2WtwJz5kzJd+4a7o8bY';
-const NOW_PAYMENTS_PUBLIC_KEY = process.env.NOW_PAYMENTS_PUBLIC_KEY || '1cb182ec-f4c0-46bb-8851-4e0a1cc76751';
-
-let npApi = null;
-
-try {
-  if (NOWPAYMENTS_API_KEY) {
-    npApi = new NowPaymentsApi({ apiKey: NOWPAYMENTS_API_KEY });
-    console.log(`💳 NowPayments initialized (API Key: ${NOWPAYMENTS_API_KEY.slice(0, 4)}...)`);
-    
-    // Validate API on startup
-    npApi.getCurrencies().then(() => {
-      console.log('✅ NowPayments API check: Gateway is responding');
-    }).catch(err => {
-      console.error('❌ NowPayments API check FAILED:', err.message);
-    });
-  } else {
-    console.warn('⚠️ NOWPAYMENTS_API_KEY missing from environment');
-  }
-} catch (e) {
-  console.error('❌ NowPayments initialization failed:', e.message);
-}
 
 let globalConfig = {
   vault_balance: "0.00",
@@ -777,57 +747,6 @@ app.get('/api/admin/visitors', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
-// ─── NowPayments: Create Deposit ──────────────────────────────────────────
-app.post('/api/create-deposit', async (req, res) => {
-  if (!npApi) {
-    return res.status(503).json({ success: false, error: 'Payment gateway not configured.' });
-  }
-
-  const { pay_currency, price_amount, price_currency, order_id, order_description, walletAddress } = req.body;
-
-  if (!pay_currency) {
-    return res.status(400).json({ success: false, error: 'pay_currency is required.' });
-  }
-
-  // NowPayments minimum amounts by currency (USD equivalent)
-  const CURRENCY_MINIMUMS = {
-    btc: 50, ltc: 15, eth: 50, xmr: 20,
-    usdttrc20: 15, usdterc20: 50,
-    default: 15
-  };
-  const minAmount = CURRENCY_MINIMUMS[pay_currency.toLowerCase()] || CURRENCY_MINIMUMS.default;
-  const finalAmount = Math.max(parseFloat(price_amount) || 0, minAmount);
-
-  try {
-    const finalOrderId = order_id || `geko-${walletAddress}-${Date.now()}`;
-    console.log(`[NowPayments] Creating payment: ${finalAmount} ${pay_currency} | order: ${finalOrderId}`);
-
-    // Use createPayment instead of createInvoice to get a direct pay_address
-    const payment = await npApi.createPayment({
-      price_amount: finalAmount,
-      price_currency: price_currency || 'usd',
-      pay_currency,
-      order_id: finalOrderId,
-      order_description: order_description || 'Geko Protocols deposit',
-      ipn_callback_url: process.env.IPN_CALLBACK_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/ipn` : undefined),
-      // Payout goes to the admin/treasury address
-      payout_address: globalConfig.deposit_address
-    });
-
-    const addr = payment.pay_address || payment.payAddress || payment.address;
-    if (!addr) {
-      console.error('[NowPayments] ERROR: No pay_address in response:', JSON.stringify(payment));
-      return res.status(502).json({ success: false, error: 'Payment gateway did not return a deposit address. Please try a higher amount.' });
-    }
-
-    console.log(`[NowPayments] Payment created successfully: ${payment.payment_id || payment.id} | addr: ${addr}`);
-    return res.json({ success: true, payment: { ...payment, pay_address: addr } });
-  } catch (err) {
-    console.error('[NowPayments] create-deposit CRITICAL failure:', err.message);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // ─── Transaction History ──────────────────────────────────────────────────
 app.get('/api/user/transactions', async (req, res) => {
     const { address } = req.query;
@@ -845,129 +764,9 @@ app.get('/api/user/transactions', async (req, res) => {
     }
 });
 
-// ─── NowPayments: IPN Webhook ──────────────────────────────────────────────
-// Shared handler for NowPayments webhook — mounted at both /api/ipn and /webhook
-const handleNowPaymentsWebhook = async (req, res) => {
-  const receivedSig = req.headers['x-nowpayments-sig'];
-  if (!receivedSig || !IPN_SECRET) {
-    console.warn('[NowPayments Webhook] Missing signature header or IPN_SECRET not set.');
-    return res.status(200).send('OK'); // Always 200 so NowPayments doesn't keep retrying
-  }
-
-  // req.body is a raw Buffer (express.raw middleware above)
-  let rawBody;
-  try {
-    rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : JSON.stringify(req.body);
-  } catch {
-    return res.status(200).send('OK');
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(rawBody);
-  } catch {
-    return res.status(200).send('OK');
-  }
-
-  // NowPayments signs the payload with keys sorted alphabetically
-  const sortedBody = Object.keys(parsed).sort().reduce((acc, key) => {
-    acc[key] = parsed[key];
-    return acc;
-  }, {});
-
-  const hmac = crypto.createHmac('sha512', IPN_SECRET);
-  hmac.update(JSON.stringify(sortedBody));
-  const expectedSig = hmac.digest('hex');
-
-  if (expectedSig !== receivedSig) {
-    console.warn('[NowPayments Webhook] Signature mismatch — ignoring.');
-    return res.status(200).send('OK');
-  }
-
-  const { payment_id, payment_status, pay_currency, actually_paid, pay_amount, order_id } = parsed;
-  const amountPaid = parseFloat(actually_paid ?? pay_amount ?? 0);
-
-  console.log(`[NowPayments Webhook] payment_id=${payment_id} status=${payment_status} paid=${amountPaid} ${pay_currency} order=${order_id}`);
-
-  if (payment_status === 'finished' && amountPaid > 0) {
-    if (dbAvailable && pool && order_id) {
-      try {
-        // order_id format: "geko-<walletAddress>-<timestamp>"
-        let walletAddress = order_id;
-        if (order_id.startsWith('geko-')) {
-          const parts = order_id.split('-');
-          if (parts.length >= 2) {
-            walletAddress = parts[1];
-          }
-        }
-
-        if (walletAddress && walletAddress.length > 10) {
-          const asset = (pay_currency || 'SOL').toUpperCase()
-            .replace('USDTTRC20', 'USDT').replace('USDTERC20', 'USDT')
-            .replace('BNBBSC', 'BNB').replace('MATICMAINNET', 'MATIC');
-
-          // Check if this payment_id has already been recorded to prevent duplicates
-          const existing = await pool.query('SELECT id FROM transactions WHERE payment_id = $1', [payment_id]);
-          if (existing.rows.length === 0) {
-            // Record original asset deposit
-            await recordTransaction({
-              wallet_address: walletAddress,
-              asset_symbol:   asset,
-              amount:         amountPaid,
-              type:           'deposit',
-              payment_id:     payment_id || null,
-              reference:      `nowpayments:${payment_id}`,
-              status:         'completed'
-            });
-
-            // Credit USDT equivalent for trading if not already USDT
-            if (asset !== 'USDT') {
-              let price = 1;
-              try {
-                const pRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${asset}USD`);
-                const r = pRes.data.result;
-                const pair = Object.keys(r)[0];
-                if (r[pair]?.c?.[0]) price = parseFloat(r[pair].c[0]);
-              } catch (_) {
-                // Fallbacks
-                if (asset === 'BTC') price = 65000;
-                if (asset === 'ETH') price = 3500;
-                if (asset === 'SOL') price = 145;
-              }
-
-              const usdtEquiv = parseFloat((amountPaid * price).toFixed(2));
-              await recordTransaction({
-                wallet_address: walletAddress,
-                asset_symbol:   'USDT',
-                amount:         usdtEquiv,
-                type:           'credit',
-                payment_id:     payment_id ? `equiv-${payment_id}` : null,
-                reference:      `${asset}-usd-equiv:${payment_id || 'manual'}`,
-                status:         'completed'
-              });
-            }
-
-            console.log(`[NowPayments Webhook] Credited ${amountPaid} ${asset} to ${walletAddress} | trade balance updated`);
-          }
-        }
-      } catch (e) {
-        console.error('[NowPayments Webhook] DB credit error:', e.message);
-      }
-    }
-  }
-
-  res.status(200).send('OK');
-};
-
-app.post('/api/ipn', handleNowPaymentsWebhook);
-app.post('/webhook',  handleNowPaymentsWebhook);
-
 // ─── User balance (sum of transactions + column overrides) ────────────────
 app.get('/api/user/balance', async (req, res) => {
   const { address, asset } = req.query;
-  if (!address) return res.status(400).json({ error: 'address required' });
-
-  if (!dbAvailable) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
     // AGGRESSIVE SYNC: Ensure user node is registered during balance check
@@ -1513,101 +1312,27 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
     if (balance < parseFloat(wr.amount))
       return res.status(400).json({ success: false, error: `Insufficient balance: ${balance} ${wr.asset}` });
 
-    let signature = null;
-    let nowpaymentsId = null;
-    let payoutError = null;
+    // 3. Mark as approved manually
+    await pool.query(
+      `UPDATE withdrawal_requests 
+          SET status = 'approved', processed_at = NOW()
+        WHERE id = $1`,
+      [requestId]
+    );
 
-    // 3a. Try NowPayments Payout API - Corrected to use the proper environment variable or constant
-    const activeApiKey = process.env.NOWPAYMENTS_API_KEY || NOWPAYMENTS_API_KEY;
-    const activeIpnSecret = process.env.IPN_SECRET || IPN_SECRET;
-    if (activeApiKey && activeIpnSecret) {
-      try {
-        const callbackUrl = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/ipn` : `http://localhost:${port}/api/ipn`;
-        const body = {
-          withdrawals: [{
-            address:          wr.destination_address,
-            currency:         wr.asset.toLowerCase(),
-            amount:           parseFloat(wr.amount),
-            ipn_callback_url: callbackUrl,
-            extra_id:         `geko-wr-${wr.id}`
-          }]
-        };
-        const bodyStr = JSON.stringify(body);
-        const sigHex  = crypto.createHmac('sha512', activeIpnSecret).update(bodyStr).digest('hex');
-
-        const nowRes  = await axios.post('https://api.nowpayments.io/v1/payout', body, {
-          headers: {
-            'Content-Type':       'application/json',
-            'x-api-key':          activeApiKey,
-            'x-nowpayments-sig':  sigHex
-          }
-        });
-        const nowData = nowRes.data;
-
-        if (nowRes.status === 200 && nowData.id) {
-          nowpaymentsId = nowData.id;
-          signature     = `nowpayments-payout:${nowData.id}`;
-          console.log(`[Approve Withdrawal] NowPayments payout initiated: ${nowData.id}`);
-        } else {
-          payoutError = nowData.message || JSON.stringify(nowData);
-          console.warn(`[Approve Withdrawal] NowPayments payout failed: ${payoutError}`);
-        }
-      } catch (e) {
-        payoutError = e.message;
-        console.warn(`[Approve Withdrawal] NowPayments error: ${e.message}`);
-      }
-    }
-
-    // 3b. Fallback — Direct Solana treasury transfer (SOL only)
-    if (!signature && wr.asset === 'SOL') {
-      const secretKeyString = process.env.TREASURY_SECRET_KEY;
-      if (!secretKeyString) throw new Error('TREASURY_SECRET_KEY not set and NowPayments payout failed');
-
-      let secretKey;
-      if (secretKeyString.includes(',')) {
-        secretKey = Uint8Array.from(JSON.parse(secretKeyString));
-      } else {
-        secretKey = bs58.decode(secretKeyString);
-      }
-      const treasuryKeypair = Keypair.fromSecretKey(secretKey);
-      const rpcUrl          = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-      const connection      = new Connection(rpcUrl, 'confirmed');
-
-      const tx = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: treasuryKeypair.publicKey,
-          toPubkey:   new PublicKey(wr.destination_address),
-          lamports:   Math.round(parseFloat(wr.amount) * LAMPORTS_PER_SOL)
-        })
-      );
-      signature = await sendAndConfirmTransaction(connection, tx, [treasuryKeypair]);
-      console.log(`[Approve Withdrawal] SOL treasury transfer: ${signature}`);
-    }
-
-    if (!signature) throw new Error(payoutError || 'All payout methods failed');
-
-    // 4. Record debit in the transactions ledger
+    // 4. Record as negative transaction in ledger to debit user balance
     await recordTransaction({
       wallet_address: wr.wallet_address,
       asset_symbol:   wr.asset,
       amount:         -Math.abs(parseFloat(wr.amount)),
       type:           'withdrawal',
-      tx_signature:   signature,
-      reference:      `admin-approved:#${wr.id}→${wr.destination_address}`
+      reference:      `manual-withdraw-req:#${requestId}→${wr.destination_address}`,
+      status:         'completed'
     });
 
-    // 5. Mark request approved
-    await pool.query(
-      `UPDATE withdrawal_requests
-          SET status = 'approved', tx_signature = $1, nowpayments_id = $2, processed_at = NOW()
-        WHERE id = $3`,
-      [signature, nowpaymentsId, requestId]
-    );
-
     const newBalance = await getUserBalance(wr.wallet_address, wr.asset);
-    console.log(`✅ Withdrawal #${wr.id} approved | ${wr.amount} ${wr.asset} → ${wr.destination_address} | tx: ${signature} | new bal: ${newBalance}`);
-    return res.json({ success: true, txSignature: signature, nowpaymentsId, newBalance });
-
+    console.log(`✅ Withdrawal manual approval for request #${requestId} | destination: ${wr.destination_address}`);
+    return res.json({ success: true, newBalance });
   } catch (e) {
     console.error('[Approve Withdrawal] Error:', e.message);
     // Mark as failed
@@ -1764,7 +1489,7 @@ try {
     console.log(`🚀 Geko Protocols Server: http://0.0.0.0:${port}`);
     console.log(`📂 Static Paths: dist, public, root`);
     console.log(`🗄️  Database Status: ${dbAvailable ? 'CONNECTED ✅' : 'DISCONNECTED ❌'}`);
-    console.log(`💳 NowPayments Ready: ${!!npApi}`);
+    console.log(`[Status] Database: ${dbAvailable ? 'Connected' : 'Unavailable'}`);
     console.log('---------------------------------------------');
   });
 } catch (listenError) {
