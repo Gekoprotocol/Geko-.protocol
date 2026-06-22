@@ -413,18 +413,50 @@ app.get('/manifest.json', (req, res) => {
 });
 
 // ─── Config endpoints ──────────────────────────────────────────────────────
-app.get('/api/config', (req, res) => {
-  res.json(globalConfig);
+app.get('/api/config', async (req, res) => {
+  if (dbAvailable && pool) {
+    try {
+      const result = await pool.query('SELECT key, value FROM geko_config');
+      const dbConfig = result.rows.reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
+      return res.json({ ...globalConfig, ...dbConfig });
+    } catch (e) { console.error('Config fetch error:', e.message); }
+  }
+  res.json({ ...globalConfig, solana_deposit_address: '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw' });
 });
 
-app.post('/api/admin/config', (req, res) => {
-    const { vault_balance, deposit_address } = req.body;
+app.post('/api/admin/config', async (req, res) => {
+  const { solana_deposit_address, vault_balance } = req.body;
 
-    // Add the assignment operator (=) to update the object
-    if (vault_balance !== undefined) globalConfig.vault_balance = vault_balance;
-    if (deposit_address !== undefined) globalConfig.deposit_address = deposit_address;
-
-    res.json({ success: true, config: globalConfig });
+  if (dbAvailable && pool) {
+    try {
+      if (solana_deposit_address) {
+        await pool.query(
+          `INSERT INTO geko_config (key, value, updated_at)
+           VALUES ('solana_deposit_address', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+          [solana_deposit_address]
+        );
+      }
+      if (vault_balance !== undefined) {
+        await pool.query(
+          `INSERT INTO geko_config (key, value, updated_at)
+           VALUES ('vault_balance', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+          [vault_balance]
+        );
+      }
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('Config update error:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+  
+  // Fallback to memory if DB is down
+  if (vault_balance !== undefined) globalConfig.vault_balance = vault_balance;
+  if (solana_deposit_address !== undefined) globalConfig.solana_deposit_address = solana_deposit_address;
+  
+  res.json({ success: true, config: globalConfig });
 });
 
 // ─── Live prices proxy ─────────────────────────────────────────────────────
@@ -555,82 +587,43 @@ app.post('/api/admin/users/update', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
-app.get('/api/config', async (req, res) => {
-  if (dbAvailable && pool) {
-    try {
-      const result = await pool.query('SELECT key, value FROM geko_config');
-      const config = result.rows.reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
-      return res.json(config);
-    } catch (e) { console.error('Config fetch error:', e.message); }
-  }
-  res.json({ solana_deposit_address: '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw' });
-});
-
-app.post('/api/admin/config', async (req, res) => {
-  const { solana_deposit_address } = req.body;
-  if (!solana_deposit_address) return res.status(400).json({ error: 'solana_deposit_address required' });
-
-  if (dbAvailable && pool) {
-    try {
-      await pool.query(
-        `INSERT INTO geko_config (key, value, updated_at)
-         VALUES ('solana_deposit_address', $1, NOW())
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-        [solana_deposit_address]
-      );
-      return res.json({ success: true });
-    } catch (e) {
-      console.error('Config update error:', e.message);
-      return res.status(500).json({ error: e.message });
-    }
-  }
-  res.status(503).json({ error: 'Database unavailable' });
-});
-
 // Register / upsert a user (called on wallet connect)
 app.post('/api/users/upsert', async (req, res) => {
-  let { wallet_address, wallet_data, ip_address, nickname } = req.body;
-  if (wallet_address) wallet_address = wallet_address.trim();
+  let { wallet_address, address, wallet_data, ip_address, nickname } = req.body;
+  const targetAddress = (wallet_address || address || '').trim();
   
-  if (!wallet_address || wallet_address.length < 32) {
-    console.warn('[Upsert] REJECTED: Invalid/Missing wallet_address');
+  if (!targetAddress || targetAddress.length < 32) {
+    console.warn('[Upsert] REJECTED: Invalid/Missing wallet_address:', targetAddress);
     return res.status(400).json({ error: 'Valid wallet_address required' });
   }
 
   if (dbAvailable && pool) {
     try {
-      console.log(`[Upsert] SYNCING_NODE: ${wallet_address}`);
-      const values = [wallet_address, JSON.stringify(wallet_data || {}), ip_address || null];
-      let query;
+      console.log(`[Upsert] SYNCING_NODE: ${targetAddress}`);
       
-      if (nickname) {
-        values.push(nickname);
-        query = `
-          INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen, nickname)
-          VALUES ($1, $2, $3, NOW(), $4)
-          ON CONFLICT (wallet_address) DO UPDATE
-          SET wallet_data = EXCLUDED.wallet_data,
-              ip_address = EXCLUDED.ip_address,
-              last_seen = NOW(),
-              nickname = EXCLUDED.nickname
-          RETURNING *`;
-      } else {
-        query = `
-          INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen)
-          VALUES ($1, $2, $3, NOW())
-          ON CONFLICT (wallet_address) DO UPDATE
-          SET wallet_data = EXCLUDED.wallet_data,
-              ip_address = EXCLUDED.ip_address,
-              last_seen = NOW()
-          RETURNING *`;
-      }
-
-      const result = await pool.query(query, values);
-      console.log(`[Upsert] NODE_REGISTRY_SUCCESS: ${wallet_address} | DB_ID: ${result.rows[0].id}`);
+      const upsertQuery = `
+        INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen, nickname, demo_balance)
+        VALUES ($1, $2, $3, NOW(), $4, 100000)
+        ON CONFLICT (wallet_address) DO UPDATE
+        SET wallet_data = EXCLUDED.wallet_data,
+            ip_address = EXCLUDED.ip_address,
+            last_seen = NOW(),
+            nickname = COALESCE(NULLIF($4, ''), geko_users.nickname)
+        RETURNING *`;
+      
+      const values = [
+        targetAddress, 
+        JSON.stringify(wallet_data || {}), 
+        ip_address || req.ip || null,
+        nickname || null
+      ];
+      
+      const result = await pool.query(upsertQuery, values);
+      console.log(`[Upsert] NODE_SYNC_SUCCESS: ${targetAddress} | ID: ${result.rows[0].id}`);
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
-      console.error('[Upsert] CRITICAL_DB_ERROR:', e.message);
-      return res.status(500).json({ error: `Registry Error: ${e.message}` });
+      console.error('[Upsert] CRITICAL_SYNC_FAILURE:', e.message);
+      return res.status(500).json({ error: `Sync Error: ${e.message}` });
     }
   }
 
@@ -639,13 +632,15 @@ app.post('/api/users/upsert', async (req, res) => {
 
 // Heartbeat — keeps last_seen fresh so admin sees who's online right now
 app.post('/api/users/heartbeat', async (req, res) => {
-  const { wallet_address } = req.body || {};
-  if (!wallet_address) return res.json({ success: false });
+  const { wallet_address, address } = req.body || {};
+  const target = (wallet_address || address || '').trim();
+  if (!target) return res.json({ success: false });
+
   if (dbAvailable && pool) {
     try {
       await pool.query(
         `UPDATE geko_users SET last_seen = NOW() WHERE wallet_address = $1`,
-        [wallet_address]
+        [target]
       );
       return res.json({ success: true });
     } catch (e) { console.error('Heartbeat error:', e.message); }

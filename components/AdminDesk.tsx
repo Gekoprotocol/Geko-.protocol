@@ -307,7 +307,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
       const res = await fetch('/api/admin/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vault_balance: vaultInput, deposit_address: depositInput })
+        body: JSON.stringify({ vault_balance: vaultInput, solana_deposit_address: depositInput })
       });
       if (res.ok) {
         window.dispatchEvent(new CustomEvent('configUpdated'));
@@ -581,7 +581,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                    Vault Balance <span className="text-indigo-400">(displayed to all users)</span>
+                    Global Vault Balance <span className="text-indigo-400">(Public Display)</span>
                   </label>
                   <span className="text-[8px] text-emerald-500 font-black uppercase">✎ Editable</span>
                 </div>
@@ -591,6 +591,23 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   onChange={e => setVaultInput(e.target.value)}
                   placeholder="e.g. 25,000.00"
                   className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 hover:border-indigo-500/70 focus:border-indigo-500 rounded-2xl p-5 text-base text-emerald-400 font-mono outline-none transition-colors cursor-text"
+                />
+              </div>
+
+              {/* Deposit Address */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                    Master Deposit Address <span className="text-indigo-400">(Global)</span>
+                  </label>
+                  <span className="text-[8px] text-emerald-500 font-black uppercase">✎ Editable</span>
+                </div>
+                <input
+                  type="text"
+                  value={depositInput}
+                  onChange={e => setDepositInput(e.target.value)}
+                  placeholder="Solana Address"
+                  className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 hover:border-indigo-500/70 focus:border-indigo-500 rounded-2xl p-5 text-base text-indigo-400 font-mono outline-none transition-colors cursor-text"
                 />
               </div>
 

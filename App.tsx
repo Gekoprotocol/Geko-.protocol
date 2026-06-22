@@ -190,11 +190,28 @@ function TerminalLayout() {
   };
 
   // Fetch User Data & Balances
+  const [solanaDepositAddress, setSolanaDepositAddress] = useState('6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
+
+  // Fetch Global Config
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/config`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.solana_deposit_address) setSolanaDepositAddress(data.solana_deposit_address);
+        }
+      } catch (_) {}
+    };
+    fetchConfig();
+    const interval = setInterval(fetchConfig, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const refreshData = useCallback(async (nickname?: string) => {
     if (!publicKey) return;
     const address = publicKey.toBase58();
     
-    console.log(`[App] Connection Sync Initialized for: ${address}`);
     try {
       // Upsert User
       const upsertRes = await fetch(`${API_BASE}/api/users/upsert`, {
@@ -206,7 +223,6 @@ function TerminalLayout() {
       const userJson = await upsertRes.json();
       const user = userJson.user;
       setUserData(user);
-      console.log(`[App] Identity verified in cloud registry`, user);
 
       if (!user.nickname && !nickname) {
         setIsNicknameModalOpen(true);
@@ -214,11 +230,10 @@ function TerminalLayout() {
         setIsNicknameModalOpen(false);
       }
 
-      // Get Vault Balance
+      // Get Balances
       const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}&asset=USDT`);
       if (!balRes.ok) throw new Error("Balance API Offline");
       const balJson = await balRes.json();
-      console.log(`[App] Balances synchronized`, balJson);
       
       setVaultBalance(balJson.balance || 0);
       
@@ -280,7 +295,7 @@ function TerminalLayout() {
   useEffect(() => {
     if (connected && publicKey) {
       refreshData();
-      const interval = setInterval(refreshData, 15000);
+      const interval = setInterval(refreshData, 7000);
       return () => clearInterval(interval);
     }
   }, [connected, publicKey, refreshData]);
@@ -390,12 +405,12 @@ function TerminalLayout() {
         </header>
 
         <main className="flex-1 overflow-hidden relative">
-          {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress="" onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={connected} onPlaceTrade={() => {}} activeTrades={[]} wallet={walletData} />}
           {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-          {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress="" onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
-          {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress="" onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'support' && <div className="p-20 text-center space-y-4">
               <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Support Node</h2>
               <p className="text-gray-500">Use the widget in the bottom right corner for live assistance.</p>
