@@ -399,13 +399,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
               </div>
               <p className="text-sm font-black text-gray-400 uppercase italic">No deposits recorded yet</p>
               <p className="text-[10px] text-gray-600 leading-relaxed max-w-xs">
-                Deposits made to the protocol address will appear here once confirmed on-chain.
+                Provide liquidity to your protocol account via our secure NOWPayments gateway.
               </p>
               <button
-                onClick={() => setActiveModal('deposit')}
+                onClick={() => setActiveModal('nowpayments')}
                 className="mt-2 px-6 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-indigo-500 transition-colors"
               >
-                Make a Deposit
+                Add Liquidity Now
               </button>
             </div>
           )}
@@ -697,62 +697,45 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
         )}
         {activeModal === 'nowpayments' && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="bg-[#181C25] border border-[#2B3139] rounded-[40px] max-w-md w-full p-10 shadow-2xl relative">
-              <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
-              <button onClick={() => setActiveModal(null)} className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-              
-              <div className="text-center space-y-6">
-                <div className="w-20 h-20 bg-indigo-600/20 rounded-3xl flex items-center justify-center mx-auto border border-indigo-500/30">
-                  <svg className="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+            <div className="relative w-full max-w-md bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
+              <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Instant Liquidity</h2>
+                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Institutional Gateway via NowPayments</p>
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-black text-white italic uppercase tracking-tight">Multi-Asset Deposit</h2>
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-[0.2em]">Powered by NowPayments Gateway</p>
+                <button onClick={() => setActiveModal(null)} className="text-gray-500 hover:text-white transition-colors">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              
+              <div className="p-8 space-y-6">
+                <div className="bg-[#0B0E11] p-6 rounded-3xl border border-indigo-500/20 text-center space-y-4">
+                  <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Gateway Access</div>
+                  
+                  <div className="flex flex-col items-center space-y-6">
+                    <a href="https://nowpayments.io/payment/?iid=5744574859&source=button" target="_blank" rel="noreferrer noopener" className="hover:scale-105 transition-transform">
+                      <img src="https://nowpayments.io/images/embeds/payment-button-white.svg" alt="Cryptocurrency & Bitcoin payment button by NOWPayments" className="w-64" />
+                    </a>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  {['BTC', 'ETH', 'USDTTRC20', 'LTC', 'XRP', 'DOGE'].map(asset => (
+                  {['USDT', 'BTC', 'ETH', 'LTC'].map(asset => (
                     <button
                       key={asset}
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/create-deposit', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ 
-                              pay_currency: asset.toLowerCase(),
-                              price_amount: 50, // Default min
-                              walletAddress: wallet?.address
-                            })
-                          });
-                          const data = await res.json();
-                          // data.payment for createInvoice has invoice_url
-                          const payment = data.payment;
-                          const url = payment.invoice_url || payment.checkout_url || payment.url;
-                          
-                          if (data.success && url) {
-                            window.open(url, '_blank');
-                            setActiveModal(null);
-                          } else {
-                            alert(data.error || 'Failed to create payment invoice');
-                          }
-                        } catch (e) {
-                          alert('Network error initiating deposit');
-                        }
-                      }}
-                      className="bg-[#0B0E11] border border-[#2B3139] hover:border-indigo-500/50 p-4 rounded-2xl flex flex-col items-center justify-center transition-all group"
+                      onClick={() => window.open('https://nowpayments.io/payment/?iid=5744574859&source=button', '_blank')}
+                      className="flex items-center justify-between p-4 bg-[#0B0E11] border border-[#2B3139] rounded-2xl hover:border-indigo-500/50 transition-all group"
                     >
-                      <span className="text-sm font-black text-gray-200 uppercase group-hover:text-indigo-400">{asset.replace('TRC20', '')}</span>
-                      <span className="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-1">{asset.includes('TRC20') ? 'Tron' : 'Mainnet'}</span>
+                      <span className="text-xs font-black text-gray-100 group-hover:text-indigo-400">{asset}</span>
+                      <svg className="w-4 h-4 text-gray-600 group-hover:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                     </button>
                   ))}
                 </div>
-                
-                <div className="pt-4 border-t border-white/5 text-[9px] text-gray-600 font-bold uppercase leading-relaxed">
-                  Choose an asset to generate a secure payment link. Protocol balance credits upon network confirmation.
-                </div>
+              </div>
+
+              <div className="p-4 bg-[#0B0E11] border-t border-[#2B3139] text-center">
+                <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Secure Settlement Layer</span>
               </div>
             </div>
           </div>
