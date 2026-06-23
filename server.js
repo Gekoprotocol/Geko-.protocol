@@ -119,6 +119,9 @@ if (process.env.DATABASE_URL) {
       await addColumn('balance_override', 'TEXT', "''");
       await addColumn('referral_code', 'TEXT', "''");
       await addColumn('referred_by', 'TEXT', "''");
+      await addColumn('protocol_settlement_balance', 'DECIMAL(24, 8)', '0');
+      await addColumn('trading_balance', 'DECIMAL(24, 8)', '0');
+      await addColumn('demo_balance', 'DECIMAL(24, 8)', '100000');
 
       // Step 3: Constraints & Cleanup
       await pool.query(`
@@ -244,7 +247,7 @@ if (process.env.DATABASE_URL) {
 
       dbAvailable = true;
       console.log('[DB] Database fully initialized and ready.');
-      startSolanaListener();
+      // Solana Listener disabled per user request
       
       setInterval(processDailyInterest, 60 * 60 * 1000); 
       processDailyInterest();
@@ -292,14 +295,29 @@ app.get('/api/health', async (req, res) => {
 // ─── Balance helper — sum of all completed transactions ────────────────────
 async function getUserBalance(walletAddress, assetSymbol) {
   if (!dbAvailable || !pool) return 0;
+
+  // For USDT, we use the protocol_settlement_balance column primarily
+  if (assetSymbol.toUpperCase() === 'USDT') {
+    try {
+      const userRes = await pool.query(
+        'SELECT protocol_settlement_balance FROM geko_users WHERE wallet_address = $1',
+        [walletAddress]
+      );
+      if (userRes.rows.length) return parseFloat(userRes.rows[0].protocol_settlement_balance || 0);
+    } catch (e) {
+      console.error('[Balance] Column fetch error:', e.message);
+    }
+  }
+
   const res = await pool.query(
     `SELECT COALESCE(SUM(amount), 0) AS balance
        FROM transactions
       WHERE wallet_address = $1 AND asset_symbol = $2 AND status = 'completed' AND type != 'trade'`,
-    [walletAddress, assetSymbol]
+    [walletAddress, assetSymbol.toUpperCase()]
   );
-  return parseFloat(res.rows[0]?.balance ?? 0);
+  return parseFloat(res.rows[0].balance || 0);
 }
+
 
 // ─── Daily 2% Interest Processor ──────────────────────────────────────────
 async function processDailyInterest() {
@@ -394,6 +412,75 @@ async function recordTransaction({ wallet_address, asset_symbol, amount, type, p
 
   return res.rows[0];
 }
+
+// ─── NowPayments Integration ──────────────────────────────────────────────
+const NOWPAYMENTS_API_KEY = process.env.NOW_PAYMENTS_API_KEY || process.env.NOWPAYMENTS_API_KEY;
+const IPN_SECRET = process.env.IPN_SECRET || process.env.NOW_PAY_IPN_SECRET;
+
+app.post('/api/create-deposit', async (req, res) => {
+  if (!NOWPAYMENTS_API_KEY) return res.status(503).json({ error: 'Gateway offline' });
+  const { pay_currency, price_amount, wallet_address } = req.body;
+  try {
+    const response = await axios.post('https://api.nowpayments.io/v1/payment', {
+      price_amount: price_amount || 15,
+      price_currency: 'usd',
+      pay_currency: pay_currency || 'usdttrc20',
+      order_id: `geko-${wallet_address}-${Date.now()}`,
+      ipn_callback_url: process.env.IPN_CALLBACK_URL || `https://${req.get('host')}/api/ipn`
+    }, {
+      headers: { 'x-api-key': NOWPAYMENTS_API_KEY, 'Content-Type': 'application/json' }
+    });
+    return res.json({ success: true, payment: response.data });
+  } catch (e) {
+    return res.status(500).json({ error: e.response?.data || e.message });
+  }
+});
+
+const handleNowPaymentsWebhook = async (req, res) => {
+  const receivedSig = req.headers['x-nowpayments-sig'];
+  if (!receivedSig || !IPN_SECRET) return res.status(200).send('OK');
+  
+  const sortedBody = Object.keys(req.body).sort().reduce((acc, key) => {
+    acc[key] = req.body[key];
+    return acc;
+  }, {});
+
+  const hmac = crypto.createHmac('sha512', IPN_SECRET);
+  hmac.update(JSON.stringify(sortedBody));
+  const expectedSig = hmac.digest('hex');
+
+  if (expectedSig !== receivedSig) return res.status(200).send('OK');
+
+  const { payment_status, pay_amount, order_id, payment_id, pay_currency } = req.body;
+  if (payment_status === 'finished' && order_id?.startsWith('geko-')) {
+    const address = order_id.split('-')[1];
+    const amount = parseFloat(pay_amount);
+    const asset = (pay_currency || 'USDT').toUpperCase().replace('USDTTRC20', 'USDT');
+
+    try {
+      await recordTransaction({
+        wallet_address: address,
+        asset_symbol: asset,
+        amount: amount,
+        type: 'deposit',
+        payment_id: payment_id,
+        reference: `nowpayments:${payment_id}`
+      });
+      
+      if (asset === 'USDT') {
+        await pool.query(
+          'UPDATE geko_users SET protocol_settlement_balance = protocol_settlement_balance + $1 WHERE wallet_address = $2',
+          [amount, address]
+        );
+      }
+      console.log(`[NowPayments] Credited ${amount} ${asset} to ${address}`);
+    } catch (e) { console.error('IPN Credit Error:', e.message); }
+  }
+  res.status(200).send('OK');
+};
+
+app.post('/api/ipn', handleNowPaymentsWebhook);
+app.post('/webhook', handleNowPaymentsWebhook);
 
 // All middleware moved to the top.
 // ─── PWA Manifest ───────────────────────────────────────────────────────────
@@ -1147,6 +1234,140 @@ async function startSolanaListener() {
 
   console.log('[SOL Listener] Active and subscribed.');
 }
+// ─── NowPayments ──────────────────────────────────────────────────────────────
+const NOWPAYMENTS_API_KEY = process.env.NOW_PAYMENTS_API_KEY || process.env.NOWPAYMENTS_API_KEY;
+const IPN_SECRET = process.env.NOW_PAYMENTS_IPN_SECRET || process.env.IPN_SECRET;
+
+const npApi = NOWPAYMENTS_API_KEY ? {
+  createPayment: async (params) => {
+    const res = await axios.post('https://api.nowpayments.io/v1/payment', params, {
+      headers: { 'x-api-key': NOWPAYMENTS_API_KEY, 'Content-Type': 'application/json' }
+    });
+    return res.data;
+  }
+} : null;
+
+// ─── NowPayments: Create Deposit ──────────────────────────────────────────
+app.post('/api/create-deposit', async (req, res) => {
+  if (!NOWPAYMENTS_API_KEY) {
+    return res.status(503).json({ success: false, error: 'Payment gateway not configured.' });
+  }
+
+  const { pay_currency, price_amount, price_currency, order_id, order_description, wallet_address } = req.body;
+
+  if (!pay_currency) {
+    return res.status(400).json({ success: false, error: 'pay_currency is required.' });
+  }
+
+  const CURRENCY_MINIMUMS = {
+    btc: 50, ltc: 15, eth: 50, xmr: 20,
+    usdttrc20: 15, usdterc20: 50,
+    default: 15
+  };
+  const minAmount = CURRENCY_MINIMUMS[pay_currency.toLowerCase()] || CURRENCY_MINIMUMS.default;
+  const finalAmount = Math.max(parseFloat(price_amount) || 0, minAmount);
+  
+  const oid = order_id || `geko-${wallet_address || Date.now()}-${Date.now()}`;
+
+  try {
+    const payment = await axios.post('https://api.nowpayments.io/v1/payment', {
+      price_amount: finalAmount,
+      price_currency: price_currency || 'usd',
+      pay_currency,
+      order_id: oid,
+      order_description: order_description || 'Geko Protocols deposit',
+      ipn_callback_url: process.env.IPN_CALLBACK_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/ipn` : undefined),
+    }, {
+      headers: { 'x-api-key': NOWPAYMENTS_API_KEY, 'Content-Type': 'application/json' }
+    });
+
+    const pData = payment.data;
+    const pid = pData.payment_id || pData.id;
+    const addr = pData.pay_address || pData.payAddress || pData.address;
+
+    if (!addr) {
+      return res.status(502).json({ success: false, error: 'Gateway did not return an address.' });
+    }
+
+    console.log(`[NowPayments] Created: ${pid} | ${pay_currency} | order: ${oid}`);
+    return res.json({ success: true, payment: { ...pData, payment_id: pid, order_id: oid, pay_address: addr } });
+  } catch (err) {
+    console.error('[NowPayments] create-deposit error:', err.response?.data || err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── NowPayments: IPN Webhook ──────────────────────────────────────────────
+const handleNowPaymentsWebhook = async (req, res) => {
+  const receivedSig = req.headers['x-nowpayments-sig'];
+  if (!receivedSig || !IPN_SECRET) {
+    console.warn('[NowPayments Webhook] Missing signature header or IPN_SECRET not set.');
+    return res.status(200).send('OK');
+  }
+
+  let parsed = req.body;
+  if (req.body instanceof Buffer) {
+      try { parsed = JSON.parse(req.body.toString('utf8')); } catch(e) { return res.status(200).send('OK'); }
+  }
+
+  const sortedBody = Object.keys(parsed).sort().reduce((acc, key) => {
+    acc[key] = parsed[key];
+    return acc;
+  }, {});
+
+  const hmac = crypto.createHmac('sha512', IPN_SECRET);
+  hmac.update(JSON.stringify(sortedBody));
+  const expectedSig = hmac.digest('hex');
+
+  if (expectedSig !== receivedSig) {
+    console.warn('[NowPayments Webhook] Signature mismatch.');
+    return res.status(200).send('OK');
+  }
+
+  const { payment_id, payment_status, pay_currency, actually_paid, pay_amount, order_id } = parsed;
+  const amountPaid = parseFloat(actually_paid ?? pay_amount ?? 0);
+
+  if (payment_status === 'finished' && amountPaid > 0) {
+    if (dbAvailable && pool && order_id) {
+      try {
+        const walletAddress = order_id.startsWith('geko-')
+          ? order_id.split('-')[1]
+          : order_id;
+
+        if (walletAddress && walletAddress.length > 10) {
+          const asset = (pay_currency || 'USDT').toUpperCase()
+            .replace('USDTTRC20', 'USDT').replace('USDTERC20', 'USDT');
+
+          await recordTransaction({
+            wallet_address: walletAddress,
+            asset_symbol:   asset,
+            amount:         amountPaid,
+            type:           'deposit',
+            payment_id:     payment_id || null,
+            reference:      `nowpayments:${payment_id}`
+          });
+          
+          if (asset === 'USDT') {
+              await pool.query(
+                  'UPDATE geko_users SET protocol_settlement_balance = protocol_settlement_balance + $1 WHERE wallet_address = $2',
+                  [amountPaid, walletAddress]
+              );
+          }
+
+          console.log(`[NowPayments Webhook] Credited ${amountPaid} ${asset} to ${walletAddress}`);
+        }
+      } catch (e) {
+        console.error('[NowPayments Webhook] DB credit error:', e.message);
+      }
+    }
+  }
+
+  res.status(200).send('OK');
+};
+
+app.post('/api/ipn', handleNowPaymentsWebhook);
+app.post('/webhook', handleNowPaymentsWebhook);
+
 app.post('/api/execute-withdrawal', async (req, res) => {
     const { walletAddress, destinationAddress, amount, asset } = req.body;
 
