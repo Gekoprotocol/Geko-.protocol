@@ -106,12 +106,23 @@ if (process.env.DATABASE_URL) {
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS nickname TEXT;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS force_win BOOLEAN DEFAULT FALSE;
         ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS last_interest_at TIMESTAMPTZ DEFAULT NOW();
+        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS kyc_status TEXT DEFAULT 'none';
+
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_wallet_address_key') THEN
+            ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
+          END IF;
+        END $$;
 
         UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0);
         UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000);
         UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0);
         UPDATE geko_users SET available_balance = COALESCE(available_balance, 0);
       `);
+
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_wallet ON geko_users (wallet_address)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_last_seen ON geko_users (last_seen)`);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS trades (
@@ -395,7 +406,7 @@ app.get('/api/config', async (req, res) => {
 });
 
 app.post('/api/admin/config', async (req, res) => {
-  const { solana_deposit_address, vault_balance } = req.body;
+  const { solana_deposit_address } = req.body;
 
   if (dbAvailable && pool) {
     try {
@@ -407,14 +418,6 @@ app.post('/api/admin/config', async (req, res) => {
           [solana_deposit_address]
         );
       }
-      if (vault_balance !== undefined) {
-        await pool.query(
-          `INSERT INTO geko_config (key, value, updated_at)
-           VALUES ('vault_balance', $1, NOW())
-           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-          [vault_balance]
-        );
-      }
       return res.json({ success: true });
     } catch (e) {
       console.error('Config update error:', e.message);
@@ -423,7 +426,6 @@ app.post('/api/admin/config', async (req, res) => {
   }
   
   // Fallback to memory if DB is down
-  if (vault_balance !== undefined) globalConfig.vault_balance = vault_balance;
   if (solana_deposit_address !== undefined) globalConfig.solana_deposit_address = solana_deposit_address;
   
   res.json({ success: true, config: globalConfig });
@@ -521,12 +523,14 @@ app.get('/api/admin/users', async (req, res) => {
         FROM geko_users u 
         ORDER BY last_seen DESC
       `);
-      console.log(`[Admin] Fetched ${result.rows.length} user nodes`);
+      console.log(`[Admin] Fetched ${result.rows.length} user nodes from registry`);
       return res.json(result.rows);
     } catch (e) {
-      console.error('[Admin] DB users error:', e.message);
+      console.error('[Admin] REGISTRY_FETCH_ERROR:', e.message);
+      return res.status(500).json({ error: e.message });
     }
   }
+  console.warn('[Admin] REGISTRY_FETCH_REJECTED: DB Unavailable');
   res.status(503).json({ error: 'Database unavailable' });
 });
 
@@ -546,11 +550,13 @@ app.post('/api/admin/users/update', async (req, res) => {
       values.push(id);
       if (updates.length > 0) {
         await pool.query(`UPDATE geko_users SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+        console.log(`[Admin] UPDATED_USER_ID: ${id} | Balances: ${trading_balance}/${demo_balance}/${protocol_settlement_balance}`);
       }
       const result = await pool.query('SELECT * FROM geko_users WHERE id = $1', [id]);
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
-      console.error('DB update error:', e.message);
+      console.error('[Admin] USER_UPDATE_ERROR:', e.message);
+      return res.status(500).json({ error: e.message });
     }
   }
 
@@ -569,7 +575,7 @@ app.post('/api/users/upsert', async (req, res) => {
 
   if (dbAvailable && pool) {
     try {
-      console.log(`[Upsert] SYNCING_NODE: ${targetAddress}`);
+      console.log(`[Upsert] SYNCING_NODE: ${targetAddress} | Nickname: ${nickname || 'None'}`);
       
       const upsertQuery = `
         INSERT INTO geko_users (wallet_address, wallet_data, ip_address, last_seen, nickname, demo_balance)
@@ -590,13 +596,20 @@ app.post('/api/users/upsert', async (req, res) => {
       
       const result = await pool.query(upsertQuery, values);
       console.log(`[Upsert] NODE_SYNC_SUCCESS: ${targetAddress} | ID: ${result.rows[0].id}`);
+      
+      // Verify total count for debug
+      const countRes = await pool.query('SELECT COUNT(*) FROM geko_users');
+      console.log(`[Upsert] Total users in DB now: ${countRes.rows[0].count}`);
+      
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
       console.error('[Upsert] CRITICAL_SYNC_FAILURE:', e.message);
+      console.error(e.stack);
       return res.status(500).json({ error: `Sync Error: ${e.message}` });
     }
   }
 
+  console.warn('[Upsert] SYNC_REJECTED: DB Unavailable');
   res.status(503).json({ error: 'Cloud Registry Unavailable' });
 });
 
