@@ -55,39 +55,21 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
   return (
     <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'}`}>
       <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-2">
-          <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-indigo-400 font-black text-sm">
-            {user.email ? '@' : 'W'}
-          </div>
-          <div className="flex flex-col space-y-1">
-            {isOnline ? (
-              <div className="flex items-center space-x-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full w-fit">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Online</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded-full w-fit">
-                <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Offline</span>
-              </div>
-            )}
-            {hasActiveTrades && (
-              <div className="flex items-center space-x-1 px-2 py-1 bg-indigo-500/10 border border-indigo-500/30 rounded-full w-fit">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"></div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-indigo-400">Trading ({user.active_trades_count})</span>
-              </div>
-            )}
-          </div>
+        <div className="flex items-center space-x-3">
+          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
+          <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">Node_{user.id}</div>
         </div>
-        <div className="text-[8px] text-gray-500 uppercase font-black">ID: {user.id}</div>
+        <div className="text-[8px] text-gray-500 uppercase font-black">{isOnline ? 'Active' : 'Standby'}</div>
       </div>
-      <div className="cursor-pointer group" onClick={() => protocolInputRef.current?.focus()}>
-        <div className="text-sm font-bold text-gray-100 truncate group-hover:text-indigo-400 transition-colors">{user.nickname || user.email || user.wallet_address || 'Anonymous'}</div>
-        {(user.nickname || user.email) && user.wallet_address && <div className="text-[9px] text-indigo-400 font-mono mt-0.5 truncate">{user.wallet_address}</div>}
-        <div className="text-[8px] text-gray-500 font-mono mt-1">Last seen: {user.last_seen ? new Date(user.last_seen).toLocaleString() : 'N/A'}</div>
+
+      <div className="cursor-pointer group space-y-1" onClick={() => protocolInputRef.current?.focus()}>
+        <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Identify Link (Wallet)</div>
+        <div className="text-xs font-mono font-bold text-gray-100 break-all group-hover:text-indigo-400 transition-colors">
+            {user.wallet_address || 'NO_ADDRESS_LINKED'}
+        </div>
       </div>
       
-      <div className="grid grid-cols-1 gap-3">
+      <div className="grid grid-cols-1 gap-3 pt-2">
           <div className="bg-[#0B0E11] p-3 rounded-2xl border border-[#2B3139]">
             <div className="text-[8px] text-gray-500 uppercase font-black mb-1">Protocol Settlement Balance</div>
             <div className="text-sm font-mono font-bold text-indigo-400">
@@ -112,7 +94,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
 
       <div className="space-y-3">
         <div className="space-y-1">
-            <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Set Protocol Balance (use + to add)</div>
+            <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Modify Protocol Settlement</div>
             <input
             ref={protocolInputRef}
             type="text"
@@ -123,7 +105,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
         </div>
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-                <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Set Live</div>
+                <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Live Add/Set</div>
                 <input
                 type="text"
                 value={localBal}
@@ -132,7 +114,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
                 />
             </div>
             <div className="space-y-1">
-                <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Set Demo</div>
+                <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Demo Add/Set</div>
                 <input
                 type="text"
                 value={localDemoBal}
@@ -395,17 +377,32 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
         {activeTab === 'users' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center px-4">
-              <h2 className="text-lg font-black uppercase italic text-indigo-400">Registry — User Nodes</h2>
-              <span className="text-[10px] text-gray-500 font-black">{dbUsers.length} REGISTERED</span>
+              <div>
+                <h2 className="text-lg font-black uppercase italic text-indigo-400">Registry — User Nodes</h2>
+                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Address-based identifying system (No nicknames)</p>
+              </div>
+              <div className="flex items-center space-x-4">
+                <span className="text-[10px] text-gray-500 font-black uppercase">{dbUsers.length} REGISTERED</span>
+                <button
+                  onClick={async () => {
+                    const res = await fetch('/api/admin/users');
+                    if (res.ok) setDbUsers(await res.json());
+                  }}
+                  className="px-3 py-1.5 bg-[#1E2329] border border-[#2B3139] rounded-lg text-[9px] font-black uppercase text-indigo-400 hover:text-white transition-all"
+                >Force Refresh</button>
+              </div>
             </div>
 
             {dbUsers.length === 0 && (
-              <div className="text-center py-20 text-[11px] text-gray-600 font-black uppercase tracking-[0.4em]">
-                No registered users yet. Users appear here when they connect.
+              <div className="bg-[#181C25] border-2 border-dashed border-[#2B3139] rounded-[40px] py-32 text-center space-y-4">
+                <div className="text-4xl text-gray-800 font-black uppercase italic tracking-tighter opacity-20">Registry Empty</div>
+                <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] max-w-sm mx-auto leading-relaxed">
+                  Waiting for user connections. Ensure your Supabase database is reachable and the Sync Node button is used on the client.
+                </p>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-2">
               {dbUsers.map(user => (
                 <UserCard
                   key={user.id}
