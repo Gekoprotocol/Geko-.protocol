@@ -196,7 +196,7 @@ function TerminalLayout() {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/config`);
+        const res = await fetch('/api/config');
         if (res.ok) {
           const data = await res.json();
           if (data.solana_deposit_address) setSolanaDepositAddress(data.solana_deposit_address);
@@ -213,51 +213,65 @@ function TerminalLayout() {
     const address = publicKey.toBase58();
     
     try {
-      console.log(`[Sync] Attempting to upsert user: ${address}`);
       // Upsert User
-      const upsertRes = await fetch(`${API_BASE}/api/users/upsert`, {
+      const upsertRes = await fetch('/api/users/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: address, nickname })
       });
       
-      if (!upsertRes.ok) {
-        const errText = await upsertRes.text();
-        console.error(`[Sync] Registration failed with status ${upsertRes.status}: ${errText}`);
-        throw new Error(`Registration failed: ${upsertRes.status}`);
-      }
-      
-      const userJson = await upsertRes.json();
-      console.log(`[Sync] User upserted successfully:`, userJson.user);
-      const user = userJson.user;
-      setUserData(user);
-
-      if (!user.nickname && !nickname) {
-        setIsNicknameModalOpen(true);
-      } else if (nickname) {
-        setIsNicknameModalOpen(false);
+      if (upsertRes.ok) {
+        const userJson = await upsertRes.json();
+        setUserData(userJson.user);
+        if (!userJson.user.nickname && !nickname) {
+          setIsNicknameModalOpen(true);
+        } else if (nickname) {
+          setIsNicknameModalOpen(false);
+        }
       }
 
       // Get Balances
-      const balRes = await fetch(`${API_BASE}/api/user/balance?address=${address}&asset=USDT`);
-      if (!balRes.ok) throw new Error("Balance API Offline");
-      const balJson = await balRes.json();
-      
-      setVaultBalance(balJson.balance || 0);
-      
-      // Update userData with latest balances from cloud node
-      setUserData((prev: any) => ({
-        ...prev,
-        trading_balance: balJson.trading_balance,
-        demo_balance: balJson.demo_balance,
-        protocol_settlement_balance: balJson.balance
-      }));
+      const balRes = await fetch(`/api/user/balance?address=${address}&asset=USDT`);
+      if (balRes.ok) {
+        const balJson = await balRes.json();
+        setVaultBalance(balJson.balance || 0);
+        setUserData((prev: any) => ({
+          ...prev,
+          trading_balance: balJson.trading_balance,
+          demo_balance: balJson.demo_balance,
+          protocol_settlement_balance: balJson.balance
+        }));
+      }
     } catch (err) {
-      console.error("[Sync] CRITICAL_SYNC_ERROR:", err);
+      console.warn("[Sync] Background sync check failed (normal if offline)");
     } finally {
       setIsLoading(false);
     }
   }, [publicKey]);
+
+  // Aggressive Immediate Sync on Connection
+  useEffect(() => {
+    if (connected && publicKey) {
+      const address = publicKey.toBase58();
+      console.log(`[Identity] AGGRESSIVE_SYNC_TRIGGERED: ${address}`);
+      
+      const fastSync = async () => {
+        try {
+          await fetch('/api/users/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wallet_address: address })
+          });
+          console.log("[Identity] Aggressive sync success");
+          refreshData();
+        } catch (e) {
+          console.error("[Identity] Aggressive sync failed", e);
+        }
+      };
+      
+      fastSync();
+    }
+  }, [connected, publicKey, refreshData]);
 
   const handleNicknameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,7 +284,7 @@ function TerminalLayout() {
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/binance/prices`);
+        const res = await fetch('/api/binance/prices');
         if (!res.ok) return;
         const data = await res.json();
         setPrices(data);
@@ -286,16 +300,16 @@ function TerminalLayout() {
   useEffect(() => {
     if (connected && publicKey) {
       const address = publicKey.toBase58();
-      // Heartbeat every 20 seconds
+      // Heartbeat every 15 seconds (more frequent)
       const interval = setInterval(async () => {
         try {
-          await fetch(`${API_BASE}/api/users/heartbeat`, {
+          await fetch('/api/users/heartbeat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ wallet_address: address })
           });
         } catch (_) {}
-      }, 20000);
+      }, 15000);
       return () => clearInterval(interval);
     }
   }, [connected, publicKey]);
@@ -303,7 +317,7 @@ function TerminalLayout() {
   useEffect(() => {
     if (connected && publicKey) {
       refreshData();
-      const interval = setInterval(refreshData, 7000);
+      const interval = setInterval(refreshData, 10000); // 10s is plenty
       return () => clearInterval(interval);
     }
   }, [connected, publicKey, refreshData]);

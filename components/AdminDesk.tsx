@@ -164,7 +164,7 @@ interface AdminDeskProps {
 }
 
 const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTrades: propsActiveTrades, onForceOutcome, onUpdateWallet }) => {
-  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'deposit' | 'config'>('deposit');
+  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'deposit' | 'config'>('users');
   const [remoteUsers, setRemoteUsers] = useState<Record<string, UserRecord>>({});
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
