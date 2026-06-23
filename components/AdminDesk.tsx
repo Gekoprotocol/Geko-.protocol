@@ -29,7 +29,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
 
   const uid = user.id.toString();
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
-  const isOnline = lastSeenMs < 45_000;
+  const isOnline = lastSeenMs < 90_000;
   const hasActiveTrades = user.active_trades_count > 0;
 
   const handleUpdate = () => {
