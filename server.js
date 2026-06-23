@@ -63,6 +63,9 @@ let pool = null;
 let dbAvailable = false;
 
 if (process.env.DATABASE_URL) {
+  const maskedUrl = process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':****@');
+  console.log(`[DB] Using DATABASE_URL: ${maskedUrl}`);
+
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -75,55 +78,65 @@ if (process.env.DATABASE_URL) {
       console.log('[DB] Connection successful');
       client.release();
 
+      // Step 1: Base table
       await pool.query(`
         CREATE TABLE IF NOT EXISTS geko_users (
           id SERIAL PRIMARY KEY,
           wallet_address TEXT UNIQUE,
           wallet_data JSONB DEFAULT '{}',
-          balance_override TEXT,
           trading_balance DECIMAL(24, 8) DEFAULT 0,
           demo_balance DECIMAL(24, 8) DEFAULT 100000,
           protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
-          available_balance DECIMAL(24, 8) DEFAULT 0,
-          available_demo_balance DECIMAL(24, 8) DEFAULT 100000,
-          nickname TEXT,
-          force_win BOOLEAN DEFAULT FALSE,
-          ip_address TEXT,
           last_seen TIMESTAMPTZ DEFAULT NOW(),
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          last_interest_at TIMESTAMPTZ DEFAULT NOW(),
-          referral_code TEXT,
-          referred_by TEXT,
-          kyc_status TEXT DEFAULT 'none'
+          created_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
 
-      // Ensure new columns exist for existing tables and fix NULL balances
-      await pool.query(`
-        ALTER TABLE geko_users ALTER COLUMN trading_balance SET DEFAULT 0;
-        ALTER TABLE geko_users ALTER COLUMN demo_balance SET DEFAULT 100000;
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0;
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS nickname TEXT;
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS force_win BOOLEAN DEFAULT FALSE;
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS last_interest_at TIMESTAMPTZ DEFAULT NOW();
-        ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS kyc_status TEXT DEFAULT 'none';
+      // Step 2: Columns one by one for maximum safety
+      const addColumn = async (name: string, type: string, def: string) => {
+        try {
+          await pool.query(`ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS ${name} ${type} DEFAULT ${def}`);
+        } catch (e) {
+          console.warn(`[DB] Column ${name} may already exist or error:`, e.message);
+        }
+      };
 
+      await addColumn('nickname', 'TEXT', "''");
+      await addColumn('kyc_status', 'TEXT', "'none'");
+      await addColumn('force_win', 'BOOLEAN', 'FALSE');
+      await addColumn('last_interest_at', 'TIMESTAMPTZ', 'NOW()');
+      await addColumn('ip_address', 'TEXT', "''");
+      await addColumn('available_balance', 'DECIMAL(24, 8)', '0');
+      await addColumn('available_demo_balance', 'DECIMAL(24, 8)', '100000');
+      await addColumn('balance_override', 'TEXT', "''");
+      await addColumn('referral_code', 'TEXT', "''");
+      await addColumn('referred_by', 'TEXT', "''");
+
+      // Step 3: Constraints & Cleanup
+      await pool.query(`
         DO $$ 
         BEGIN 
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_wallet_address_key') THEN
+            -- Cleanup duplicates before adding constraint
+            DELETE FROM geko_users a USING geko_users b
+            WHERE a.id < b.id AND a.wallet_address = b.wallet_address;
+            
             ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
           END IF;
         END $$;
+      `);
 
-        UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0);
-        UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000);
-        UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0);
-        UPDATE geko_users SET available_balance = COALESCE(available_balance, 0);
+      // Step 4: Defaults & Sync
+      await pool.query(`
+        UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
+        UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000) WHERE demo_balance IS NULL;
+        UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0) WHERE protocol_settlement_balance IS NULL;
       `);
 
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_wallet ON geko_users (wallet_address)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_last_seen ON geko_users (last_seen)`);
 
+      // Step 5: Other tables
       await pool.query(`
         CREATE TABLE IF NOT EXISTS trades (
           id TEXT PRIMARY KEY,
@@ -141,15 +154,60 @@ if (process.env.DATABASE_URL) {
         )
       `);
 
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_trades_wallet ON trades (wallet_address, status)`);
-
       await pool.query(`
-        CREATE TABLE IF NOT EXISTS geko_config (
-          key TEXT PRIMARY KEY,
-          value TEXT,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
+        CREATE TABLE IF NOT EXISTS withdrawal_requests (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT NOT NULL,
+          destination_address TEXT NOT NULL,
+          amount DECIMAL(24, 8) NOT NULL,
+          asset TEXT NOT NULL DEFAULT 'SOL',
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
+
+      dbAvailable = true;
+      console.log('[DB] Database ready and all schema verified.');
+      startSolanaListener();
+    } catch (err) {
+      console.error('[DB Error] CRITICAL initialization failure:', err.message);
+      dbAvailable = false;
+    }
+  };
+
+  initializeDatabase();
+} else { 
+  console.warn('DATABASE_URL is not set in .env. Database features will be unavailable.');
+}
+
+// ─── Health check ──────────────────────────────────────────────────────────
+app.get('/api/health', async (req, res) => {
+  let dbStatus = dbAvailable ? 'CONNECTED ✅' : 'DISCONNECTED ❌';
+  let userCount = 0;
+  let lastError = null;
+  
+  if (dbAvailable && pool) {
+    try {
+      const r = await pool.query('SELECT COUNT(*) FROM geko_users');
+      userCount = parseInt(r.rows[0].count);
+    } catch (e) {
+      dbStatus = 'QUERY_ERROR ⚠️';
+      lastError = e.message;
+    }
+  } else if (process.env.DATABASE_URL) {
+    dbStatus = 'INITIALIZING 🔄';
+  } else {
+    dbStatus = 'NO_DATABASE_URL ⚠️';
+  }
+  
+  res.json({ 
+    status: 'ONLINE', 
+    db: dbStatus, 
+    users: userCount, 
+    error: lastError,
+    time: new Date().toISOString() 
+  });
+});
 
       // Initialize default config
       await pool.query(`
