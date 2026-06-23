@@ -18,6 +18,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
   const [localBal, setLocalBal] = useState(String(currentBalance));
   const [localDemoBal, setLocalDemoBal] = useState(String(currentDemoBalance));
   const [localProtocolBal, setLocalProtocolBal] = useState(String(currentProtocolBalance));
+  const protocolInputRef = useRef<HTMLInputElement>(null);
 
   // Keep local state in sync with external updates
   useEffect(() => {
@@ -30,6 +31,26 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
   const isOnline = lastSeenMs < 45_000;
   const hasActiveTrades = user.active_trades_count > 0;
+
+  const handleUpdate = () => {
+    const processAdditive = (val: string, current: string) => {
+      if (val.startsWith('+')) {
+        const add = parseFloat(val.substring(1).replace(/,/g, ''));
+        return (parseFloat(current) + (isNaN(add) ? 0 : add)).toString();
+      }
+      if (val.startsWith('-')) {
+        const sub = parseFloat(val.substring(1).replace(/,/g, ''));
+        return (parseFloat(current) - (isNaN(sub) ? 0 : sub)).toString();
+      }
+      return val.replace(/,/g, '');
+    };
+
+    onSave(user, { 
+      trading_balance: processAdditive(localBal, String(currentBalance)), 
+      demo_balance: processAdditive(localDemoBal, String(currentDemoBalance)), 
+      protocol_settlement_balance: processAdditive(localProtocolBal, String(currentProtocolBalance)) 
+    });
+  };
 
   return (
     <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'}`}>
@@ -60,8 +81,8 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
         </div>
         <div className="text-[8px] text-gray-500 uppercase font-black">ID: {user.id}</div>
       </div>
-      <div>
-        <div className="text-sm font-bold text-gray-100 truncate">{user.nickname || user.email || user.wallet_address || 'Anonymous'}</div>
+      <div className="cursor-pointer group" onClick={() => protocolInputRef.current?.focus()}>
+        <div className="text-sm font-bold text-gray-100 truncate group-hover:text-indigo-400 transition-colors">{user.nickname || user.email || user.wallet_address || 'Anonymous'}</div>
         {(user.nickname || user.email) && user.wallet_address && <div className="text-[9px] text-indigo-400 font-mono mt-0.5 truncate">{user.wallet_address}</div>}
         <div className="text-[8px] text-gray-500 font-mono mt-1">Last seen: {user.last_seen ? new Date(user.last_seen).toLocaleString() : 'N/A'}</div>
       </div>
@@ -91,8 +112,9 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
 
       <div className="space-y-3">
         <div className="space-y-1">
-            <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Set Protocol Balance</div>
+            <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Set Protocol Balance (use + to add)</div>
             <input
+            ref={protocolInputRef}
             type="text"
             value={localProtocolBal}
             onChange={e => setLocalProtocolBal(e.target.value)}
@@ -120,7 +142,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
             </div>
         </div>
         <button
-          onClick={() => onSave(user, { trading_balance: localBal, demo_balance: localDemoBal, protocol_settlement_balance: localProtocolBal })}
+          onClick={handleUpdate}
           disabled={savingId === uid}
           className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
             savedId === uid ? 'bg-emerald-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
@@ -435,7 +457,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
             <div className="flex justify-between items-center px-4">
               <div>
                 <h2 className="text-lg font-black uppercase italic text-amber-500">Withdrawal Queue</h2>
-                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Approve triggers NowPayments payout · SOL falls back to treasury transfer</p>
+                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Marking 'Done' will update the protocol settlement balance manually.</p>
               </div>
               <div className="flex items-center space-x-4">
                 <span className="text-[10px] text-amber-400 font-black">
@@ -537,8 +559,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                                 }`}
                               >
                                 {isApproving
-                                  ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Sending…</span></>
-                                  : <span>Approve &amp; Pay</span>
+                                  ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Processing…</span></>
+                                  : <span>Done</span>
                                 }
                               </button>
                               <button
@@ -550,7 +572,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                               </button>
                             </div>
                           )}
-                          {isApproved && <span className="text-[9px] text-emerald-500 font-black uppercase">Paid ✓</span>}
+                          {isApproved && <span className="text-[9px] text-emerald-500 font-black uppercase">Completed ✓</span>}
                           {isRejected && <span className="text-[9px] text-gray-500 font-black uppercase">Rejected</span>}
                           {isFailed   && (
                             <button
@@ -576,23 +598,6 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
           <div className="space-y-6 max-w-2xl">
             <h2 className="text-lg font-black uppercase italic text-indigo-400 px-4">Protocol Overrides</h2>
             <div className="bg-[#181C25] border border-[#2B3139] p-8 rounded-[40px] space-y-8">
-
-              {/* Vault Balance */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                    Global Vault Balance <span className="text-indigo-400">(Public Display)</span>
-                  </label>
-                  <span className="text-[8px] text-emerald-500 font-black uppercase">✎ Editable</span>
-                </div>
-                <input
-                  type="text"
-                  value={vaultInput}
-                  onChange={e => setVaultInput(e.target.value)}
-                  placeholder="e.g. 25,000.00"
-                  className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 hover:border-indigo-500/70 focus:border-indigo-500 rounded-2xl p-5 text-base text-emerald-400 font-mono outline-none transition-colors cursor-text"
-                />
-              </div>
 
               {/* Deposit Address */}
               <div className="space-y-3">

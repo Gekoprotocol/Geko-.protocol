@@ -213,14 +213,22 @@ function TerminalLayout() {
     const address = publicKey.toBase58();
     
     try {
+      console.log(`[Sync] Attempting to upsert user: ${address}`);
       // Upsert User
       const upsertRes = await fetch(`${API_BASE}/api/users/upsert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: address, nickname })
       });
-      if (!upsertRes.ok) throw new Error(`Registration failed: ${upsertRes.status}`);
+      
+      if (!upsertRes.ok) {
+        const errText = await upsertRes.text();
+        console.error(`[Sync] Registration failed with status ${upsertRes.status}: ${errText}`);
+        throw new Error(`Registration failed: ${upsertRes.status}`);
+      }
+      
       const userJson = await upsertRes.json();
+      console.log(`[Sync] User upserted successfully:`, userJson.user);
       const user = userJson.user;
       setUserData(user);
 
@@ -245,7 +253,7 @@ function TerminalLayout() {
         protocol_settlement_balance: balJson.balance
       }));
     } catch (err) {
-      console.error("Data fetch error", err);
+      console.error("[Sync] CRITICAL_SYNC_ERROR:", err);
     } finally {
       setIsLoading(false);
     }
