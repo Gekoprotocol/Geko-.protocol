@@ -93,7 +93,7 @@ if (process.env.DATABASE_URL) {
       `);
 
       // Step 2: Columns one by one for maximum safety
-      const addColumn = async (name: string, type: string, def: string) => {
+      const addColumn = async (name, type, def) => {
         try {
           await pool.query(`ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS ${name} ${type} DEFAULT ${def}`);
         } catch (e) {
