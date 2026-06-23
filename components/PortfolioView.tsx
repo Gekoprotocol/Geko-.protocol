@@ -124,7 +124,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     const interval = setInterval(() => {
       fetchProtocolBalance();
       fetchDbTransactions();
-    }, 30000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [wallet?.address]);
 
