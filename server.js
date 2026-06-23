@@ -78,7 +78,7 @@ if (process.env.DATABASE_URL) {
       console.log('[DB] Connection successful');
       client.release();
 
-      // Step 1: Base table
+      // Step 1: Core Tables
       await pool.query(`
         CREATE TABLE IF NOT EXISTS geko_users (
           id SERIAL PRIMARY KEY,
@@ -89,6 +89,14 @@ if (process.env.DATABASE_URL) {
           protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
           last_seen TIMESTAMPTZ DEFAULT NOW(),
           created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS geko_config (
+          key TEXT PRIMARY KEY,
+          value TEXT,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
 
@@ -117,26 +125,30 @@ if (process.env.DATABASE_URL) {
         DO $$ 
         BEGIN 
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_wallet_address_key') THEN
-            -- Cleanup duplicates before adding constraint
             DELETE FROM geko_users a USING geko_users b
             WHERE a.id < b.id AND a.wallet_address = b.wallet_address;
-            
             ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
           END IF;
         END $$;
       `);
 
-      // Step 4: Defaults & Sync
+      // Step 4: Defaults & Defaults Config
       await pool.query(`
         UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
         UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000) WHERE demo_balance IS NULL;
         UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0) WHERE protocol_settlement_balance IS NULL;
       `);
 
+      await pool.query(`
+        INSERT INTO geko_config (key, value)
+        VALUES ('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw')
+        ON CONFLICT (key) DO NOTHING
+      `);
+
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_wallet ON geko_users (wallet_address)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_last_seen ON geko_users (last_seen)`);
 
-      // Step 5: Other tables
+      // Step 5: Secondary Tables
       await pool.query(`
         CREATE TABLE IF NOT EXISTS trades (
           id TEXT PRIMARY KEY,
@@ -162,15 +174,83 @@ if (process.env.DATABASE_URL) {
           amount DECIMAL(24, 8) NOT NULL,
           asset TEXT NOT NULL DEFAULT 'SOL',
           status TEXT NOT NULL DEFAULT 'pending',
+          tx_signature TEXT,
+          admin_note TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          processed_at TIMESTAMPTZ
+        )
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS transactions (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT NOT NULL,
+          asset_symbol TEXT NOT NULL,
+          amount DECIMAL(24, 8) NOT NULL,
+          type TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'completed',
+          payment_id TEXT,
+          tx_signature TEXT,
+          reference TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS geko_visitors (
+          id SERIAL PRIMARY KEY,
+          visitor_id TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          language TEXT,
+          timezone TEXT,
+          screen_size TEXT,
+          platform TEXT,
+          referrer TEXT,
+          page_path TEXT,
+          wallet_extensions JSONB DEFAULT '[]',
+          visit_count INTEGER DEFAULT 1,
+          first_seen TIMESTAMPTZ DEFAULT NOW(),
+          last_seen TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS support_tickets (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          messages JSONB DEFAULT '[]',
+          status TEXT DEFAULT 'open',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS kyc_submissions (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT NOT NULL,
+          full_name TEXT,
+          date_of_birth TEXT,
+          country TEXT,
+          id_type TEXT,
+          id_number TEXT,
+          status TEXT DEFAULT 'pending',
+          admin_note TEXT,
           created_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
 
       dbAvailable = true;
-      console.log('[DB] Database ready and all schema verified.');
+      console.log('[DB] Database fully initialized and ready.');
       startSolanaListener();
+      
+      setInterval(processDailyInterest, 60 * 60 * 1000); 
+      processDailyInterest();
     } catch (err) {
       console.error('[DB Error] CRITICAL initialization failure:', err.message);
+      console.error(err.stack);
       dbAvailable = false;
     }
   };
@@ -208,112 +288,6 @@ app.get('/api/health', async (req, res) => {
     time: new Date().toISOString() 
   });
 });
-
-      // Initialize default config
-      await pool.query(`
-        INSERT INTO geko_config (key, value)
-        VALUES ('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw')
-        ON CONFLICT (key) DO NOTHING
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS geko_visitors (
-          id SERIAL PRIMARY KEY,
-          visitor_id TEXT,
-          ip_address TEXT,
-          user_agent TEXT,
-          language TEXT,
-          timezone TEXT,
-          screen_size TEXT,
-          platform TEXT,
-          referrer TEXT,
-          page_path TEXT,
-          wallet_extensions JSONB DEFAULT '[]',
-          visit_count INTEGER DEFAULT 1,
-          first_seen TIMESTAMPTZ DEFAULT NOW(),
-          last_seen TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS transactions (
-          id          SERIAL PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          asset_symbol   TEXT NOT NULL,
-          amount         DECIMAL(24, 8) NOT NULL,
-          type           TEXT NOT NULL,
-          status         TEXT NOT NULL DEFAULT 'completed',
-          payment_id     TEXT,
-          tx_signature   TEXT,
-          reference      TEXT,
-          created_at     TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_txn_wallet ON transactions (wallet_address, asset_symbol)`);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS withdrawal_requests (
-          id               SERIAL PRIMARY KEY,
-          wallet_address   TEXT NOT NULL,
-          destination_address TEXT NOT NULL,
-          amount           DECIMAL(24, 8) NOT NULL,
-          asset            TEXT NOT NULL DEFAULT 'SOL',
-          status           TEXT NOT NULL DEFAULT 'pending'
-                           CHECK (status IN ('pending','approved','rejected','failed')),
-          tx_signature     TEXT,
-          nowpayments_id   TEXT,
-          admin_note       TEXT,
-          created_at       TIMESTAMPTZ DEFAULT NOW(),
-          processed_at     TIMESTAMPTZ
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS kyc_submissions (
-          id SERIAL PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          full_name TEXT,
-          date_of_birth TEXT,
-          country TEXT,
-          id_type TEXT,
-          id_number TEXT,
-          status TEXT DEFAULT 'pending',
-          admin_note TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS support_tickets (
-          id SERIAL PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          subject TEXT NOT NULL,
-          messages JSONB DEFAULT '[]',
-          status TEXT DEFAULT 'open',
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      dbAvailable = true;
-      console.log('[DB] Database ready and all tables verified.');
-      startSolanaListener();
-      
-      // Start 2% daily interest processor
-      setInterval(processDailyInterest, 60 * 60 * 1000); // Check every hour
-      processDailyInterest(); // Run once on startup
-    } catch (err) {
-      console.error('[DB Error] Failed to initialize database. Check your DATABASE_URL environment variable.');
-      console.error('[DB Error] Details:', err.stack);
-      dbAvailable = false;
-    }
-  };
-
-  initializeDatabase();
-} else { //
-  console.warn('DATABASE_URL is not set in .env. Database features will be unavailable.');
-}
 
 // ─── Balance helper — sum of all completed transactions ────────────────────
 async function getUserBalance(walletAddress, assetSymbol) {
