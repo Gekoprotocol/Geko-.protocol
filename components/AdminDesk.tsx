@@ -164,7 +164,7 @@ interface AdminDeskProps {
 }
 
 const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTrades: propsActiveTrades, onForceOutcome, onUpdateWallet }) => {
-  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'deposit' | 'config'>('deposit');
+  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'deposit' | 'config'>('users');
   const [remoteUsers, setRemoteUsers] = useState<Record<string, UserRecord>>({});
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
@@ -179,22 +179,32 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
   const [wrError, setWrError]          = useState<Record<number, string>>({});
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
-  const [vaultInput, setVaultInput] = useState('0.00');
   const [depositInput, setDepositInput] = useState('6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
+  const [sysStatus, setSysStatus] = useState<any>(null);
 
-  // Load current config on mount
+  // Load current config and health on mount
   useEffect(() => {
     const loadConfig = async () => {
       try {
         const res = await fetch('/api/config');
         if (res.ok) {
           const data = await res.json();
-          setVaultInput(data.vault_balance || '0.00');
           setDepositInput(data.deposit_address || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
         }
       } catch (_) {}
     };
+    const checkHealth = async () => {
+        try {
+            const res = await fetch('/api/health');
+            if (res.ok) setSysStatus(await res.json());
+        } catch (_) {
+            setSysStatus({ db: 'OFFLINE ❌', users: 0, error: 'Cannot connect to API' });
+        }
+    };
     loadConfig();
+    checkHealth();
+    const interval = setInterval(checkHealth, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchActiveTrades = async () => {
@@ -329,7 +339,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
       const res = await fetch('/api/admin/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vault_balance: vaultInput, solana_deposit_address: depositInput })
+        body: JSON.stringify({ solana_deposit_address: depositInput })
       });
       if (res.ok) {
         window.dispatchEvent(new CustomEvent('configUpdated'));
@@ -347,7 +357,18 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     <div className="fixed inset-0 z-[1000] bg-[#0B0E11] text-gray-200 font-mono flex flex-col border-4 border-indigo-900/20">
       <div className="flex items-center justify-between p-6 bg-[#181C25] border-b border-[#2B3139]">
         <div className="flex items-center space-x-8">
-          <h1 className="text-xl font-black italic uppercase text-indigo-400 tracking-tighter">Geko Protocols_Root</h1>
+          <div className="space-y-1">
+            <h1 className="text-xl font-black italic uppercase text-indigo-400 tracking-tighter leading-none">Geko Protocols_Root</h1>
+            {sysStatus && (
+                <div className="flex items-center space-x-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${sysStatus.db.includes('✅') ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                    <span className="text-[8px] font-black uppercase text-gray-500">
+                        Registry: <span className="text-gray-300">{sysStatus.db}</span> | Nodes: <span className="text-indigo-400">{sysStatus.users}</span>
+                    </span>
+                    {sysStatus.error && <span className="text-[8px] font-black text-rose-500 italic">ERR: {sysStatus.error}</span>}
+                </div>
+            )}
+          </div>
           <nav className="flex space-x-1">
             {[
               { id: 'users', label: 'User Nodes' },

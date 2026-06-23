@@ -300,6 +300,16 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
           </div>
           <div className="flex space-x-3">
              <button onClick={() => setActiveModal('deposit')} className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">Add Liquidity</button>
+             <button 
+                onClick={() => {
+                    onRefreshBalances();
+                    audioSynth.playPing();
+                }} 
+                className="px-8 py-3 bg-indigo-600/10 text-indigo-400 font-black uppercase tracking-widest text-xs rounded-xl border border-indigo-500/20 hover:bg-indigo-600/20 transition-all flex items-center space-x-2"
+             >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                <span>Sync Node</span>
+             </button>
              <button onClick={() => setShowTransferModal(true)} className="px-8 py-3 bg-emerald-600/20 text-emerald-500 font-black uppercase tracking-widest text-xs rounded-xl border border-emerald-500/20 hover:bg-emerald-600/20 transition-all">Transfer</button>
              <button onClick={handleWithdrawClick} className="px-8 py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
              <button onClick={() => setActiveModal('kyc')} className="px-8 py-3 bg-amber-600/10 text-amber-500 font-black uppercase tracking-widest text-xs rounded-xl border border-amber-500/20 hover:bg-amber-600/20 transition-all">Verify KYC</button>
