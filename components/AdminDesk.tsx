@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WalletData, ActiveTrade } from '../types';
 import { authService, UserRecord } from '../services/authService';
 
