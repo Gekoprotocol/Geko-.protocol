@@ -52,6 +52,7 @@ import {
 
 import { LandingPage } from './components/LandingPage';
 import { ConnectWallet } from './components/ConnectWallet';
+import { authService } from './services/authService';
 import TradeView from './components/TradeView';
 import { PortfolioView } from './components/PortfolioView';
 import WalletDashboard from './components/WalletDashboard';
@@ -426,6 +427,15 @@ function TerminalLayout() {
           <ConnectWallet onConnect={handleWalletConnect} onClose={() => setIsWalletModalOpen(false)} />
         )}
       </>
+    );
+  }
+
+  if (isConnected && !walletData) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] space-y-4">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Synchronizing Identity...</div>
+      </div>
     );
   }
 

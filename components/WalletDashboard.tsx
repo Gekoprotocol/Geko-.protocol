@@ -12,9 +12,9 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({ wallet, onClose, onDi
   const [activeTab, setActiveTab] = useState<'overview' | 'identity'>('overview');
   
   // Calculate Totals
-  const externalValue = wallet.balances.reduce((acc, curr) => acc + parseFloat(curr.valueUsd.replace(/,/g, '')), 0);
-  const protocolValue = (wallet.protocolBalances || []).reduce((acc, curr) => acc + parseFloat(curr.valueUsd.replace(/,/g, '')), 0);
-  const tradingValue = wallet.trading_balance || 0;
+  const externalValue = (wallet?.balances || []).reduce((acc, curr) => acc + parseFloat(curr.valueUsd.replace(/,/g, '')), 0);
+  const protocolValue = (wallet?.protocolBalances || []).reduce((acc, curr) => acc + parseFloat(curr.valueUsd.replace(/,/g, '')), 0);
+  const tradingValue = wallet?.trading_balance || 0;
   const totalValue = externalValue + protocolValue + tradingValue;
 
     const [vaultBalance, setVaultBalance] = useState("0.00");
