@@ -147,12 +147,12 @@ const TradeView: React.FC<TradeViewProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            walletAddress: wallet.address,
+            walletAddress: wallet?.address,
             asset:         selectedSymbol,
             tradeSize:     amount,
             leverage,
             type:          direction === 'up' ? 'LONG' : 'SHORT',
-            isDemo:        wallet.isDemo,
+            isDemo:        wallet?.isDemo,
             entryPrice:    selectedAsset.price,
             duration:      duration,
             tradeId:       tradeId
@@ -203,7 +203,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                 asset: trade.symbol,
                 payout: pnl.toFixed(2),
                 tradeRef: trade.id,
-                isDemo: wallet.isDemo,
+                isDemo: wallet?.isDemo,
                 status: isWin ? 'won' : 'lost'
               })
             });
@@ -226,7 +226,7 @@ const TradeView: React.FC<TradeViewProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [localActiveTrades, wallet?.address]);
+  }, [localActiveTrades, wallet?.address, wallet?.isDemo]);
 
   const userPending  = localActiveTrades;
   const userSettled  = localSettledTrades;
