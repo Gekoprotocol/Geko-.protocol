@@ -52,6 +52,7 @@ import {
 
 import { LandingPage } from './components/LandingPage';
 import { ConnectWallet } from './components/ConnectWallet';
+import { authService } from './services/authService';
 import TradeView from './components/TradeView';
 import { PortfolioView } from './components/PortfolioView';
 import WalletDashboard from './components/WalletDashboard';
