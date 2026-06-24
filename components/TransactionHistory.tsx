@@ -23,11 +23,13 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
     const [loading, setLoading] = useState(true);
 
     const fetchHistory = async () => {
-        if (!wallet.address) return;
+        if (!wallet?.address) return;
         try {
             const res = await fetch(`/api/user/transactions?address=${wallet.address}`);
             if (res.ok) {
-                setTxs(await res.json());
+                const data = await res.json();
+                if (data.success && data.transactions) setTxs(data.transactions);
+                else if (Array.isArray(data)) setTxs(data);
             }
         } catch (e) {
             console.error('Failed to fetch history', e);
@@ -37,10 +39,11 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
     };
 
     useEffect(() => {
+        if (!wallet?.address) return;
         fetchHistory();
         const int = setInterval(fetchHistory, 30000);
         return () => clearInterval(int);
-    }, [wallet.address]);
+    }, [wallet?.address]);
 
     return (
         <div className="flex-1 flex flex-col p-8 space-y-6 overflow-hidden">
