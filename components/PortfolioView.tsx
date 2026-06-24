@@ -340,9 +340,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                       <div className="font-mono font-bold text-emerald-500 text-xl">+${simulatedYield.toFixed(4)}</div>
                    </div>
                    <div>
-                      <div className="text-[10px] text-gray-500 font-bold uppercase mb-1">Live External Liquidity ({wallet.source})</div>
+                      <div className="text-[10px] text-gray-500 font-bold uppercase mb-1">Live External Liquidity ({wallet?.source || 'N/A'})</div>
                       <div className="font-mono font-bold text-indigo-400 text-xl flex items-center">
-                        ${wallet.balances.reduce((acc, b) => acc + parseFloat(b.valueUsd.replace(/,/g, '')), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        ${(wallet?.balances || []).reduce((acc, b) => acc + parseFloat(b.valueUsd.replace(/,/g, '')), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         <div className="ml-2 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                       </div>
                    </div>
