@@ -124,7 +124,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
     const interval = setInterval(() => {
       fetchProtocolBalance();
       fetchDbTransactions();
-    }, 10000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [wallet?.address]);
 
@@ -468,7 +468,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({ wallet, assets, de
                                <div className="space-y-2">
                                   <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Asset</label>
                                   <select value={withdrawAsset} onChange={e => setWithdrawAsset(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm h-14">
-                                     {['SOL', 'USDT'].map(s => <option key={s} value={s}>{s}</option>)}
+                                     {['SOL', 'USDT', 'BNB'].map(s => <option key={s} value={s}>{s}</option>)}
                                   </select>
                                </div>
                                <div className="space-y-2">

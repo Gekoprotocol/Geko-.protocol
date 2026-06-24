@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
+import { ConnectWallet } from './components/ConnectWallet';
 import TradeView from './components/TradeView';
 import { PortfolioView } from './components/PortfolioView';
 import WalletDashboard from './components/WalletDashboard';
@@ -124,10 +125,91 @@ function TerminalLayout() {
   const [prices, setPrices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIdentityOpen, setIsIdentityOpen] = useState(false);
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
 
   const [isDemo, setIsDemo] = useState(false);
   const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
+  const [tradingBalance, setTradingBalance] = useState(0);
+  const [customWallet, setCustomWallet] = useState<WalletData | null>(null);
+
+  // Load Session
+  useEffect(() => {
+    const unsub = authService.observeSession(wallet => {
+        if (wallet) setCustomWallet(wallet);
+    });
+    return () => unsub();
+  }, []);
+
+  const activeAddress = publicKey?.toBase58() || customWallet?.address;
+  const isConnected = connected || !!customWallet;
+
+  // Sync Active Trades
+  useEffect(() => {
+    if (!isConnected || !activeAddress) return;
+    const fetchTrades = async () => {
+        try {
+            const res = await fetch(`/api/user/active-trades?address=${encodeURIComponent(activeAddress)}`);
+            if (res.ok) {
+                const data = await res.json();
+                const synced: ActiveTrade[] = data.map((t: any) => ({
+                    id: t.id,
+                    symbol: t.symbol,
+                    userName: 'Local_Node',
+                    direction: t.direction.toLowerCase() as 'up' | 'down',
+                    amount: t.amount.toString(),
+                    entryPrice: parseFloat(t.entry_price),
+                    startTime: new Date(t.created_at).getTime(),
+                    duration: t.duration,
+                    status: t.status,
+                    forceOutcome: t.force_outcome
+                }));
+                setActiveTrades(synced);
+            }
+        } catch (e) { console.warn("Trade sync failed", e); }
+    };
+    fetchTrades();
+    const interval = setInterval(fetchTrades, 3000);
+    return () => clearInterval(interval);
+  }, [isConnected, activeAddress]);
+
+  // Sync Trading Balance
+  useEffect(() => {
+    if (!isConnected || !activeAddress) return;
+    const fetchBal = async () => {
+        try {
+            const res = await fetch(`/api/user/balance?address=${encodeURIComponent(activeAddress)}&asset=USDT`);
+            if (res.ok) {
+                const data = await res.json();
+                setTradingBalance(isDemo ? data.demo_balance : data.trading_balance);
+                setVaultBalance(data.balance || 0);
+            }
+        } catch (e) { console.warn("Balance sync failed", e); }
+    };
+    fetchBal();
+    const interval = setInterval(fetchBal, 3000);
+    return () => clearInterval(interval);
+  }, [isConnected, activeAddress, isDemo]);
+
+  const handleWalletConnect = (data: WalletData) => {
+    setCustomWallet(data);
+    authService.saveSession(data);
+    setIsWalletModalOpen(false);
+  };
+
+  // Sync custom wallet to DB
+  useEffect(() => {
+    if (customWallet) {
+        fetch('/api/users/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                wallet_address: customWallet.address,
+                wallet_data: customWallet
+            })
+        }).catch(e => console.error("Sync failed", e));
+    }
+  }, [customWallet]);
 
   // Hidden Admin Access
   const [adminTaps, setAdminTaps] = useState(0);
@@ -148,11 +230,7 @@ function TerminalLayout() {
     setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, ...updates } : t));
   };
 
-  const activeTradingBalance = useMemo(() => {
-    const bal = isDemo ? parseFloat(userData?.demo_balance ?? 100000) : parseFloat(userData?.trading_balance ?? 0);
-    console.log(`[Balance Debug] isDemo: ${isDemo}, userData.demo: ${userData?.demo_balance}, Final: ${bal}`);
-    return bal;
-  }, [isDemo, userData]);
+  const activeTradingBalance = tradingBalance;
 
   // Map prices to AssetInfo format
   const assets: AssetInfo[] = useMemo(() => {
@@ -209,8 +287,8 @@ function TerminalLayout() {
   }, []);
 
   const refreshData = useCallback(async (nickname?: string) => {
-    if (!publicKey) return;
-    const address = publicKey.toBase58();
+    if (!activeAddress) return;
+    const address = activeAddress;
     
     try {
       // Upsert User
@@ -247,12 +325,12 @@ function TerminalLayout() {
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey]);
+  }, [activeAddress]);
 
   // Aggressive Immediate Sync on Connection
   useEffect(() => {
-    if (connected && publicKey) {
-      const address = publicKey.toBase58();
+    if (isConnected && activeAddress) {
+      const address = activeAddress;
       console.log(`[Identity] AGGRESSIVE_SYNC_TRIGGERED: ${address}`);
       
       const fastSync = async () => {
@@ -271,7 +349,7 @@ function TerminalLayout() {
       
       fastSync();
     }
-  }, [connected, publicKey, refreshData]);
+  }, [isConnected, activeAddress, refreshData]);
 
   const handleNicknameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,8 +376,8 @@ function TerminalLayout() {
   }, []);
 
   useEffect(() => {
-    if (connected && publicKey) {
-      const address = publicKey.toBase58();
+    if (isConnected && activeAddress) {
+      const address = activeAddress;
       // Heartbeat every 15 seconds (more frequent)
       const interval = setInterval(async () => {
         try {
@@ -312,37 +390,42 @@ function TerminalLayout() {
       }, 15000);
       return () => clearInterval(interval);
     }
-  }, [connected, publicKey]);
+  }, [isConnected, activeAddress]);
 
   useEffect(() => {
-    if (connected && publicKey) {
+    if (isConnected && activeAddress) {
       refreshData();
       const interval = setInterval(refreshData, 10000); // 10s is plenty
       return () => clearInterval(interval);
     }
-  }, [connected, publicKey, refreshData]);
+  }, [isConnected, activeAddress, refreshData]);
 
   const walletData: WalletData | null = useMemo(() => {
-    if (!publicKey) return null;
+    if (!activeAddress) return null;
     return {
-      address: publicKey.toBase58(),
-      source: 'Solana',
+      address: activeAddress,
+      source: customWallet?.source || (connected ? 'Solana' : 'Unknown'),
       trading_balance: activeTradingBalance,
       isDemo: isDemo,
-      balances: [], // External balances can be fetched if needed
+      balances: customWallet?.balances || [],
       protocolBalances: [
         { symbol: 'USDT', amount: vaultBalance.toString(), valueUsd: vaultBalance.toString() }
       ],
-      history: [] // Transaction history fetched in components
+      history: customWallet?.history || []
     };
-  }, [publicKey, userData, vaultBalance, activeTradingBalance, isDemo]);
+  }, [activeAddress, customWallet, connected, userData, vaultBalance, activeTradingBalance, isDemo]);
 
-  if (!connected) {
+  if (!isConnected) {
     return (
-      <LandingPage 
-        onLoginSuccess={() => {}} 
-        onConnectWalletClick={() => setVisible(true)} 
-      />
+      <>
+        <LandingPage 
+          onLoginSuccess={handleWalletConnect} 
+          onConnectWalletClick={() => setIsWalletModalOpen(true)} 
+        />
+        {isWalletModalOpen && (
+          <ConnectWallet onConnect={handleWalletConnect} onClose={() => setIsWalletModalOpen(false)} />
+        )}
+      </>
     );
   }
 
@@ -396,7 +479,7 @@ function TerminalLayout() {
           <div className="p-3 rounded-2xl bg-[#0B0E11] border border-white/5 flex items-center justify-between group cursor-pointer" onClick={() => setIsIdentityOpen(true)}>
             <div className="flex items-center space-x-3">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <div className="truncate text-[10px] font-mono font-bold text-gray-400">{publicKey?.toBase58().slice(0,12)}...</div>
+                <div className="truncate text-[10px] font-mono font-bold text-gray-400">{activeAddress?.slice(0,12)}...</div>
             </div>
             <Settings size={14} className="text-gray-600 group-hover:text-white transition-colors" />
           </div>
@@ -428,7 +511,7 @@ function TerminalLayout() {
 
         <main className="flex-1 overflow-hidden relative">
           {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
-          {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={connected} onPlaceTrade={() => {}} activeTrades={[]} wallet={walletData} />}
+          {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} />}
           {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
           {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
@@ -490,7 +573,7 @@ function TerminalLayout() {
                 </button>
               </form>
               <div className="pt-4 border-t border-white/5">
-                 <p className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Connected Wallet: {publicKey?.toBase58().slice(0,16)}...</p>
+                 <p className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Connected Wallet: {activeAddress?.slice(0,16)}...</p>
               </div>
             </div>
           </div>
