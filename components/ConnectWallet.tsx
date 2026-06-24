@@ -59,7 +59,7 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
     if (id === 'metamask') return !!w.ethereum?.isMetaMask;
     if (id === 'phantom')  return !!(w.phantom?.solana || w.solana?.isPhantom);
     if (id === 'trust')    return !!w.trustwallet;
-    if (id === 'binance')  return !!w.BinanceChain;
+    if (id === 'binance')  return !!(w.BinanceChain || w.binance?.ethereum || w.ethereum?.isBinance);
     if (id === 'okx')      return !!w.okxwallet;
     if (id === 'coinbase') return !!w.coinbaseWalletExtension;
     if (id === 'exodus')   return !!w.exodus?.ethereum;

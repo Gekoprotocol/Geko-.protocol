@@ -154,9 +154,8 @@ export const universalWallet = {
 
         const getProvider = () => {
             if (walletName === 'MetaMask') {
-                // Must be MetaMask specifically — reject Exodus/Coinbase spoofs
-                return findInProviders((p: any) => p.isMetaMask && !p.isExodus && !p.isCoinbaseWallet && !p.isBraveWallet)
-                    || (win.ethereum?.isMetaMask && !win.ethereum?.isExodus && !win.ethereum?.isCoinbaseWallet ? win.ethereum : null);
+                return findInProviders((p: any) => p.isMetaMask)
+                    || (win.ethereum?.isMetaMask ? win.ethereum : null);
             }
             if (walletName === 'Exodus') {
                 return win.exodus?.ethereum
@@ -173,7 +172,7 @@ export const universalWallet = {
                     || findInProviders((p: any) => p.isTrust || p.isTrustWallet)
                     || (win.ethereum?.isTrust ? win.ethereum : null);
             }
-            if (walletName === 'Binance') {
+            if (walletName === 'Binance' || walletName === 'Binance Web3') {
                 return win.BinanceChain
                     || win.binance?.ethereum
                     || findInProviders((p: any) => p.isBinance)

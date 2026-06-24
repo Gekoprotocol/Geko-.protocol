@@ -42,59 +42,26 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [leverage, setLeverage] = useState(20);
 
   // Live DB balance (Vault)
-  const [vaultBalance, setVaultBalance] = useState<number>(0);
-  const [tradingBalance, setTradingBalance] = useState<number>(0);
+  const [vaultBalance, setVaultBalance] = useState<number>(wallet?.protocolBalances?.[0]?.amount ? parseFloat(wallet.protocolBalances[0].amount) : 0);
+  const [tradingBalance, setTradingBalance] = useState<number>(wallet?.trading_balance || 0);
   const [balLoading, setBalLoading]     = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
   const [transferDirection, setTransferDirection] = useState<'vault_to_trade' | 'trade_to_vault'>('vault_to_trade');
   const [transferLoading, setTransferLoading] = useState(false);
-  const [localActiveTrades, setLocalActiveTrades] = useState<ActiveTrade[]>([]);
+  const [localActiveTrades, setLocalActiveTrades] = useState<ActiveTrade[]>(activeTrades || []);
   const [localSettledTrades, setLocalSettledTrades] = useState<ActiveTrade[]>([]);
 
-  const balFetchRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const fetchBalances = async () => {
-    if (!wallet?.address) return;
-    setBalLoading(true);
-    try {
-      // Fetch USDT Balances (Protocol, Trading, Demo) in one call
-      const vRes = await fetch(`/api/user/balance?address=${encodeURIComponent(wallet.address)}&asset=USDT`);
-      if (vRes.ok) {
-        const vData = await vRes.json();
-        if (vData.balance !== undefined) setVaultBalance(parseFloat(vData.balance));
-        if (wallet.isDemo && vData.demo_balance !== undefined) setTradingBalance(parseFloat(vData.demo_balance));
-        else if (vData.trading_balance !== undefined) setTradingBalance(parseFloat(vData.trading_balance));
-      }
-
-      // Fetch Active Trades from server
-      const tRes = await fetch(`/api/user/active-trades?address=${encodeURIComponent(wallet.address)}`);
-      if (tRes.ok) {
-        const tData = await tRes.json();
-        const syncedTrades: ActiveTrade[] = tData.map((t: any) => ({
-          id: t.id,
-          symbol: t.symbol,
-          userName: 'Local_Node',
-          direction: t.direction.toLowerCase() as 'up' | 'down',
-          amount: t.amount.toString(),
-          entryPrice: parseFloat(t.entry_price),
-          startTime: new Date(t.created_at).getTime(),
-          duration: t.duration,
-          status: t.status,
-          forceOutcome: t.force_outcome
-        }));
-        
-        setLocalActiveTrades(syncedTrades);
-      }
-    } catch (_) {}
-    finally { setBalLoading(false); }
-  };
+  useEffect(() => {
+    setLocalActiveTrades(activeTrades);
+  }, [activeTrades]);
 
   useEffect(() => {
-    fetchBalances();
-    balFetchRef.current = setInterval(fetchBalances, 10000);
-    return () => { if (balFetchRef.current) clearInterval(balFetchRef.current); };
-  }, [wallet?.address]);
+    if (wallet) {
+        setTradingBalance(wallet.trading_balance || 0);
+        if (wallet.protocolBalances?.[0]) setVaultBalance(parseFloat(wallet.protocolBalances[0].amount));
+    }
+  }, [wallet?.trading_balance, wallet?.protocolBalances]);
 
   // Validation
   const parsedAmount  = parseFloat(amount) || 0;

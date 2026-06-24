@@ -595,6 +595,47 @@ app.get('/api/user/data', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
+// ─── Email Auth: Login ───────────────────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const userEmail = email.toLowerCase().trim();
+    // Auto-provision profile for ANY email login
+    const nickname = userEmail.split('@')[0].toUpperCase();
+    const result = await pool.query(
+      `INSERT INTO geko_users (email, nickname, last_seen) 
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (email) DO UPDATE SET last_seen = NOW()
+       RETURNING *`,
+      [userEmail, nickname]
+    );
+    const user = result.rows[0];
+    
+    // Generate a stable virtual address if none exists
+    const virtualAddress = user.wallet_address || ('0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40));
+
+    return res.json({ 
+      success: true, 
+      user: {
+        id: user.id,
+        address: virtualAddress,
+        email: user.email,
+        nickname: user.nickname,
+        wallet_data: user.wallet_data || {},
+        trading_balance: user.trading_balance,
+        demo_balance: user.demo_balance,
+        protocol_settlement_balance: user.protocol_settlement_balance
+      }
+    });
+  } catch (e) {
+    console.error('Email login error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Balance Transfer ─────────────────────────────────────────────────────
 app.post('/api/balance/transfer', async (req, res) => {
   const { walletAddress, amount, direction } = req.body;
@@ -657,6 +698,23 @@ app.get('/api/admin/visitors', async (req, res) => {
 });
 
 // ─── User balance ──────────────────────────────────────────────────────────
+app.get('/api/user/transactions', async (req, res) => {
+  const { address, limit } = req.query;
+  if (!address) return res.status(400).json({ error: 'Address required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM transactions WHERE wallet_address = $1 ORDER BY created_at DESC LIMIT $2`,
+      [address, parseInt(limit || '50')]
+    );
+    res.json({ success: true, transactions: result.rows });
+  } catch (e) {
+    console.error('Fetch transactions error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/user/balance', async (req, res) => {
   const { address, asset } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
@@ -839,15 +897,19 @@ app.post('/api/admin/force-outcome', async (req, res) => {
 app.get('/api/admin/withdrawal-requests', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const result = await pool.query(
-      `SELECT wr.*, u.nickname,
-              (SELECT protocol_settlement_balance FROM geko_users WHERE wallet_address = wr.wallet_address) AS current_balance
-         FROM withdrawal_requests wr
-         LEFT JOIN geko_users u ON u.wallet_address = wr.wallet_address
-         ORDER BY wr.created_at DESC
-         LIMIT 200`
+    const wrRes = await pool.query(
+      `SELECT wr.*, u.nickname FROM withdrawal_requests wr
+       LEFT JOIN geko_users u ON u.wallet_address = wr.wallet_address
+       ORDER BY wr.created_at DESC LIMIT 200`
     );
-    return res.json(result.rows);
+    
+    // Enrich with current balance for the specific asset
+    const enriched = await Promise.all(wrRes.rows.map(async (wr) => {
+        const current_balance = await getUserBalance(wr.wallet_address, wr.asset);
+        return { ...wr, current_balance };
+    }));
+
+    return res.json(enriched);
   } catch (e) {
     console.error('Admin withdrawal-requests error:', e.message);
     return res.status(500).json({ error: e.message });
