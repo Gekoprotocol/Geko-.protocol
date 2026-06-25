@@ -5,24 +5,47 @@ import { AssetInfo, ExchangeOffer } from '../types';
 interface SwapViewProps {
   assets: AssetInfo[];
   isConnected: boolean;
+  wallet?: (WalletData & { pending_deposit_currency?: string, pending_deposit_amount?: number }) | null;
   onConnect: () => void;
   onSignUp: () => void;
   onConfirm: (info: string, callback: () => void) => void;
   onSwap: (from: string, to: string, amount: string) => void;
   onDeposit: (amount: string, asset: string) => void;
+  onRefreshBalances?: () => void;
 }
 
-const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, onConnect, onSignUp, onConfirm, onSwap, onDeposit }) => {
+const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onConfirm, onSwap, onDeposit, onRefreshBalances }) => {
   const [fromAsset, setFromAsset] = useState(assets[0]);
   const [toAsset, setToAsset] = useState(assets[1]);
   const [amount, setAmount] = useState('');
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<'swap' | 'yield'>('swap');
+  const [isSwapping, setIsSwapping] = useState(false);
   
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [selectorSide, setSelectorSide] = useState<'from' | 'to'>('from');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const handleManualSwap = async () => {
+      if (!wallet?.address) return;
+      setIsSwapping(true);
+      try {
+          const res = await fetch('/api/user/swap', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ walletAddress: wallet.address })
+          });
+          if (res.ok) {
+              if (onRefreshBalances) onRefreshBalances();
+              alert('Swap successful! USDT added to Protocol Balance.');
+          }
+      } catch (e) {
+          console.error('Swap failed', e);
+      } finally {
+          setIsSwapping(false);
+      }
+  };
+`,old_string:
   const providers = [
     { name: 'ChangeNOW', logo: 'CN' },
     { name: 'SimpleSwap', logo: 'SS' },
@@ -126,6 +149,35 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, onConnect, onS
           </div>
         )}
 
+        {wallet?.pending_deposit_amount && wallet.pending_deposit_amount > 0 && (
+            <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-[40px] p-8 flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4">
+                <div className="flex items-center space-x-6">
+                    <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg">
+                        {wallet.pending_deposit_currency?.[0] || 'D'}
+                    </div>
+                    <div>
+                        <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Incoming Clearing Detected</div>
+                        <div className="text-3xl font-black text-white italic">{wallet.pending_deposit_amount} {wallet.pending_deposit_currency}</div>
+                        <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Institutional deposit waiting for settlement</div>
+                    </div>
+                </div>
+                <button 
+                    onClick={handleManualSwap}
+                    disabled={isSwapping}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-10 py-5 rounded-[20px] font-black uppercase italic tracking-widest shadow-xl transition-all flex items-center space-x-3"
+                >
+                    {isSwapping ? (
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                        <>
+                            <span>Swap to USDT</span>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        </>
+                    )}
+                </button>
+            </div>
+        )}
+`,old_string:
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-5 space-y-4">
             {/* Swap Input Card */}
