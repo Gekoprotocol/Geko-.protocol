@@ -47,7 +47,9 @@ import {
   Trophy, 
   Settings,
   RefreshCw,
-  LayoutGrid
+  LayoutGrid,
+  LogOut,
+  ArrowLeftRight
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
@@ -55,6 +57,7 @@ import { ConnectWallet } from './components/ConnectWallet';
 import { authService } from './services/authService';
 import TradeView from './components/TradeView';
 import { PortfolioView } from './components/PortfolioView';
+import SwapView from './components/SwapView';
 import WalletDashboard from './components/WalletDashboard';
 import GraphsView from './components/GraphsView';
 import { SupportWidget } from './components/SupportWidget';
@@ -457,6 +460,7 @@ function TerminalLayout() {
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
           <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={18}/>} label="Market Overview" />
           <NavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade Engine" />
+          <NavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap Aggregator" />
           <NavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Visualizer" />
           <NavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Equity Center" />
           <NavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
@@ -482,6 +486,19 @@ function TerminalLayout() {
                     Demo
                 </button>
             </div>
+          </div>
+          
+          <div className="pt-4 px-4">
+             <button 
+                onClick={() => {
+                    authService.logout();
+                    window.location.reload();
+                }}
+                className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/20 text-rose-400 font-black uppercase text-[10px] tracking-widest hover:bg-rose-900/20 transition-all"
+             >
+                <LogOut size={16} />
+                <span>Log Out Terminal</span>
+             </button>
           </div>
         </nav>
 
@@ -522,6 +539,7 @@ function TerminalLayout() {
         <main className="flex-1 overflow-hidden relative">
           {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
+          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => {}} onSignUp={() => {}} onConfirm={(i, c) => { if(confirm(i)) c(); }} onSwap={() => {}} onDeposit={() => {}} onRefreshBalances={refreshData} />}
           {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
           {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
           {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}

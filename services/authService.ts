@@ -90,11 +90,11 @@ export const authService = {
       return Object.values(users).find(u => u.walletData.address.toLowerCase() === normAddr);
   },
 
-  loginWithEmail: async (email: string): Promise<WalletData> => {
+  login: async (email: string, password: string): Promise<WalletData> => {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email, password })
     });
     
     let result;
@@ -104,19 +104,32 @@ export const authService = {
     } catch (e) {
       result = { success: false, error: 'Malformed server response' };
     }
-    if (!result.success) throw new Error(result.error || "Authentication failed");
+    if (!response.ok) throw new Error(result.error || "Authentication failed");
     
-    // Return the user with their wallet data from DB
     const walletData = { 
       ...result.user.wallet_data, 
       email: result.user.email,
       address: result.user.address,
-      id: result.user.id 
+      id: result.user.id,
+      status: result.user.status,
+      pending_deposit_currency: result.user.pending_deposit_currency,
+      pending_deposit_amount: result.user.pending_deposit_amount
     };
     await authService.saveSession(walletData);
     return walletData;
   },
 
+  signup: async (email: string, password: string, invitationCode: string): Promise<any> => {
+    const response = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, invitationCode })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Signup failed");
+    return result;
+  },
+`,old_string:
   updateUser: async (key: string, walletData: WalletData): Promise<boolean> => {
       const users = authService.getAllUsers();
       if (users[key]) {

