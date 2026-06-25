@@ -5,89 +5,28 @@ const USERS_KEY = 'geko_users_db_v1';
 const SESSION_KEY = 'geko_active_session_v1';
 
 // Cross-tab sync channel to simulate real-time backend push
-const syncChannel = new BroadcastChannel('geko_sync_service');
+const syncChannel = new BroadcastChannel('geko_protocol_sync');
 
 export interface UserRecord {
-    type: string;
     walletData: WalletData;
-    createdAt: string;
     lastActive: number;
-    password?: string;
 }
 
-const generateWalletForUser = (email: string): WalletData => {
-  const hash = Array.from(email).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const address = `0x${Math.floor(Math.random() * 10000).toString(16)}${hash.toString(16).padEnd(30, '0')}`;
-  
-  return {
-    address: address,
-    email: email,
-    isDelegated: false,
-    balances: [
-      { symbol: 'ETH', amount: '0.00', valueUsd: '0.00' },
-      { symbol: 'USDT', amount: '0.00', valueUsd: '0.00' },
-      { symbol: 'SOL', amount: '0.00', valueUsd: '0.00' }
-    ],
-    protocolBalances: [], 
-    history: []
-  };
-};
-
 export const authService = {
-  
-  getSession: (): WalletData | null => {
-    try {
-      const sessionStr = localStorage.getItem(SESSION_KEY);
-      return sessionStr ? JSON.parse(sessionStr) : null;
-    } catch { return null; }
-  },
-
   saveSession: async (walletData: WalletData) => {
     localStorage.setItem(SESSION_KEY, JSON.stringify(walletData));
-    const key = walletData.email || walletData.address;
-    const users = authService.getAllUsers();
-    let existingRecord = users[key];
-    
-    const record: UserRecord = {
-        type: walletData.email ? 'EMAIL_IDENTITY' : 'WEB3_WALLET',
-        walletData: walletData,
-        createdAt: existingRecord ? existingRecord.createdAt : new Date().toISOString(),
-        lastActive: Date.now(),
-        password: existingRecord?.password 
-    };
-    authService.saveLocalUser(key, record);
-    
-    // Notify other tabs
-    syncChannel.postMessage({ type: 'SESSION_UPDATE', data: walletData });
-    // Notify current tab immediately
+    syncChannel.postMessage({ type: 'SESSION_UPDATE', walletData });
     window.dispatchEvent(new CustomEvent('geko-session-local-update', { detail: walletData }));
   },
 
-  subscribeToAllUsers: (callback: (users: Record<string, UserRecord>) => void) => {
-      const update = () => callback(authService.getAllUsers());
-      update();
-      
-      const listener = (event: MessageEvent) => {
-          if (event.data.type === 'USER_REGISTRY_UPDATE') update();
-      };
-      syncChannel.addEventListener('message', listener);
-      window.addEventListener('geko-user-update', update);
-
-      return () => {
-          syncChannel.removeEventListener('message', listener);
-          window.removeEventListener('geko-user-update', update);
-      };
+  getSession: (): WalletData | null => {
+    const data = localStorage.getItem(SESSION_KEY);
+    return data ? JSON.parse(data) : null;
   },
 
   getAllUsers: (): Record<string, UserRecord> => {
-      const usersStr = localStorage.getItem(USERS_KEY);
-      return usersStr ? JSON.parse(usersStr) : {};
-  },
-
-  findUserByAddress: (address: string): UserRecord | undefined => {
-      const users = authService.getAllUsers();
-      const normAddr = address.toLowerCase();
-      return Object.values(users).find(u => u.walletData.address.toLowerCase() === normAddr);
+      const data = localStorage.getItem(USERS_KEY);
+      return data ? JSON.parse(data) : {};
   },
 
   login: async (email: string, password: string): Promise<WalletData> => {
@@ -129,7 +68,7 @@ export const authService = {
     if (!response.ok) throw new Error(result.error || "Signup failed");
     return result;
   },
-`,old_string:
+
   updateUser: async (key: string, walletData: WalletData): Promise<boolean> => {
       const users = authService.getAllUsers();
       if (users[key]) {

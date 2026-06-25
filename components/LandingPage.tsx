@@ -230,26 +230,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConn
     </div>
   );
 };
-`,old_string:
-                    <div className="flex items-center justify-center space-x-2 pt-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Protocol Gateway Online</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Manual Download Hub */}
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in slide-in-from-bottom-4 delay-500">
-                <DownloadCard name="MetaMask" url="https://metamask.io/download/" />
-                <DownloadCard name="Binance" url="https://www.bnbchain.org/en/wallet/direct" />
-                <DownloadCard name="Phantom" url="https://phantom.app/download" />
-                <DownloadCard name="Solflare" url="https://solflare.com/download" />
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 function DownloadCard({ name, url }: { name: string, url: string }) {
     return (

@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { AssetInfo, ExchangeOffer } from '../types';
+import { AssetInfo, ExchangeOffer, WalletData } from '../types';
 
 interface SwapViewProps {
   assets: AssetInfo[];
@@ -45,7 +44,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
           setIsSwapping(false);
       }
   };
-`,old_string:
+
   const providers = [
     { name: 'ChangeNOW', logo: 'CN' },
     { name: 'SimpleSwap', logo: 'SS' },
@@ -177,7 +176,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                 </button>
             </div>
         )}
-`,old_string:
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-5 space-y-4">
             {/* Swap Input Card */}
