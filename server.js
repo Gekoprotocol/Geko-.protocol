@@ -61,6 +61,7 @@ let globalConfig = {
 const { Pool } = pg;
 let pool = null;
 let dbAvailable = false;
+let lastInitError = null;
 
 if (process.env.DATABASE_URL) {
   const maskedUrl = process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':****@');
@@ -324,6 +325,7 @@ if (process.env.DATABASE_URL) {
     } catch (err) {
       console.error('[DB Error] CRITICAL initialization failure:', err.message);
       console.error(err.stack);
+      lastInitError = err.message;
       dbAvailable = false;
     }
   };
@@ -357,7 +359,7 @@ app.get('/api/health', async (req, res) => {
     status: 'ONLINE', 
     db: dbStatus, 
     users: userCount, 
-    error: lastError,
+    error: lastError || lastInitError,
     time: new Date().toISOString() 
   });
 });
