@@ -136,6 +136,7 @@ function TerminalLayout() {
   const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
   const [tradingBalance, setTradingBalance] = useState(0);
   const [customWallet, setCustomWallet] = useState<WalletData | null>(null);
+  const [shouldOpenDeposit, setShouldOpenDeposit] = useState(false);
 
   // Load Session
   useEffect(() => {
@@ -554,13 +555,13 @@ function TerminalLayout() {
         </header>
 
         <main className="flex-1 overflow-hidden relative">
-          {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
           {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => {}} onSignUp={() => {}} onConfirm={(i, c) => { if(confirm(i)) c(); }} onSwap={() => {}} onDeposit={() => {}} onRefreshBalances={refreshData} />}
+          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => {}} onSignUp={() => {}} onConfirm={(i, c) => { if(confirm(i)) c(); }} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
           {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-          {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
           {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
-          {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} />}
+          {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
           {activeTab === 'support' && <div className="p-20 text-center space-y-4">
               <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Support Node</h2>
               <p className="text-gray-500">Use the widget in the bottom right corner for live assistance.</p>
