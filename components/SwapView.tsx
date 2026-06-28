@@ -14,8 +14,8 @@ interface SwapViewProps {
 }
 
 const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onConfirm, onSwap, onDeposit, onRefreshBalances }) => {
-  const [fromAsset, setFromAsset] = useState(assets[0]);
-  const [toAsset, setToAsset] = useState(assets[1]);
+  const [fromAsset, setFromAsset] = useState<AssetInfo | null>(assets[0] || null);
+  const [toAsset, setToAsset] = useState<AssetInfo | null>(assets[1] || null);
   const [amount, setAmount] = useState('');
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<'swap' | 'yield'>('swap');
@@ -24,6 +24,13 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [selectorSide, setSelectorSide] = useState<'from' | 'to'>('from');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (assets.length >= 2) {
+      if (!fromAsset) setFromAsset(assets[0]);
+      if (!toAsset) setToAsset(assets[1]);
+    }
+  }, [assets]);
 
   const handleManualSwap = async () => {
       if (!wallet?.address) return;
@@ -54,7 +61,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
   ];
 
   const offers: ExchangeOffer[] = useMemo(() => {
-    if (!amount || parseFloat(amount) <= 0) return [];
+    if (!amount || parseFloat(amount) <= 0 || !fromAsset || !toAsset) return [];
     const baseRate = fromAsset.price / toAsset.price;
     return providers.map((p, i) => ({
       id: `offer-${p.name}`,
@@ -66,6 +73,15 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
       logo: p.logo
     })).sort((a, b) => b.rate - a.rate);
   }, [amount, fromAsset, toAsset]);
+
+  if (!fromAsset || !toAsset) {
+    return (
+      <div className="w-full max-w-4xl p-12 text-center">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-500 font-black uppercase tracking-widest text-xs">Syncing Protocol Liquidity...</p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (offers.length > 0 && !selectedOfferId) setSelectedOfferId(offers[0].id);
