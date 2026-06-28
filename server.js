@@ -147,7 +147,7 @@ if (process.env.DATABASE_URL) {
           END IF;
         END $$;
       `);
-`,old_string:
+
       // Step 4: Defaults & Defaults Config
       await pool.query(`
         UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
@@ -305,7 +305,7 @@ if (process.env.DATABASE_URL) {
       setInterval(processDailyInterest, 60 * 60 * 1000); 
       processDailyInterest();
     } catch (err) {
-`,old_string:      console.error('[DB Error] CRITICAL initialization failure:', err.message);
+      console.error('[DB Error] CRITICAL initialization failure:', err.message);
       console.error(err.stack);
       dbAvailable = false;
     }
@@ -821,7 +821,7 @@ app.get('/api/admin/support/tickets', async (req, res) => {
     res.json(result.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-`,old_string:
+
 // ─── Balance Transfer ─────────────────────────────────────────────────────
 app.post('/api/balance/transfer', async (req, res) => {
   const { walletAddress, amount, direction } = req.body;

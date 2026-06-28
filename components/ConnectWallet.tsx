@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { universalWallet } from '../services/universalWallet';
 import { WalletData } from '../types';
 
-export type ConnectMode = 'wallets';
+export type ConnectMode = 'identity' | 'wallets';
 
 interface ConnectWalletProps {
   onConnect: (address: WalletData, email?: string) => void;
@@ -19,9 +19,35 @@ interface WalletOption {
   svg: React.ReactNode;
 }
 
-export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose }) => {
+export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose, initialMode = 'identity' }) => {
+  const [mode, setMode] = useState<ConnectMode>(initialMode);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [error, setError]       = useState('');
+
+  // Identity State
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const handleIdentityContinue = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!email.includes('@')) {
+      setError('Valid institutional email required');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Access key must be at least 6 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Access keys do not match');
+      return;
+    }
+
+    setMode('wallets');
+  };
 
   const wallets: WalletOption[] = [
     {
@@ -76,7 +102,7 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
       } else {
         data = await universalWallet.connectSolana();
       }
-      onConnect(data);
+      onConnect(data, email);
     } catch (e: any) {
       setError(e.message || 'Connection failed');
       setConnecting(null);
@@ -91,8 +117,12 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
         {/* Header */}
         <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center shrink-0">
           <div>
-            <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Identity Uplink</h2>
-            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">Connect to Geko Protocols</p>
+            <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">
+              {mode === 'identity' ? 'Identity Verification' : 'Uplink Selection'}
+            </h2>
+            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">
+              {mode === 'identity' ? 'Establish Secure Credentials' : 'Select Terminal Node'}
+            </p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-2">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,40 +134,97 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="p-6 space-y-3">
               {error && (
-                <div className="p-3 bg-rose-900/20 border border-rose-500/30 rounded-2xl text-[10px] text-rose-400 font-black uppercase text-center">
+                <div className="p-4 bg-rose-900/20 border border-rose-500/30 rounded-2xl text-[10px] text-rose-400 font-black uppercase text-center tracking-widest animate-in fade-in zoom-in duration-300">
                   {error}
                 </div>
               )}
-              {wallets.map(w => (
-                <button
-                  key={w.id}
-                  disabled={!!connecting}
-                  onClick={() => handleWalletConnect(w)}
-                  className="w-full flex items-center justify-between p-4 bg-[#1E2329] border border-[#2B3139] rounded-3xl hover:border-indigo-500/50 transition-all group disabled:opacity-50"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className={`p-2.5 rounded-2xl bg-[#0B0E11] ${w.color}`}>
-                      {w.svg}
-                    </div>
-                    <div className="text-left">
-                      <span className="font-black text-gray-200 uppercase text-sm block">{w.name}</span>
-                      <span className="text-[8px] text-gray-600 font-black uppercase">{w.type === 'svm' ? 'Solana' : 'EVM'}</span>
-                    </div>
-                    {isDetected(w.id) && (
-                      <span className="text-[8px] bg-emerald-900/30 text-emerald-500 px-1.5 py-0.5 rounded uppercase font-black tracking-widest">
-                        Detected
-                      </span>
-                    )}
-                  </div>
-                  {connecting === w.id ? (
-                    <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  )}
-                </button>
-              ))}
+
+              {mode === 'identity' ? (
+                <form onSubmit={handleIdentityContinue} className="space-y-4 animate-in slide-in-from-right-4 duration-500">
+                   <div className="space-y-4">
+                      <div className="space-y-1">
+                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Protocol Email</label>
+                          <input 
+                              type="email" 
+                              required 
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              placeholder="operator@geko.institutional"
+                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                          />
+                      </div>
+                      <div className="space-y-1">
+                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Access Key</label>
+                          <input 
+                              type="password" 
+                              required 
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              placeholder="••••••••"
+                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                          />
+                      </div>
+                      <div className="space-y-1">
+                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Access Key</label>
+                          <input 
+                              type="password" 
+                              required 
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              placeholder="••••••••"
+                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                          />
+                      </div>
+                   </div>
+                   <button 
+                      type="submit"
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.2em] py-5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center space-x-3 mt-6"
+                   >
+                      <span>Continue to Uplink</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+                   </button>
+                </form>
+              ) : (
+                <div className="space-y-3 animate-in slide-in-from-right-4 duration-500">
+                  <button 
+                    onClick={() => setMode('identity')}
+                    className="flex items-center space-x-2 text-[9px] text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors mb-2"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    <span>Back to Identity</span>
+                  </button>
+                  {wallets.map(w => (
+                    <button
+                      key={w.id}
+                      disabled={!!connecting}
+                      onClick={() => handleWalletConnect(w)}
+                      className="w-full flex items-center justify-between p-4 bg-[#1E2329] border border-[#2B3139] rounded-3xl hover:border-indigo-500/50 transition-all group disabled:opacity-50"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className={`p-2.5 rounded-2xl bg-[#0B0E11] ${w.color}`}>
+                          {w.svg}
+                        </div>
+                        <div className="text-left">
+                          <span className="font-black text-gray-200 uppercase text-sm block">{w.name}</span>
+                          <span className="text-[8px] text-gray-600 font-black uppercase">{w.type === 'svm' ? 'Solana' : 'EVM'}</span>
+                        </div>
+                        {isDetected(w.id) && (
+                          <span className="text-[8px] bg-emerald-900/30 text-emerald-500 px-1.5 py-0.5 rounded uppercase font-black tracking-widest">
+                            Detected
+                          </span>
+                        )}
+                      </div>
+                      {connecting === w.id ? (
+                        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
         </div>
 
