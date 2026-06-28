@@ -372,7 +372,7 @@ function TerminalLayout() {
         const res = await fetch('/api/binance/prices');
         if (!res.ok) return;
         const data = await res.json();
-        setPrices(data);
+        setPrices(Array.isArray(data) ? data : []);
       } catch (e) {
         console.warn("Price feed error", e);
       }
@@ -539,11 +539,11 @@ function TerminalLayout() {
           </div>
           <div className="flex items-center gap-6">
              <div className="hidden lg:flex items-center space-x-6">
-                {prices.slice(0, 2).map(p => (
+                {(Array.isArray(prices) ? prices : []).slice(0, 2).map(p => (
                 <div key={p.symbol} className="flex flex-col items-end">
                     <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
-                    <span className={`text-xs font-mono font-bold ${parseFloat(p.priceChangePercent) >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    ${parseFloat(p.lastPrice).toLocaleString()}
+                    <span className={`text-xs font-mono font-bold ${parseFloat(p.priceChangePercent || '0') >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    ${parseFloat(p.lastPrice || '0').toLocaleString()}
                     </span>
                 </div>
                 ))}
