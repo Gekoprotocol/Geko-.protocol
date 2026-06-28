@@ -83,6 +83,7 @@ if (process.env.DATABASE_URL) {
         CREATE TABLE IF NOT EXISTS geko_users (
           id SERIAL PRIMARY KEY,
           wallet_address TEXT UNIQUE,
+          nickname TEXT DEFAULT '',
           email TEXT UNIQUE,
           password TEXT,
           invitation_code TEXT,
@@ -90,7 +91,11 @@ if (process.env.DATABASE_URL) {
           wallet_data JSONB DEFAULT '{}',
           trading_balance DECIMAL(24, 8) DEFAULT 0,
           demo_balance DECIMAL(24, 8) DEFAULT 100000,
+          available_balance DECIMAL(24, 8) DEFAULT 0,
+          available_demo_balance DECIMAL(24, 8) DEFAULT 100000,
           protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
+          pending_deposit_currency TEXT DEFAULT 'BTC',
+          pending_deposit_amount DECIMAL(24, 8) DEFAULT 0,
           last_seen TIMESTAMPTZ DEFAULT NOW(),
           created_at TIMESTAMPTZ DEFAULT NOW()
         )
@@ -130,7 +135,7 @@ if (process.env.DATABASE_URL) {
       await addColumn('password', 'TEXT', "NULL");
       await addColumn('invitation_code', 'TEXT', "NULL");
       await addColumn('status', 'TEXT', "'guest'");
-      await addColumn('pending_deposit_currency', 'TEXT', "NULL");
+      await addColumn('pending_deposit_currency', 'TEXT', "'BTC'");
       await addColumn('pending_deposit_amount', 'DECIMAL(24, 8)', '0');
 
       // Step 3: Constraints & Cleanup
@@ -138,22 +143,34 @@ if (process.env.DATABASE_URL) {
         DO $$ 
         BEGIN 
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_wallet_address_key') THEN
-            DELETE FROM geko_users a USING geko_users b
-            WHERE a.id < b.id AND a.wallet_address = b.wallet_address;
-            ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
+            BEGIN
+              DELETE FROM geko_users a USING geko_users b
+              WHERE a.id < b.id AND a.wallet_address = b.wallet_address;
+              ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
+            EXCEPTION WHEN OTHERS THEN
+              RAISE NOTICE 'Could not add unique constraint on wallet_address';
+            END;
           END IF;
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_email_key') THEN
-            ALTER TABLE geko_users ADD CONSTRAINT geko_users_email_key UNIQUE (email);
+            BEGIN
+              ALTER TABLE geko_users ADD CONSTRAINT geko_users_email_key UNIQUE (email);
+            EXCEPTION WHEN OTHERS THEN
+              RAISE NOTICE 'Could not add unique constraint on email';
+            END;
           END IF;
         END $$;
       `);
 
       // Step 4: Defaults & Defaults Config
-      await pool.query(`
-        UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
-        UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000) WHERE demo_balance IS NULL;
-        UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0) WHERE protocol_settlement_balance IS NULL;
-      `);
+      try {
+        await pool.query(`
+          UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
+          UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000) WHERE demo_balance IS NULL;
+          UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0) WHERE protocol_settlement_balance IS NULL;
+        `);
+      } catch (e) {
+        console.warn('[DB] Non-critical default update failed:', e.message);
+      }
 
       await pool.query(`
         INSERT INTO geko_config (key, value)
