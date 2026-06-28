@@ -91,6 +91,8 @@ if (process.env.DATABASE_URL) {
           wallet_data JSONB DEFAULT '{}',
           trading_balance DECIMAL(24, 8) DEFAULT 0,
           demo_balance DECIMAL(24, 8) DEFAULT 100000,
+          available_balance DECIMAL(24, 8) DEFAULT 0,
+          available_demo_balance DECIMAL(24, 8) DEFAULT 100000,
           protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
           pending_deposit_currency TEXT DEFAULT 'BTC',
           pending_deposit_amount DECIMAL(24, 8) DEFAULT 0,
