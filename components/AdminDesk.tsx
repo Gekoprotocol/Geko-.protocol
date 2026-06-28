@@ -173,7 +173,6 @@ interface AdminDeskProps {
 
 const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTrades: propsActiveTrades, onForceOutcome, onUpdateWallet }) => {
   const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'guests' | 'support' | 'config'>('users');
-  const [remoteUsers, setRemoteUsers] = useState<Record<string, UserRecord>>({});
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -263,11 +262,6 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     fetchWithdrawalRequests();
     const interval = setInterval(fetchWithdrawalRequests, 8000);
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const unsub = authService.subscribeToAllUsers(users => setRemoteUsers(users));
-    return () => unsub();
   }, []);
 
   const realUserTrades = useMemo(() => activeTrades.filter(t => t.status === 'pending'), [activeTrades]);
