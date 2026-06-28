@@ -65,6 +65,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         const walletData = await authService.login(email, password);
         if (walletData.status === 'guest') {
             setView('wait');
+        } else {
+            onLoginSuccess(walletData);
         }
       }
     } catch (err: any) {

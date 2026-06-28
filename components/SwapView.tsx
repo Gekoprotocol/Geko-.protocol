@@ -74,6 +74,12 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
     })).sort((a, b) => b.rate - a.rate);
   }, [amount, fromAsset, toAsset]);
 
+  useEffect(() => {
+    if (offers.length > 0 && !selectedOfferId) setSelectedOfferId(offers[0].id);
+  }, [offers, selectedOfferId]);
+
+  const selectedOffer = useMemo(() => offers.find(o => o.id === selectedOfferId), [offers, selectedOfferId]);
+
   if (!fromAsset || !toAsset) {
     return (
       <div className="w-full max-w-4xl p-12 text-center">
@@ -82,10 +88,6 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
       </div>
     );
   }
-
-  useEffect(() => {
-    if (offers.length > 0 && !selectedOfferId) setSelectedOfferId(offers[0].id);
-  }, [offers, selectedOfferId]);
 
   const handleAction = () => {
     if (!isConnected) { onConnect(); return; }
@@ -131,8 +133,6 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
     a.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
     a.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const selectedOffer = useMemo(() => offers.find(o => o.id === selectedOfferId), [offers, selectedOfferId]);
 
   return (
     <div className="h-full p-8 flex flex-col items-center bg-[#0B0E11] animate-in fade-in duration-500 relative overflow-y-auto custom-scrollbar">
@@ -201,7 +201,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                 <div className="flex justify-between items-center px-1">
                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{activeMode === 'swap' ? 'Pay with' : 'Deposit'}</span>
                    <div className="flex items-center space-x-2">
-                      <span className="text-[10px] text-indigo-400 font-mono">~${(parseFloat(amount || '0') * fromAsset.price).toFixed(2)} USD</span>
+                      <span className="text-[10px] text-indigo-400 font-mono">~${(parseFloat(amount || '0') * (fromAsset?.price || 0)).toFixed(2)} USD</span>
                    </div>
                 </div>
                 <div className="flex items-center space-x-4">
@@ -210,8 +210,8 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                     onClick={() => openSelector('from')}
                     className="flex items-center space-x-2 bg-[#2B3139] hover:bg-[#363C45] px-5 py-3 rounded-2xl border border-[#2B3139] transition-all active:scale-95 group"
                   >
-                    <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">{fromAsset.symbol[0]}</div>
-                    <span className="font-black text-sm text-gray-200">{fromAsset.symbol}</span>
+                    <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">{fromAsset?.symbol[0] || '?'}</div>
+                    <span className="font-black text-sm text-gray-200">{fromAsset?.symbol || '...'}</span>
                     <svg className="w-4 h-4 text-gray-500 group-hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </button>
                 </div>
@@ -220,7 +220,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
               {activeMode === 'swap' && (
                 <div className="flex justify-center -my-4 relative z-20">
                    <button 
-                     onClick={() => { const t = fromAsset; setFromAsset(toAsset); setToAsset(t); }}
+                     onClick={() => { if(fromAsset && toAsset) { const t = fromAsset; setFromAsset(toAsset); setToAsset(t); } }}
                      className="w-12 h-12 bg-[#181C25] border-4 border-[#0B0E11] rounded-2xl flex items-center justify-center hover:scale-110 active:rotate-180 transition-all shadow-xl text-indigo-500 group border-[#2B3139]"
                    >
                      <svg className="w-6 h-6 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
@@ -242,8 +242,8 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                       onClick={() => openSelector('to')}
                       className="flex items-center space-x-2 bg-[#2B3139] hover:bg-[#363C45] px-5 py-3 rounded-2xl border border-[#2B3139] transition-all active:scale-95 group"
                     >
-                      <div className="w-6 h-6 bg-purple-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">{toAsset.symbol[0]}</div>
-                      <span className="font-black text-sm text-gray-200">{toAsset.symbol}</span>
+                      <div className="w-6 h-6 bg-purple-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">{toAsset?.symbol[0] || '?'}</div>
+                      <span className="font-black text-sm text-gray-200">{toAsset?.symbol || '...'}</span>
                       <svg className="w-4 h-4 text-gray-500 group-hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                     </button>
                   </div>
@@ -290,7 +290,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                          </div>
                          <div className="text-right">
                             <div className="text-2xl font-mono font-bold text-gray-200">{(parseFloat(amount) * offer.rate).toFixed(6)}</div>
-                            <div className="text-[9px] text-gray-500 font-mono">1 {fromAsset.symbol} = {offer.rate.toFixed(4)} {toAsset.symbol}</div>
+                            <div className="text-[9px] text-gray-500 font-mono">1 {fromAsset?.symbol} = {offer.rate.toFixed(4)} {toAsset?.symbol}</div>
                          </div>
                        </div>
                      ))
@@ -364,7 +364,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                            key={asset.symbol} 
                            onClick={() => handleSelectAsset(asset)}
                            className={`w-full flex items-center justify-between p-4 hover:bg-[#2B3139] rounded-2xl transition-all group ${
-                              (selectorSide === 'from' ? fromAsset.symbol : toAsset.symbol) === asset.symbol ? 'bg-indigo-900/20 border border-indigo-500/30' : 'border border-transparent'
+                              (selectorSide === 'from' ? fromAsset?.symbol : toAsset?.symbol) === asset.symbol ? 'bg-indigo-900/20 border border-indigo-500/30' : 'border border-transparent'
                            }`}
                          >
                             <div className="flex items-center space-x-4">
