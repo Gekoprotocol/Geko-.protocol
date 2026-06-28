@@ -433,7 +433,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
       <div className="flex items-center justify-between p-6 bg-[#181C25] border-b border-[#2B3139]">
         <div className="flex items-center space-x-8">
           <div className="space-y-1">
-            <h1 className="text-xl font-black italic uppercase text-indigo-400 tracking-tighter leading-none">Geko Protocols_Root</h1>
+            <h1 className="text-xl font-black italic uppercase text-indigo-400 tracking-tighter leading-none">Geko Protocols_Root V2</h1>
             {sysStatus && (
                 <div className="flex items-center space-x-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${sysStatus.db.includes('✅') ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>

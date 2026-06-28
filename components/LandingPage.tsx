@@ -1,16 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
-import { WalletData } from '../types';
+import { WalletData, AssetInfo } from '../types';
+import SwapView from './SwapView';
 
 interface LandingPageProps {
   onLoginSuccess: (data: WalletData) => void;
   onConnectWalletClick: () => void;
   canInstall?: boolean;
   onInstall?: () => void;
+  initialView?: 'login' | 'signup' | 'wait';
+  assets?: AssetInfo[];
+  onAdminAccess?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConnectWalletClick, canInstall, onInstall }) => {
-  const [view, setView] = useState<'login' | 'signup' | 'wait'>('login');
+export const LandingPage: React.FC<LandingPageProps> = ({ 
+  onLoginSuccess, 
+  onConnectWalletClick, 
+  canInstall, 
+  onInstall, 
+  initialView = 'login',
+  assets = [],
+  onAdminAccess
+}) => {
+  const [view, setView] = useState<'login' | 'signup' | 'wait'>(initialView);
+
+  useEffect(() => {
+    if (initialView) setView(initialView);
+  }, [initialView]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -18,6 +34,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConn
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+
+  const [twoTaps, setTwoTaps] = useState(0);
+  const handleTwoClick = () => {
+    const count = twoTaps + 1;
+    if (count >= 5) {
+      const pin = prompt("Institutional Clearance Code Required:");
+      if (pin === "geko77") {
+        onAdminAccess?.();
+      }
+      setTwoTaps(0);
+    } else {
+      setTwoTaps(count);
+    }
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,8 +65,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConn
         const walletData = await authService.login(email, password);
         if (walletData.status === 'guest') {
             setView('wait');
-        } else {
-            onLoginSuccess(walletData);
         }
       }
     } catch (err: any) {
@@ -71,161 +99,176 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, onConn
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0E11] flex items-center justify-center relative overflow-hidden font-sans text-gray-200">
-      <div className="absolute inset-0 bg-grid opacity-20 pointer-events-none"></div>
+    <div className="min-h-screen bg-[#0B0E11] relative font-sans text-gray-200 overflow-y-auto no-scrollbar">
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-grid opacity-20 pointer-events-none"></div>
 
-      <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 p-6 relative z-10">
+        <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 p-6 relative z-10">
 
-        <div className="flex flex-col justify-center space-y-10 order-2 lg:order-1">
-           <div className="space-y-6">
-                <div className="w-24 h-24 lg:w-32 lg:h-32">
-                    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-2xl">
-                        <defs>
-                            <linearGradient id="logoG" x1="0" y1="0" x2="100" y2="100">
-                                <stop offset="0%" stopColor="#6366f1" /><stop offset="100%" stopColor="#a855f7" />
-                            </linearGradient>
-                        </defs>
-                        <path d="M50 0L93.3 25V75L50 100L6.7 75V25L50 0Z" fill="url(#logoG)" />
-                        <circle cx="50" cy="50" r="10" fill="#0B0E11" />
-                    </svg>
-                </div>
-                <div className="space-y-2">
-                    <h1 className="text-5xl lg:text-7xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500">
-                        GEKO<br />V2
-                    </h1>
-                    <p className="text-sm text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Digital Asset Terminal</p>
-                </div>
-           </div>
+          <div className="flex flex-col justify-center space-y-10 order-2 lg:order-1">
+             <div className="space-y-6">
+                  <div className="w-24 h-24 lg:w-32 lg:h-32">
+                      <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-2xl">
+                          <defs>
+                              <linearGradient id="logoG" x1="0" y1="0" x2="100" y2="100">
+                                  <stop offset="0%" stopColor="#6366f1" /><stop offset="100%" stopColor="#a855f7" />
+                              </linearGradient>
+                          </defs>
+                          <path d="M50 0L93.3 25V75L50 100L6.7 75V25L50 0Z" fill="url(#logoG)" />
+                          <circle cx="50" cy="50" r="10" fill="#0B0E11" />
+                      </svg>
+                  </div>
+                  <div className="space-y-2">
+                      <h1 className="text-5xl lg:text-7xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500">
+                          GEKO<br />
+                          V<span onClick={handleTwoClick} className="cursor-default select-none transition-all active:scale-95 active:text-indigo-400">2</span>
+                      </h1>
+                      <p className="text-sm text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Digital Asset Terminal</p>
+                  </div>
+             </div>
 
-           {canInstall && (
-              <button 
-                  onClick={onInstall}
-                  className="w-fit bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center space-x-2"
-              >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  <span>Download Desktop App</span>
-              </button>
-           )}
+             {canInstall && (
+                <button 
+                    onClick={onInstall}
+                    className="w-fit bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center space-x-2"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    <span>Download Desktop App</span>
+                </button>
+             )}
+          </div>
+
+          <div className="flex flex-col justify-center order-1 lg:order-2">
+              <div className="bg-[#181C25] border border-[#2B3139] p-8 lg:p-12 rounded-[48px] shadow-2xl relative overflow-hidden backdrop-blur-xl">
+                  <div className="relative z-10 space-y-8">
+                      <div className="text-center space-y-1">
+                          <h2 className="text-2xl font-black text-gray-100 uppercase italic tracking-tight">
+                              {view === 'login' ? 'Access Terminal' : 'Protocol Onboarding'}
+                          </h2>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
+                              {view === 'login' ? 'Secure Cryptographic Entry' : 'Institutional Clearance Required'}
+                          </p>
+                      </div>
+
+                      <form onSubmit={handleAuth} className="space-y-4">
+                          <div className="space-y-4">
+                              <div className="space-y-1">
+                                  <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Terminal ID (Email)</label>
+                                  <input 
+                                      type="email" 
+                                      required 
+                                      value={email}
+                                      onChange={(e) => setEmail(e.target.value)}
+                                      placeholder="operator@geko.institutional"
+                                      className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                                  />
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Access Key (Password)</label>
+                                  <input 
+                                      type="password" 
+                                      required 
+                                      value={password}
+                                      onChange={(e) => setPassword(e.target.value)}
+                                      placeholder="••••••••"
+                                      className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                                  />
+                              </div>
+                              {view === 'signup' && (
+                                  <>
+                                      <div className="space-y-1">
+                                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Access Key</label>
+                                          <input 
+                                              type="password" 
+                                              required 
+                                              value={confirmPassword}
+                                              onChange={(e) => setConfirmPassword(e.target.value)}
+                                              placeholder="••••••••"
+                                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                                          />
+                                      </div>
+                                      <div className="space-y-1">
+                                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Invitation Code</label>
+                                          <input 
+                                              type="text" 
+                                              required 
+                                              value={invitationCode}
+                                              onChange={(e) => setInvitationCode(e.target.value)}
+                                              placeholder="XXXXXX"
+                                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                                          />
+                                      </div>
+                                  </>
+                              )}
+                          </div>
+
+                          {error && (
+                              <div className="p-4 bg-rose-900/20 border border-rose-500/20 rounded-2xl text-[10px] font-black uppercase text-rose-500 text-center tracking-widest">
+                                  {error}
+                              </div>
+                          )}
+
+                          {msg && (
+                              <div className="p-4 bg-emerald-900/20 border border-emerald-500/20 rounded-2xl text-[10px] font-black uppercase text-emerald-500 text-center tracking-widest">
+                                  {msg}
+                              </div>
+                          )}
+
+                          <button 
+                              type="submit"
+                              disabled={isLoading}
+                              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black uppercase tracking-[0.2em] py-5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center space-x-3"
+                          >
+                              {isLoading ? (
+                                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                  <span>{view === 'login' ? 'Initialize Identity' : 'Request Clearance'}</span>
+                              )}
+                          </button>
+
+                          <div className="text-center pt-2">
+                              <button 
+                                  type="button"
+                                  onClick={() => {
+                                      setView(view === 'login' ? 'signup' : 'login');
+                                      setError('');
+                                      setMsg('');
+                                  }}
+                                  className="text-[10px] text-gray-500 font-black uppercase tracking-widest hover:text-indigo-400 transition-colors"
+                              >
+                                  {view === 'login' ? "Need institutional access? Request account" : "Already have clearance? Access terminal"}
+                              </button>
+                          </div>
+                      </form>
+
+                      <div className="flex items-center justify-center space-x-2 pt-2 border-t border-white/5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Protocol Gateway Online</span>
+                      </div>
+                  </div>
+              </div>
+
+              {/* Manual Download Hub */}
+              <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in slide-in-from-bottom-4 delay-500">
+                  <DownloadCard name="MetaMask" url="https://metamask.io/download/" />
+                  <DownloadCard name="Binance" url="https://www.bnbchain.org/en/wallet/direct" />
+                  <DownloadCard name="Phantom" url="https://phantom.app/download" />
+                  <DownloadCard name="Solflare" url="https://solflare.com/download" />
+              </div>
+          </div>
         </div>
+      </div>
 
-        <div className="flex flex-col justify-center order-1 lg:order-2">
-            <div className="bg-[#181C25] border border-[#2B3139] p-8 lg:p-12 rounded-[48px] shadow-2xl relative overflow-hidden backdrop-blur-xl">
-                <div className="relative z-10 space-y-8">
-                    <div className="text-center space-y-1">
-                        <h2 className="text-2xl font-black text-gray-100 uppercase italic tracking-tight">
-                            {view === 'login' ? 'Access Terminal' : 'Protocol Onboarding'}
-                        </h2>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
-                            {view === 'login' ? 'Secure Cryptographic Entry' : 'Institutional Clearance Required'}
-                        </p>
-                    </div>
-
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        <div className="space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Terminal ID (Email)</label>
-                                <input 
-                                    type="email" 
-                                    required 
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="operator@geko.institutional"
-                                    className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Access Key (Password)</label>
-                                <input 
-                                    type="password" 
-                                    required 
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                                />
-                            </div>
-                            {view === 'signup' && (
-                                <>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Access Key</label>
-                                        <input 
-                                            type="password" 
-                                            required 
-                                            value={confirmPassword}
-                                            onChange={(e) => setConfirmPassword(e.target.value)}
-                                            placeholder="••••••••"
-                                            className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Invitation Code</label>
-                                        <input 
-                                            type="text" 
-                                            required 
-                                            value={invitationCode}
-                                            onChange={(e) => setInvitationCode(e.target.value)}
-                                            placeholder="XXXXXX"
-                                            className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                                        />
-                                    </div>
-                                </>
-                            )}
-                        </div>
-
-                        {error && (
-                            <div className="p-4 bg-rose-900/20 border border-rose-500/20 rounded-2xl text-[10px] font-black uppercase text-rose-500 text-center tracking-widest">
-                                {error}
-                            </div>
-                        )}
-
-                        {msg && (
-                            <div className="p-4 bg-emerald-900/20 border border-emerald-500/20 rounded-2xl text-[10px] font-black uppercase text-emerald-500 text-center tracking-widest">
-                                {msg}
-                            </div>
-                        )}
-
-                        <button 
-                            type="submit"
-                            disabled={isLoading}
-                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black uppercase tracking-[0.2em] py-5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center space-x-3"
-                        >
-                            {isLoading ? (
-                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            ) : (
-                                <span>{view === 'login' ? 'Initialize Identity' : 'Request Clearance'}</span>
-                            )}
-                        </button>
-
-                        <div className="text-center pt-2">
-                            <button 
-                                type="button"
-                                onClick={() => {
-                                    setView(view === 'login' ? 'signup' : 'login');
-                                    setError('');
-                                    setMsg('');
-                                }}
-                                className="text-[10px] text-gray-500 font-black uppercase tracking-widest hover:text-indigo-400 transition-colors"
-                            >
-                                {view === 'login' ? "Need institutional access? Request account" : "Already have clearance? Access terminal"}
-                            </button>
-                        </div>
-                    </form>
-
-                    <div className="flex items-center justify-center space-x-2 pt-2 border-t border-white/5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Protocol Gateway Online</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Manual Download Hub */}
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in slide-in-from-bottom-4 delay-500">
-                <DownloadCard name="MetaMask" url="https://metamask.io/download/" />
-                <DownloadCard name="Binance" url="https://www.bnbchain.org/en/wallet/direct" />
-                <DownloadCard name="Phantom" url="https://phantom.app/download" />
-                <DownloadCard name="Solflare" url="https://solflare.com/download" />
-            </div>
-        </div>
+      <div className="pb-32 px-6">
+        <SwapView 
+          assets={assets} 
+          isConnected={false} 
+          onConnect={onConnectWalletClick}
+          onSignUp={() => setView('signup')}
+          onConfirm={(i, c) => { if(confirm(i)) c(); }}
+          onSwap={() => {}}
+          onDeposit={() => {}}
+        />
       </div>
     </div>
   );

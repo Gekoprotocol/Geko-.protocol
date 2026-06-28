@@ -13,20 +13,24 @@ export interface UserRecord {
 }
 
 export const authService = {
-  saveSession: async (walletData: WalletData) => {
+  saveSession: (walletData: WalletData) => {
     localStorage.setItem(SESSION_KEY, JSON.stringify(walletData));
     syncChannel.postMessage({ type: 'SESSION_UPDATE', walletData });
     window.dispatchEvent(new CustomEvent('geko-session-local-update', { detail: walletData }));
   },
 
   getSession: (): WalletData | null => {
-    const data = localStorage.getItem(SESSION_KEY);
-    return data ? JSON.parse(data) : null;
+    try {
+      const data = localStorage.getItem(SESSION_KEY);
+      return data ? JSON.parse(data) : null;
+    } catch { return null; }
   },
 
   getAllUsers: (): Record<string, UserRecord> => {
+    try {
       const data = localStorage.getItem(USERS_KEY);
       return data ? JSON.parse(data) : {};
+    } catch { return {}; }
   },
 
   login: async (email: string, password: string): Promise<WalletData> => {
@@ -38,11 +42,11 @@ export const authService = {
     
     let result;
     try {
-      const text = await response.text();
-      result = text ? JSON.parse(text) : { success: false, error: 'Empty response from server' };
+      result = await response.json();
     } catch (e) {
-      result = { success: false, error: 'Malformed server response' };
+      throw new Error('Malformed server response');
     }
+    
     if (!response.ok) throw new Error(result.error || "Authentication failed");
     
     const walletData = { 
@@ -54,7 +58,8 @@ export const authService = {
       pending_deposit_currency: result.user.pending_deposit_currency,
       pending_deposit_amount: result.user.pending_deposit_amount
     };
-    await authService.saveSession(walletData);
+    
+    authService.saveSession(walletData);
     return walletData;
   },
 
@@ -64,7 +69,14 @@ export const authService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, invitationCode })
     });
-    const result = await response.json();
+    
+    let result;
+    try {
+      result = await response.json();
+    } catch (e) {
+      throw new Error('Malformed server response');
+    }
+    
     if (!response.ok) throw new Error(result.error || "Signup failed");
     return result;
   },
@@ -88,24 +100,13 @@ export const authService = {
       window.dispatchEvent(new CustomEvent('geko-session-local-update', { detail: null }));
   },
 
-  saveLocalUser: (key: string, record: UserRecord) => {
-      const users = authService.getAllUsers();
-      users[key] = record;
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
-      syncChannel.postMessage({ type: 'USER_REGISTRY_UPDATE' });
-      window.dispatchEvent(new Event('geko-user-update'));
-  },
-
   observeSession: (callback: (wallet: WalletData | null) => void) => {
     const check = () => callback(authService.getSession());
     
     const listener = (e: any) => {
-        // Handle BroadcastChannel (other tabs)
         if (e instanceof MessageEvent) {
           if (e.data.type === 'SESSION_UPDATE' || e.data.type === 'LOGOUT_EVENT') check();
-        } 
-        // Handle CustomEvent (current tab)
-        else if (e.type === 'geko-session-local-update') {
+        } else if (e.type === 'geko-session-local-update') {
           callback(e.detail);
         }
     };
@@ -121,3 +122,4 @@ export const authService = {
     };
   }
 };
+

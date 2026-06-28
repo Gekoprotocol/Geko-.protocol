@@ -124,11 +124,11 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
         
         <div className="text-center space-y-4">
           <div className="space-y-1">
-            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Liquid Aggregator</h1>
+            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Swap Magregator</h1>
             <p className="text-xs text-indigo-500 font-bold uppercase tracking-[0.4em]">Atomic Cross-Chain Bridge</p>
           </div>
           <div className="flex justify-center space-x-2 bg-[#181C25] p-1 rounded-full w-fit mx-auto border border-[#2B3139]">
-            <button onClick={() => setActiveMode('swap')} className={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeMode === 'swap' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-500 hover:text-gray-200'}`}>Swap Aggregator</button>
+            <button onClick={() => setActiveMode('swap')} className={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeMode === 'swap' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-500 hover:text-gray-200'}`}>Swap Magregator</button>
             <button onClick={() => setActiveMode('yield')} className={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeMode === 'yield' ? 'bg-orange-600 text-white shadow-lg shadow-orange-500/20' : 'text-gray-500 hover:text-gray-200'}`}>Geko Vault</button>
           </div>
         </div>

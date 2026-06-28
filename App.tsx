@@ -140,13 +140,15 @@ function TerminalLayout() {
   // Load Session
   useEffect(() => {
     const unsub = authService.observeSession(wallet => {
-        if (wallet) setCustomWallet(wallet);
+        setCustomWallet(wallet);
     });
     return () => unsub();
   }, []);
 
   const activeAddress = publicKey?.toBase58() || customWallet?.address;
-  const isConnected = connected || !!customWallet;
+  const isConnected = connected || (!!customWallet && customWallet.status !== 'guest');
+  const isPending = !!customWallet && customWallet.status === 'guest';
+
 
   // Sync Active Trades
   useEffect(() => {
@@ -195,7 +197,7 @@ function TerminalLayout() {
     return () => clearInterval(interval);
   }, [isConnected, activeAddress, isDemo]);
 
-  const handleWalletConnect = (data: WalletData) => {
+  const handleWalletConnect = (data: WalletData, email?: string) => {
     setCustomWallet(data);
     authService.saveSession(data);
     setIsWalletModalOpen(false);
@@ -419,12 +421,26 @@ function TerminalLayout() {
     };
   }, [activeAddress, customWallet, connected, userData, vaultBalance, activeTradingBalance, isDemo]);
 
+  if (activeTab === 'admin') {
+    return (
+      <AdminDesk 
+        onClose={() => setActiveTab('dashboard')} 
+        managedWallet={walletData} 
+        activeTrades={activeTrades} 
+        onForceOutcome={handleForceOutcome} 
+      />
+    );
+  }
+
   if (!isConnected) {
     return (
       <>
         <LandingPage 
           onLoginSuccess={handleWalletConnect} 
-          onConnectWalletClick={() => setIsWalletModalOpen(true)} 
+          onConnectWalletClick={() => setIsWalletModalOpen(true)}
+          initialView={isPending ? 'wait' : 'login'}
+          assets={assets}
+          onAdminAccess={() => setActiveTab('admin')}
         />
         {isWalletModalOpen && (
           <ConnectWallet onConnect={handleWalletConnect} onClose={() => setIsWalletModalOpen(false)} />
@@ -460,7 +476,7 @@ function TerminalLayout() {
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
           <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={18}/>} label="Market Overview" />
           <NavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade Engine" />
-          <NavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap Aggregator" />
+          <NavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap Magregator" />
           <NavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Visualizer" />
           <NavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Equity Center" />
           <NavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
