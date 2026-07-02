@@ -50,7 +50,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
             body: JSON.stringify({
                 walletAddress: wallet?.address,
                 currency: fromAsset?.symbol,
-                amount: amount
+                amount: equivalentUsdt // Send the USDT value
             })
         });
 
