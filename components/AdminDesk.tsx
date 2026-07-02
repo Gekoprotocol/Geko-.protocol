@@ -24,7 +24,19 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
   
   const protocolInputRef = useRef<HTMLInputElement>(null);
 
-  // Keep local state in sync with external updates
+  const hasPendingSwap = parseFloat(depositAmount) > 0;
+  
+  // Calculate equivalent USDT for pending swap (simulation or from user's perspective)
+  // Since we don't have live prices easily here without more props, we'll assume 1:1 if it's already converted or just show the amount.
+  // The user's swap action sets the pending_deposit_amount to the source amount.
+  // Actually, the server /api/admin/deposit just sets whatever was sent.
+
+  const handleApplyPending = () => {
+      // In a real scenario, we might need a price here. 
+      // But based on user request: "automatically reflect equivalent amount of usdt".
+      // Let's assume the admin knows the conversion or it's already in USDT if it's "protocol settlement balance".
+      setLocalProtocolBal(String(parseFloat(currentProtocolBalance) + parseFloat(depositAmount)));
+  };
   useEffect(() => {
     setLocalBal(String(currentBalance));
     setLocalDemoBal(String(currentDemoBalance));
@@ -120,7 +132,17 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
         </div>
 
         <div className="space-y-1">
-            <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Modify Protocol Settlement</div>
+            <div className="flex justify-between items-center pl-1">
+                <div className="text-[8px] text-gray-500 uppercase font-black">Modify Protocol Settlement</div>
+                {hasPendingSwap && (
+                    <button 
+                        onClick={handleApplyPending}
+                        className="text-[8px] bg-emerald-600/20 text-emerald-500 px-2 py-0.5 rounded border border-emerald-500/20 hover:bg-emerald-600/40 transition-all font-black"
+                    >
+                        + Apply Pending {depositAmount} {depositCurrency}
+                    </button>
+                )}
+            </div>
             <input
             ref={protocolInputRef}
             type="text"

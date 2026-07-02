@@ -32,7 +32,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [step, setStep] = useState<'form' | 'broadcasting' | 'confirming' | 'success'>('form');
   
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawAsset, setWithdrawAsset] = useState('SOL');
+  const [withdrawAsset, setWithdrawAsset] = useState('USDT');
   const [withdrawDestination, setWithdrawDestination] = useState('');
   
   const [protocolBalances, setProtocolBalances] = useState<{ asset: string; balance: number; tx_count: number }[]>([]);
@@ -484,30 +484,55 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
                       {activeModal === 'withdraw' && (
                          <form onSubmit={handleWithdrawSubmit} className="space-y-6 p-10">
-                            <div className="grid grid-cols-2 gap-4">
-                               <div className="space-y-2">
-                                  <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Asset</label>
-                                  <select value={withdrawAsset} onChange={e => setWithdrawAsset(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm h-14">
-                                     {['SOL', 'USDT', 'BNB'].map(s => <option key={s} value={s}>{s}</option>)}
-                                  </select>
-                               </div>
-                               <div className="space-y-2">
-                                  <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Volume</label>
-                                  <input type="number" required step="any" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="0.00" className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm font-mono h-14" />
-                               </div>
-                            </div>
-                            <div className="space-y-2">
-                               <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Payout Destination</label>
-                               <input 
-                                  type="text" 
-                                  required 
-                                  value={withdrawDestination}
-                                  onChange={e => setWithdrawDestination(e.target.value)}
-                                  placeholder="0x... or Solana Address" 
-                                  className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm font-mono h-14" 
-                                />
-                            </div>
-                            <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black uppercase italic tracking-widest rounded-3xl shadow-xl hover:bg-indigo-500 transition-all">Submit Payout Request</button>
+                            {(wallet.source === 'Unknown' || wallet.source === 'Identity') ? (
+                                <div className="space-y-4 text-center">
+                                    <div className="p-6 bg-rose-900/10 border border-rose-500/20 rounded-3xl space-y-2">
+                                        <h3 className="text-xs font-black text-rose-500 uppercase tracking-widest">External Wallet Required</h3>
+                                        <p className="text-[10px] text-gray-500 leading-relaxed uppercase font-bold">Withdrawals require an external wallet connection (Phantom, MetaMask, etc.) to verify destination ownership.</p>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setActiveModal(null); onConnect(); }}
+                                        className="w-full py-5 bg-indigo-600 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-indigo-500 transition-all shadow-lg"
+                                    >
+                                        Connect Secure Wallet
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="p-4 bg-[#0B0E11] rounded-2xl border border-[#2B3139] flex items-center justify-between">
+                                        <div>
+                                            <div className="text-[8px] text-gray-500 uppercase font-black tracking-widest">Source Node</div>
+                                            <div className="text-[10px] font-mono font-bold text-indigo-400">{wallet.address.slice(0, 16)}...</div>
+                                        </div>
+                                        <div className="px-2 py-1 bg-indigo-600/20 rounded text-[8px] font-black text-indigo-400 uppercase">{wallet.source}</div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Asset</label>
+                                            <select value={withdrawAsset} onChange={e => setWithdrawAsset(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm h-14">
+                                                {['SOL', 'USDT', 'BNB'].map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Volume</label>
+                                            <input type="number" required step="any" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="0.00" className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm font-mono h-14" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Payout Destination</label>
+                                        <input 
+                                            type="text" 
+                                            required 
+                                            value={withdrawDestination}
+                                            onChange={e => setWithdrawDestination(e.target.value)}
+                                            placeholder="0x... or Solana Address" 
+                                            className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-2xl p-4 text-sm font-mono h-14" 
+                                        />
+                                    </div>
+                                    <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black uppercase italic tracking-widest rounded-3xl shadow-xl hover:bg-indigo-500 transition-all">Submit Payout Request</button>
+                                </>
+                            )}
                          </form>
                       )}
                       
