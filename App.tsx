@@ -456,6 +456,12 @@ function TerminalLayout() {
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
         <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Synchronizing Identity...</div>
+        <button 
+          onClick={() => { authService.logout(); window.location.href = '/'; }}
+          className="mt-8 text-[8px] text-gray-600 uppercase font-black tracking-widest hover:text-rose-500 transition-colors"
+        >
+          Reset Session
+        </button>
       </div>
     );
   }
@@ -510,7 +516,7 @@ function TerminalLayout() {
              <button 
                 onClick={() => {
                     authService.logout();
-                    window.location.reload();
+                    window.location.href = '/';
                 }}
                 className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/20 text-rose-400 font-black uppercase text-[10px] tracking-widest hover:bg-rose-900/20 transition-all"
              >
@@ -555,13 +561,13 @@ function TerminalLayout() {
         </header>
 
         <main className="flex-1 overflow-hidden relative">
-          {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+          {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
           {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => {}} onSignUp={() => {}} onConfirm={(i, c) => { if(confirm(i)) c(); }} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
+          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onConfirm={(i, c) => { if(confirm(i)) c(); }} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
           {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-          {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+          {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
           {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
-          {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => {}} onUpdateWallet={() => {}} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+          {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
           {activeTab === 'support' && <div className="p-20 text-center space-y-4">
               <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Support Node</h2>
               <p className="text-gray-500">Use the widget in the bottom right corner for live assistance.</p>
