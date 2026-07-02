@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { AssetInfo, ExchangeOffer, WalletData } from '../types';
+import { AssetInfo, WalletData } from '../types';
 
 interface SwapViewProps {
   assets: AssetInfo[];
@@ -86,33 +86,38 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
       }
   };
 
-  const providers = [
-    { name: 'ChangeNOW', logo: 'CN' },
-    { name: 'SimpleSwap', logo: 'SS' },
-    { name: 'StealthEX', logo: 'SX' },
-    { name: 'Exolix', logo: 'EX' },
-    { name: 'FixedFloat', logo: 'FF' }
-  ];
+  const openSelector = (side: 'from' | 'to') => {
+    setSelectorSide(side);
+    setSearchQuery('');
+    setIsSelectorOpen(true);
+  };
 
-  const offers: ExchangeOffer[] = useMemo(() => {
-    if (!amount || parseFloat(amount) <= 0 || !fromAsset || !toAsset) return [];
-    const baseRate = fromAsset.price / toAsset.price;
-    return providers.map((p, i) => ({
-      id: `offer-${p.name}`,
-      provider: p.name,
-      rate: baseRate * (1 + (Math.random() * 0.02 - 0.01)),
-      eta: `${5 + Math.floor(Math.random() * 15)}m`,
-      rating: 4 + Math.random(),
-      type: (i === 0 ? 'Best rate' : i === 1 ? 'Fastest' : 'Standard') as ExchangeOffer['type'],
-      logo: p.logo
-    })).sort((a, b) => b.rate - a.rate);
-  }, [amount, fromAsset, toAsset]);
+  const handleSelectAsset = (asset: AssetInfo) => {
+    if (selectorSide === 'from') {
+        if (asset.symbol === toAsset.symbol) {
+            // Swap if selecting same
+            const temp = toAsset;
+            setToAsset(fromAsset);
+            setFromAsset(temp);
+        } else {
+            setFromAsset(asset);
+        }
+    } else {
+        if (asset.symbol === fromAsset.symbol) {
+            const temp = fromAsset;
+            setFromAsset(toAsset);
+            setToAsset(temp);
+        } else {
+            setToAsset(asset);
+        }
+    }
+    setIsSelectorOpen(false);
+  };
 
-  useEffect(() => {
-    if (offers.length > 0 && !selectedOfferId) setSelectedOfferId(offers[0].id);
-  }, [offers, selectedOfferId]);
-
-  const selectedOffer = useMemo(() => offers.find(o => o.id === selectedOfferId), [offers, selectedOfferId]);
+  const filteredAssets = assets.filter(a => 
+    a.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    a.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (!fromAsset || !toAsset) {
     return (
@@ -122,51 +127,6 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
       </div>
     );
   }
-
-  const handleAction = () => {
-    if (!isConnected) { onConnect(); return; }
-    
-    // Deposit Fee Logic: $10 fee for deposits over $30
-    const numAmount = parseFloat(amount || '0');
-    if (activeMode === 'yield' && numAmount > 30) {
-      onConfirm(
-        `PROTOCOL NOTICE: Deposits exceeding $30 require a $10 Task Clearance Fee for Mainnet synchronization. Total required: $${(numAmount + 10).toFixed(2)}`,
-        () => onDeposit(amount, fromAsset.symbol)
-      );
-      return;
-    }
-
-    if (activeMode === 'yield') { onDeposit(amount, fromAsset.symbol); return; }
-    const selectedOffer = offers.find(o => o.id === selectedOfferId);
-    if (!selectedOffer) return;
-    
-    onConfirm(
-        `Swap ${amount} ${fromAsset.symbol} via ${selectedOffer.provider}`,
-        () => onSwap(fromAsset.symbol, toAsset.symbol, amount)
-    );
-  };
-
-  const openSelector = (side: 'from' | 'to') => {
-    setSelectorSide(side);
-    setSearchQuery('');
-    setIsSelectorOpen(true);
-  };
-
-  const handleSelectAsset = (asset: AssetInfo) => {
-    if (selectorSide === 'from') {
-        if (asset.symbol === toAsset.symbol) setToAsset(fromAsset);
-        setFromAsset(asset);
-    } else {
-        if (asset.symbol === fromAsset.symbol) setFromAsset(toAsset);
-        setToAsset(asset);
-    }
-    setIsSelectorOpen(false);
-  };
-
-  const filteredAssets = assets.filter(a => 
-    a.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    a.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <div className="h-full p-8 flex flex-col items-center bg-[#0B0E11] animate-in fade-in duration-500 relative overflow-y-auto custom-scrollbar">
