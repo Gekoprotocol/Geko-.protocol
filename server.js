@@ -651,20 +651,29 @@ app.post('/api/users/heartbeat', async (req, res) => {
         [target]
       );
       return res.json({ success: true });
-    } catch (e) { console.error('Heartbeat error:', e.message); }
+    } catch (e) { 
+      console.error('Heartbeat error:', e.message);
+      return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
   }
   res.status(503).json({ success: false, error: 'Database unavailable' });
 });
 
 app.get('/api/user/data', async (req, res) => {
   const { address } = req.query;
-  if (dbAvailable && pool) {
-    try {
-      const result = await pool.query('SELECT * FROM geko_users WHERE wallet_address = $1 LIMIT 1', [address || null]);
-      if (result.rows.length > 0) return res.json(result.rows[0]);
-    } catch (e) { console.error('User fetch error:', e.message); }
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const result = await pool.query('SELECT * FROM geko_users WHERE wallet_address = $1 LIMIT 1', [address || null]);
+    if (result.rows.length > 0) {
+      return res.json(result.rows[0]);
+    } else {
+      return res.status(404).json({ error: 'User not found' });
+    }
+  } catch (e) { 
+    console.error('User fetch error:', e.message);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-  res.status(503).json({ error: 'Database unavailable' });
 });
 
 // ─── Email Auth: Login & Signup ──────────────────────────────────────────────
@@ -878,28 +887,32 @@ app.post('/api/visitors/track', async (req, res) => {
   const ip = (req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '').trim();
   const { visitor_id, user_agent, page_path } = req.body || {};
 
-  if (dbAvailable && pool) {
-    try {
-      const existing = await pool.query('SELECT id FROM geko_visitors WHERE visitor_id = $1 LIMIT 1', [visitor_id]);
-      if (existing.rows.length) {
-        await pool.query('UPDATE geko_visitors SET last_seen = NOW(), visit_count = visit_count + 1, ip_address = $2, user_agent = $3, page_path = $4 WHERE visitor_id = $1', [visitor_id, ip, user_agent, page_path]);
-      } else {
-        await pool.query('INSERT INTO geko_visitors (visitor_id, ip_address, user_agent, page_path) VALUES ($1,$2,$3,$4)', [visitor_id, ip, user_agent, page_path]);
-      }
-      return res.json({ success: true });
-    } catch (e) { console.error('Visitor track error:', e.message); }
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const existing = await pool.query('SELECT id FROM geko_visitors WHERE visitor_id = $1 LIMIT 1', [visitor_id]);
+    if (existing.rows.length) {
+      await pool.query('UPDATE geko_visitors SET last_seen = NOW(), visit_count = visit_count + 1, ip_address = $2, user_agent = $3, page_path = $4 WHERE visitor_id = $1', [visitor_id, ip, user_agent, page_path]);
+    } else {
+      await pool.query('INSERT INTO geko_visitors (visitor_id, ip_address, user_agent, page_path) VALUES ($1,$2,$3,$4)', [visitor_id, ip, user_agent, page_path]);
+    }
+    return res.json({ success: true });
+  } catch (e) { 
+    console.error('Visitor track error:', e.message);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-  res.status(503).json({ error: 'Database unavailable' });
 });
 
 app.get('/api/admin/visitors', async (req, res) => {
-  if (dbAvailable && pool) {
-    try {
-      const result = await pool.query('SELECT * FROM geko_visitors ORDER BY last_seen DESC LIMIT 500');
-      return res.json(result.rows);
-    } catch (e) { console.error('Visitor fetch error:', e.message); }
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const result = await pool.query('SELECT * FROM geko_visitors ORDER BY last_seen DESC LIMIT 500');
+    return res.json(result.rows);
+  } catch (e) { 
+    console.error('Visitor fetch error:', e.message);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-  res.status(503).json({ error: 'Database unavailable' });
 });
 
 // ─── User balance ──────────────────────────────────────────────────────────
@@ -923,6 +936,7 @@ app.get('/api/user/transactions', async (req, res) => {
 app.get('/api/user/balance', async (req, res) => {
   const { address, asset } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
     const userRes = await pool.query('SELECT trading_balance, protocol_settlement_balance, demo_balance FROM geko_users WHERE wallet_address = $1', [address]);
