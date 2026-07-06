@@ -40,9 +40,6 @@ app.use(cors());
 // Allow framing and basic security headers
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'ALLOWALL');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
   
   // Force correct MIME types for TypeScript and JSX files to fix "blank screen" issues
   const url = req.url.toLowerCase();
@@ -588,7 +585,7 @@ app.get('/api/admin/users', async (req, res) => {
       return res.status(500).json({ error: e.message });
     }
   }
-  res.status(503).json({ error: 'Database unavailable' });
+  res.status(400).json({ error: 'Database unavailable' });
 });
 
 app.post('/api/admin/users/update', async (req, res) => {
@@ -616,7 +613,7 @@ app.post('/api/admin/users/update', async (req, res) => {
     }
   }
 
-  res.status(503).json({ error: 'Database unavailable' });
+  res.status(400).json({ error: 'Database unavailable' });
 });
 
 // Register / upsert a user (called on wallet connect)
@@ -681,7 +678,7 @@ app.post('/api/users/heartbeat', async (req, res) => {
 
 app.get('/api/user/data', async (req, res) => {
   const { address } = req.query;
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const result = await pool.query('SELECT * FROM geko_users WHERE wallet_address = $1 LIMIT 1', [address || null]);
@@ -701,7 +698,7 @@ app.post('/api/auth/signup', async (req, res) => {
   const { email, password, invitationCode } = req.body;
   if (!email || !password || !invitationCode) return res.status(400).json({ error: 'All fields required' });
   if (invitationCode !== '196405') return res.status(400).json({ error: 'Invalid invitation code' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const userEmail = email.toLowerCase().trim();
@@ -724,7 +721,7 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const userEmail = email.toLowerCase().trim();
@@ -766,7 +763,7 @@ app.post('/api/auth/login', async (req, res) => {
 // ─── Admin Management Endpoints ───────────────────────────────────────────
 app.post('/api/admin/users/approve', async (req, res) => {
   const { userId } = req.body;
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     await pool.query("UPDATE geko_users SET status = 'approved' WHERE id = $1", [userId]);
     res.json({ success: true });
@@ -775,7 +772,7 @@ app.post('/api/admin/users/approve', async (req, res) => {
 
 app.post('/api/admin/users/reject', async (req, res) => {
   const { userId } = req.body;
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     await pool.query("UPDATE geko_users SET status = 'rejected' WHERE id = $1", [userId]);
     res.json({ success: true });
@@ -784,7 +781,7 @@ app.post('/api/admin/users/reject', async (req, res) => {
 
 app.post('/api/admin/deposit', async (req, res) => {
   const { walletAddress, currency, amount } = req.body;
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     await pool.query(
       "UPDATE geko_users SET pending_deposit_currency = $1, pending_deposit_amount = $2 WHERE wallet_address = $3",
@@ -796,7 +793,7 @@ app.post('/api/admin/deposit', async (req, res) => {
 
 app.post('/api/user/swap', async (req, res) => {
   const { walletAddress } = req.body;
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     const userRes = await pool.query(
       "SELECT pending_deposit_amount FROM geko_users WHERE wallet_address = $1",
@@ -826,7 +823,7 @@ app.post('/api/user/swap', async (req, res) => {
 // ─── Support Chat Endpoints ─────────────────────────────────────────────
 app.get('/api/support/messages', async (req, res) => {
   const { address } = req.query;
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     const result = await pool.query(
       "SELECT messages FROM support_tickets WHERE wallet_address = $1 LIMIT 1",
@@ -838,7 +835,7 @@ app.get('/api/support/messages', async (req, res) => {
 
 app.post('/api/support/send', async (req, res) => {
   const { address, message, sender } = req.body;
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     const ticketRes = await pool.query(
       "SELECT id, messages FROM support_tickets WHERE wallet_address = $1 LIMIT 1",
@@ -863,7 +860,7 @@ app.post('/api/support/send', async (req, res) => {
 });
 
 app.get('/api/admin/support/tickets', async (req, res) => {
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     const result = await pool.query("SELECT * FROM support_tickets ORDER BY updated_at DESC");
     res.json(result.rows);
@@ -874,7 +871,7 @@ app.get('/api/admin/support/tickets', async (req, res) => {
 app.post('/api/balance/transfer', async (req, res) => {
   const { walletAddress, amount, direction } = req.body;
   if (!walletAddress || !amount || !direction) return res.status(400).json({ error: 'Missing parameters' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const amt = Math.abs(parseFloat(amount));
@@ -907,7 +904,7 @@ app.post('/api/visitors/track', async (req, res) => {
   const ip = (req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '').trim();
   const { visitor_id, user_agent, page_path } = req.body || {};
 
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const existing = await pool.query('SELECT id FROM geko_visitors WHERE visitor_id = $1 LIMIT 1', [visitor_id]);
@@ -924,7 +921,7 @@ app.post('/api/visitors/track', async (req, res) => {
 });
 
 app.get('/api/admin/visitors', async (req, res) => {
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const result = await pool.query('SELECT * FROM geko_visitors ORDER BY last_seen DESC LIMIT 500');
@@ -939,7 +936,7 @@ app.get('/api/admin/visitors', async (req, res) => {
 app.get('/api/user/transactions', async (req, res) => {
   const { address, limit } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const result = await pool.query(
@@ -956,7 +953,7 @@ app.get('/api/user/transactions', async (req, res) => {
 app.get('/api/user/balance', async (req, res) => {
   const { address, asset } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const userRes = await pool.query('SELECT trading_balance, protocol_settlement_balance, demo_balance FROM geko_users WHERE wallet_address = $1', [address]);
@@ -990,7 +987,7 @@ app.get('/api/user/balance', async (req, res) => {
 app.get('/api/user/active-trades', async (req, res) => {
   const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const result = await pool.query(
@@ -1007,7 +1004,7 @@ app.get('/api/user/active-trades', async (req, res) => {
 app.post('/api/execute-trade', async (req, res) => {
   const { walletAddress, asset, tradeSize, leverage, type, isDemo, entryPrice, duration, tradeId } = req.body;
   if (!walletAddress || !tradeSize) return res.status(400).json({ error: 'Missing parameters' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const amt = Math.abs(parseFloat(tradeSize));
@@ -1049,7 +1046,7 @@ app.post('/api/execute-trade', async (req, res) => {
 app.post('/api/settle-trade', async (req, res) => {
   const { walletAddress, asset, payout, tradeRef, isDemo, status } = req.body;
   if (!walletAddress || payout === undefined) return res.status(400).json({ error: 'Missing parameters' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const amt = parseFloat(payout);
@@ -1087,7 +1084,7 @@ app.post('/api/request-withdrawal', async (req, res) => {
   const { walletAddress, destinationAddress, amount, asset } = req.body;
   if (!walletAddress || !destinationAddress || !amount || !asset)
     return res.status(400).json({ success: false, error: 'Missing required fields' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const balance = await getUserBalance(walletAddress, asset);
@@ -1109,7 +1106,7 @@ app.post('/api/request-withdrawal', async (req, res) => {
 
 // ─── Admin Trade endpoints ─────────────────────────────────────────────────
 app.get('/api/admin/active-trades', async (req, res) => {
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     const result = await pool.query("SELECT * FROM trades WHERE status = 'pending' ORDER BY created_at DESC");
     res.json(result.rows);
@@ -1122,7 +1119,7 @@ app.get('/api/admin/active-trades', async (req, res) => {
 app.post('/api/admin/force-outcome', async (req, res) => {
   const { tradeId, forceOutcome } = req.body;
   if (!tradeId || !forceOutcome) return res.status(400).json({ error: 'tradeId and forceOutcome required' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     await pool.query('UPDATE trades SET force_outcome = $1 WHERE id = $2', [forceOutcome, tradeId]);
     res.json({ success: true });
@@ -1134,7 +1131,7 @@ app.post('/api/admin/force-outcome', async (req, res) => {
 
 // ─── Admin Withdrawal endpoints ───────────────────────────────────────────
 app.get('/api/admin/withdrawal-requests', async (req, res) => {
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     const wrRes = await pool.query(
       `SELECT wr.*, u.nickname FROM withdrawal_requests wr
@@ -1158,7 +1155,7 @@ app.get('/api/admin/withdrawal-requests', async (req, res) => {
 app.post('/api/admin/approve-withdrawal', async (req, res) => {
   const { requestId } = req.body;
   if (!requestId) return res.status(400).json({ success: false, error: 'requestId required' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const wrRes = await pool.query('SELECT * FROM withdrawal_requests WHERE id = $1', [requestId]);
@@ -1195,7 +1192,7 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
 app.post('/api/admin/reject-withdrawal', async (req, res) => {
   const { requestId, note } = req.body;
   if (!requestId) return res.status(400).json({ success: false, error: 'requestId required' });
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     await pool.query('UPDATE withdrawal_requests SET status = $1, admin_note = $2, processed_at = NOW() WHERE id = $3', ['rejected', note, requestId]);
@@ -1220,6 +1217,15 @@ app.get('*', (req, res) => {
   const possiblePaths = [path.join(distPath, 'index.html'), path.join(publicPath, 'index.html'), path.join(rootPath, 'index.html')];
   for (const indexPath of possiblePaths) { if (fs.existsSync(indexPath)) return res.sendFile(indexPath); }
   res.status(404).send("<h1>Frontend Build Not Found</h1>");
+});
+
+// ─── Global Error Handler ──────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('[SERVER ERROR]', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    success: false
+  });
 });
 
 app.listen(port, '0.0.0.0', () => {

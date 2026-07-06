@@ -41,10 +41,12 @@ export const authService = {
     });
     
     let result;
+    const text = await response.text();
     try {
-      result = await response.json();
+      result = JSON.parse(text);
     } catch (e) {
-      throw new Error('Malformed server response');
+      console.error('Server response was not JSON:', text);
+      throw new Error(`Malformed server response (Status ${response.status}). Check terminal console.`);
     }
     
     if (!response.ok) throw new Error(result.error || "Authentication failed");
@@ -71,10 +73,12 @@ export const authService = {
     });
     
     let result;
+    const text = await response.text();
     try {
-      result = await response.json();
+      result = JSON.parse(text);
     } catch (e) {
-      throw new Error('Malformed server response');
+      console.error('Server response was not JSON:', text);
+      throw new Error(`Malformed server response (Status ${response.status}). Check terminal console.`);
     }
     
     if (!response.ok) throw new Error(result.error || "Signup failed");
