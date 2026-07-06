@@ -6,11 +6,12 @@ import { authService, UserRecord } from '../services/authService';
 interface UserCardProps {
   user: any;
   onSave: (user: any, balance: any) => void;
+  onDelete: (userId: number) => void;
   savingId: string | null;
   savedId: string | null;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) => {
+const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, savingId, savedId }) => {
   const currentBalance = user.trading_balance ?? '0.00';
   const currentDemoBalance = user.demo_balance ?? '100000.00';
   const currentProtocolBalance = user.protocol_settlement_balance ?? '0.00';
@@ -77,7 +78,15 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, savingId, savedId }) 
           <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
           <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">{user.email || `Node_${user.id}`}</div>
         </div>
-        <div className="text-[8px] text-gray-500 uppercase font-black">{isOnline ? 'Active' : 'Standby'}</div>
+        <div className="flex items-center space-x-2">
+            <div className="text-[8px] text-gray-500 uppercase font-black">{isOnline ? 'Active' : 'Standby'}</div>
+            <button 
+                onClick={() => { if(confirm(`Erase user ${user.email || user.id} and all its data?`)) onDelete(user.id); }}
+                className="w-5 h-5 flex items-center justify-center bg-rose-900/20 text-rose-500 border border-rose-500/20 rounded-md hover:bg-rose-500 hover:text-white transition-all text-[10px] font-bold"
+            >
+                ✕
+            </button>
+        </div>
       </div>
 
       <div className="cursor-pointer group space-y-1" onClick={() => protocolInputRef.current?.focus()}>
@@ -367,6 +376,17 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     } catch (e) { console.error('Reject failed', e); }
   };
 
+  const handleDeleteUser = async (id: number) => {
+    try {
+      await fetch('/api/admin/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      fetchDbUsers();
+    } catch (e) { console.error('Delete failed', e); }
+  };
+
   const handleSupportReply = async () => {
     if (!activeTicket || !adminReply) return;
     try {
@@ -499,6 +519,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   key={user.id}
                   user={user}
                   onSave={handleSaveBalance}
+                  onDelete={handleDeleteUser}
                   savingId={savingId}
                   savedId={savedId}
                 />
