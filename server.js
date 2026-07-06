@@ -628,9 +628,6 @@ app.post('/api/admin/users/delete', async (req, res) => {
   res.status(400).json({ error: 'DB unavailable' });
 });
 
-  res.status(400).json({ error: 'Database unavailable' });
-});
-
 // Register / upsert a user (called on wallet connect)
 app.post('/api/users/upsert', async (req, res) => {
   let { wallet_address, address, wallet_data, ip_address, nickname } = req.body;
