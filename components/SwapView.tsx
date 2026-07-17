@@ -174,7 +174,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
                 </div>
 
                 <div className="space-y-3">
-                    <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest pl-1">Master Deposit Address (SOL)</div>
+                    <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest pl-1">Master Deposit Address</div>
                     <div className="flex items-center space-x-3 bg-[#0B0E11] p-6 rounded-2xl border border-indigo-500/20 group">
                         <input 
                             type="text"

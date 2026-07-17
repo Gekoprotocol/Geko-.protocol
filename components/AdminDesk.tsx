@@ -20,6 +20,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   const [localBal, setLocalBal] = useState(String(currentBalance));
   const [localDemoBal, setLocalDemoBal] = useState(String(currentDemoBalance));
   const [localProtocolBal, setLocalProtocolBal] = useState(String(currentProtocolBalance));
+  const [localSwapSent, setLocalSwapSent] = useState(user.swap_sent || false);
   
   const [depositCurrency, setDepositCurrency] = useState(user.pending_deposit_currency || 'BTC');
   const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
@@ -28,22 +29,17 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
 
   const hasPendingSwap = parseFloat(depositAmount) > 0;
   
-  // Calculate equivalent USDT for pending swap (simulation or from user's perspective)
-  // Since we don't have live prices easily here without more props, we'll assume 1:1 if it's already converted or just show the amount.
-  // The user's swap action sets the pending_deposit_amount to the source amount.
-  // Actually, the server /api/admin/deposit just sets whatever was sent.
-
   const handleApplyPending = () => {
-      // In a real scenario, we might need a price here. 
-      // But based on user request: "automatically reflect equivalent amount of usdt".
-      // Let's assume the admin knows the conversion or it's already in USDT if it's "protocol settlement balance".
-      setLocalProtocolBal(String(parseFloat(currentProtocolBalance) + parseFloat(depositAmount)));
+      setLocalProtocolBal(String(parseFloat(localProtocolBal) + parseFloat(depositAmount)));
+      setLocalSwapSent(false);
+      setDepositAmount('0');
   };
   useEffect(() => {
     setLocalBal(String(currentBalance));
     setLocalDemoBal(String(currentDemoBalance));
     setLocalProtocolBal(String(currentProtocolBalance));
-  }, [currentBalance, currentDemoBalance, currentProtocolBalance]);
+    setLocalSwapSent(user.swap_sent || false);
+  }, [currentBalance, currentDemoBalance, currentProtocolBalance, user.swap_sent]);
 
   const uid = user.id.toString();
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
@@ -68,7 +64,8 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
       demo_balance: processAdditive(localDemoBal, String(currentDemoBalance)), 
       protocol_settlement_balance: processAdditive(localProtocolBal, String(currentProtocolBalance)),
       pending_deposit_currency: depositCurrency,
-      pending_deposit_amount: depositAmount
+      pending_deposit_amount: depositAmount,
+      swap_sent: localSwapSent
     });
   };
 
@@ -78,6 +75,9 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
           <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">{user.email || `Node_${user.id}`}</div>
+          {localSwapSent && (
+              <div className="bg-amber-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-bounce">USER SENT SWAP</div>
+          )}
         </div>
         <div className="flex items-center space-x-2">
             <div className="text-[8px] text-gray-500 uppercase font-black">{isOnline ? 'Active' : 'Standby'}</div>
@@ -336,7 +336,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
           id: user.id, 
           trading_balance: parseFloat(balances.trading_balance) || 0,
           demo_balance: parseFloat(balances.demo_balance) || 0,
-          protocol_settlement_balance: parseFloat(balances.protocol_settlement_balance) || 0
+          protocol_settlement_balance: parseFloat(balances.protocol_settlement_balance) || 0,
+          swap_sent: balances.swap_sent
         })
       });
       
