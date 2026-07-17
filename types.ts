@@ -36,6 +36,7 @@ export interface ActiveTrade {
   startTime: number;
   duration: number; 
   status: 'pending' | 'won' | 'lost';
+  leverage?: number;
   forceOutcome?: 'win' | 'loss';
   isBot?: boolean;
   isAI?: boolean;
@@ -75,6 +76,9 @@ export interface WalletData {
   isDelegated?: boolean;
   trading_balance?: number;
   available_balance?: number;
+  isDemo?: boolean;
+  status?: string;
+  role?: string;
   balances: {
     symbol: string;
     amount: string;

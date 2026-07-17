@@ -319,7 +319,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             </div>
           </div>
           <div className="flex space-x-3">
-             <button onClick={() => setActiveModal('deposit')} className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">Add Liquidity</button>
              <button 
                 onClick={() => {
                     onRefreshBalances();
@@ -378,14 +377,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             </div>
             <div className="space-y-1">
               <div className="text-sm font-black text-gray-200 uppercase tracking-tight">Consolidated Funding</div>
-              <div className="text-[10px] text-gray-500 leading-relaxed px-2">Securely fund your protocol account by transferring SOL to the master node.</div>
+              <div className="text-[10px] text-gray-500 leading-relaxed px-2">Manage your protocol account and transfer between vault and trading.</div>
             </div>
-            <button
-                onClick={() => { setActiveModal('deposit'); triggerWalletPopup(); }}
-                className="w-full py-4 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20"
-            >
-                Add Protocol Liquidity
-            </button>
             <div className="flex items-center space-x-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Protocol Secured Gateway</span>

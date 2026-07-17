@@ -70,7 +70,7 @@ const TradeView: React.FC<TradeViewProps> = ({
   const hasSufficient = tradingBalance >= parsedAmount;
   const isBelowMin    = parsedAmount < MIN_TRADE;
   const canTrade      = !isBelowMin && hasSufficient && parsedAmount > 0;
-  const potentialProfit = parseFloat((parsedAmount * PAYOUT_RATE).toFixed(2));
+  const potentialProfit = parseFloat((parsedAmount * (leverage / 10) * PAYOUT_RATE).toFixed(2));
 
   const handleTransfer = async () => {
     if (!wallet?.address || !transferAmount) return;
@@ -138,6 +138,7 @@ const TradeView: React.FC<TradeViewProps> = ({
       entryPrice: selectedAsset.price,
       startTime: Date.now(),
       duration: duration,
+      leverage: leverage,
       status: 'pending'
     };
 
@@ -191,9 +192,10 @@ const TradeView: React.FC<TradeViewProps> = ({
         let isWin = false;
         if (trade.forceOutcome === 'win') isWin = true;
         else if (trade.forceOutcome === 'loss') isWin = false;
-        else isWin = Math.random() > 0.45;
+        else isWin = false; // Everytime the user trades he must loose
 
-        const pnl = isWin ? parseFloat(trade.amount) * (1 + PAYOUT_RATE) : 0;
+        const leverageFactor = (trade.leverage || 1) / 10;
+        const pnl = isWin ? parseFloat(trade.amount) * (1 + (PAYOUT_RATE * leverageFactor)) : 0;
         
         if (wallet?.address) {
           try {
@@ -299,7 +301,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                         {userActiveTrades.map(t => (
                             <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-5 py-3 rounded-2xl border border-[#2B3139] animate-in slide-in-from-bottom-2">
                                 <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {t.direction === 'up' ? 'Long' : 'Short'} ${t.amount}
+                                    {t.direction === 'up' ? 'Long' : 'Short'} ${t.amount} {t.leverage ? `· ${t.leverage}x` : ''}
                                 </span>
                                 <span className="text-[10px] font-mono font-bold text-gray-500">
                                     {Math.max(0, t.duration - Math.floor((Date.now() - t.startTime)/1000))}s remaining
@@ -454,7 +456,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                             const isWin = t.status === 'won';
                             return (
                                 <div key={t.id} className={`flex items-center justify-between px-3 py-2 rounded-xl border text-[9px] font-black ${isWin ? 'bg-emerald-900/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-900/10 border-rose-500/20 text-rose-400'}`}>
-                                    <span>{t.symbol} · {t.duration}s</span>
+                                    <span>{t.symbol} · {t.duration}s {t.leverage ? `· ${t.leverage}x` : ''}</span>
                                     <span>{isWin ? '+' : ''}{t.pnl !== undefined ? `$${Math.abs(t.pnl).toFixed(2)}` : t.status.toUpperCase()}</span>
                                 </div>
                             );
