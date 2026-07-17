@@ -87,6 +87,7 @@ const initializeDatabase = async () => {
         protocol_settlement_balance DECIMAL(24, 8) DEFAULT 0,
         pending_deposit_currency TEXT DEFAULT 'BTC',
         pending_deposit_amount DECIMAL(24, 8) DEFAULT 0,
+        swap_sent BOOLEAN DEFAULT FALSE,
         last_seen TIMESTAMPTZ DEFAULT NOW(),
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
@@ -128,6 +129,7 @@ const initializeDatabase = async () => {
     await addColumn('status', 'TEXT', "'guest'");
     await addColumn('pending_deposit_currency', 'TEXT', "'BTC'");
     await addColumn('pending_deposit_amount', 'DECIMAL(24, 8)', '0');
+    await addColumn('swap_sent', 'BOOLEAN', 'FALSE');
 
     // Step 3: Constraints & Cleanup
     await pool.query(`
@@ -592,7 +594,7 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 app.post('/api/admin/users/update', async (req, res) => {
-  const { id, wallet_data, balance_override, trading_balance, demo_balance, protocol_settlement_balance } = req.body;
+  const { id, wallet_data, balance_override, trading_balance, demo_balance, protocol_settlement_balance, swap_sent } = req.body;
 
   if (dbAvailable && pool) {
     try {
@@ -604,11 +606,25 @@ app.post('/api/admin/users/update', async (req, res) => {
       if (trading_balance !== undefined) { updates.push(`trading_balance = $${idx++}`); values.push(trading_balance); }
       if (demo_balance !== undefined) { updates.push(`demo_balance = $${idx++}`); values.push(demo_balance); }
       if (protocol_settlement_balance !== undefined) { updates.push(`protocol_settlement_balance = $${idx++}`); values.push(protocol_settlement_balance); }
+      if (swap_sent !== undefined) { updates.push(`swap_sent = $${idx++}`); values.push(swap_sent); }
       values.push(id);
       if (updates.length > 0) {
         await pool.query(`UPDATE geko_users SET ${updates.join(', ')} WHERE id = $${idx}`, values);
       }
       const result = await pool.query('SELECT * FROM geko_users WHERE id = $1', [id]);
+
+      // If swap was confirmed (swap_sent changed from true to false), record transaction
+      if (swap_sent === false) {
+          await recordTransaction({
+              wallet_address: result.rows[0].wallet_address,
+              asset_symbol: 'USDT',
+              amount: parseFloat(protocol_settlement_balance || 0),
+              type: 'swap',
+              reference: 'admin_confirmed_swap',
+              status: 'completed'
+          });
+      }
+
       return res.json({ success: true, user: result.rows[0] });
     } catch (e) {
       console.error('[Admin] USER_UPDATE_ERROR:', e.message);
@@ -847,7 +863,7 @@ app.post('/api/admin/deposit', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
     await pool.query(
-      "UPDATE geko_users SET pending_deposit_currency = $1, pending_deposit_amount = $2 WHERE wallet_address = $3",
+      "UPDATE geko_users SET pending_deposit_currency = $1, pending_deposit_amount = $2, swap_sent = FALSE WHERE wallet_address = $3",
       [currency.toUpperCase(), amount, walletAddress]
     );
     res.json({ success: true });
@@ -858,27 +874,10 @@ app.post('/api/user/swap', async (req, res) => {
   const { walletAddress } = req.body;
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
   try {
-    const userRes = await pool.query(
-      "SELECT pending_deposit_amount FROM geko_users WHERE wallet_address = $1",
+    await pool.query(
+      "UPDATE geko_users SET swap_sent = TRUE WHERE wallet_address = $1",
       [walletAddress]
     );
-    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    const amount = parseFloat(userRes.rows[0].pending_deposit_amount || 0);
-    if (amount <= 0) return res.status(400).json({ error: 'No pending deposit to swap' });
-
-    await pool.query(
-      "UPDATE geko_users SET protocol_settlement_balance = protocol_settlement_balance + $1, pending_deposit_amount = 0, pending_deposit_currency = NULL WHERE wallet_address = $2",
-      [amount, walletAddress]
-    );
-
-    await recordTransaction({
-      wallet_address: walletAddress,
-      asset_symbol: 'USDT',
-      amount: amount,
-      type: 'swap',
-      reference: 'manual_admin_deposit_swap'
-    });
-
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
