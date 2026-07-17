@@ -57,6 +57,7 @@ export const authService = {
       address: result.user.address,
       id: result.user.id,
       status: result.user.status,
+      role: result.user.role,
       pending_deposit_currency: result.user.pending_deposit_currency,
       pending_deposit_amount: result.user.pending_deposit_amount
     };
@@ -98,7 +99,18 @@ export const authService = {
       return false;
   },
 
-  logout: () => {
+  logout: async (email?: string) => {
+      if (email) {
+          try {
+              await fetch('/api/auth/logout-and-forget', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email })
+              });
+          } catch (e) {
+              console.error('Logout sync failed', e);
+          }
+      }
       localStorage.removeItem(SESSION_KEY);
       syncChannel.postMessage({ type: 'LOGOUT_EVENT' });
       window.dispatchEvent(new CustomEvent('geko-session-local-update', { detail: null }));

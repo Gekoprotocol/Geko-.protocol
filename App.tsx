@@ -123,7 +123,11 @@ export default function App() {
 function TerminalLayout() {
   const { publicKey, connected, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Initialize tab based on existing session role
+  const initialSession = authService.getSession();
+  const [activeTab, setActiveTab] = useState(initialSession?.role === 'admin' ? 'admin' : 'dashboard');
+  
   const [userData, setUserData] = useState<any>(null);
   const [vaultBalance, setVaultBalance] = useState(0);
   const [prices, setPrices] = useState<any[]>([]);
@@ -142,6 +146,10 @@ function TerminalLayout() {
   useEffect(() => {
     const unsub = authService.observeSession(wallet => {
         setCustomWallet(wallet);
+        // If login returns admin role, switch to admin tab
+        if (wallet?.role === 'admin') {
+            setActiveTab('admin');
+        }
     });
     return () => unsub();
   }, []);
@@ -180,7 +188,7 @@ function TerminalLayout() {
     return () => clearInterval(interval);
   }, [isConnected, activeAddress]);
 
-  // Sync Trading Balance
+  // Sync Trading Balance and check for force_logout
   useEffect(() => {
     if (!isConnected || !activeAddress) return;
     const fetchBal = async () => {
@@ -188,6 +196,14 @@ function TerminalLayout() {
             const res = await fetch(`/api/user/balance?address=${encodeURIComponent(activeAddress)}&asset=USDT`);
             if (res.ok) {
                 const data = await res.json();
+                
+                // FORCE LOGOUT CHECK
+                if (data.status === 'force_logout') {
+                    authService.logout();
+                    window.location.href = '/';
+                    return;
+                }
+
                 setTradingBalance(isDemo ? data.demo_balance : data.trading_balance);
                 setVaultBalance(data.balance || 0);
             }
@@ -217,21 +233,6 @@ function TerminalLayout() {
         }).catch(e => console.error("Sync failed", e));
     }
   }, [customWallet]);
-
-  // Hidden Admin Access
-  const [adminTaps, setAdminTaps] = useState(0);
-  const handleAdminActivation = () => {
-    const count = adminTaps + 1;
-    if (count >= 10) {
-      const pin = prompt("Institutional Clearance Code Required:");
-      if (pin === "geko77") {
-        setActiveTab('admin');
-      }
-      setAdminTaps(0);
-    } else {
-      setAdminTaps(count);
-    }
-  };
 
   const handleForceOutcome = (tradeId: string, updates: Partial<ActiveTrade>) => {
     setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, ...updates } : t));
@@ -471,7 +472,7 @@ function TerminalLayout() {
       {/* SIDEBAR */}
       <div className="w-64 border-r border-white/5 flex flex-col glass z-50 shrink-0">
         {/* Header / Logo */}
-        <div className="p-6 flex items-center gap-3 border-b border-white/5 cursor-pointer select-none" onClick={handleAdminActivation}>
+        <div className="p-6 flex items-center gap-3 border-b border-white/5 cursor-pointer select-none">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
             <span className="text-white font-black text-xs italic">GK</span>
           </div>
@@ -515,7 +516,7 @@ function TerminalLayout() {
           <div className="pt-4 px-4">
              <button 
                 onClick={() => {
-                    authService.logout();
+                    authService.logout(walletData?.email);
                     window.location.href = '/';
                 }}
                 className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/20 text-rose-400 font-black uppercase text-[10px] tracking-widest hover:bg-rose-900/20 transition-all"

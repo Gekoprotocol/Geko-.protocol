@@ -35,20 +35,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
 
-  const [twoTaps, setTwoTaps] = useState(0);
-  const handleTwoClick = () => {
-    const count = twoTaps + 1;
-    if (count >= 5) {
-      const pin = prompt("Institutional Clearance Code Required:");
-      if (pin === "geko77") {
-        onAdminAccess?.();
-      }
-      setTwoTaps(0);
-    } else {
-      setTwoTaps(count);
-    }
-  };
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -123,7 +109,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="space-y-2">
                       <h1 className="text-5xl lg:text-7xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500">
                           GEKO<br />
-                          V<span onClick={handleTwoClick} className="cursor-default select-none transition-all active:scale-95 active:text-indigo-400">2</span>
+                          V2
                       </h1>
                       <p className="text-sm text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Digital Asset Terminal</p>
                   </div>
