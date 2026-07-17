@@ -76,6 +76,9 @@ export interface WalletData {
   isDelegated?: boolean;
   trading_balance?: number;
   available_balance?: number;
+  isDemo?: boolean;
+  status?: string;
+  role?: string;
   balances: {
     symbol: string;
     amount: string;

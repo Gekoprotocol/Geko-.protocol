@@ -209,7 +209,7 @@ export const universalWallet = {
             
             const address = accounts[0];
             const balances = await universalWallet.fetchAddressBalance(address);
-            const data = { address, source: walletName, chainType: 'evm', balances, history: [] };
+            const data: WalletData = { address, source: walletName, chainType: 'evm' as const, balances, history: [] };
             localStorage.setItem('geko_session', JSON.stringify(data));
             return data;
         } catch (err: any) {
@@ -238,9 +238,9 @@ export const universalWallet = {
             
             let source = 'Solana';
             if (provider.isPhantom) source = 'Phantom';
-            else if (win.exodus?.solana && provider === win.exodus.solana) source = 'Exodus';
+            else if ((window as any).exodus?.solana && provider === (window as any).exodus.solana) source = 'Exodus';
             
-            const sessionData: WalletData = { address, source, chainType: 'svm', balances, history: [] };
+            const sessionData: WalletData = { address, source, chainType: 'svm' as const, balances, history: [] };
             localStorage.setItem('geko_session', JSON.stringify(sessionData));
             
             return sessionData;
