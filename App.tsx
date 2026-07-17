@@ -142,6 +142,10 @@ function TerminalLayout() {
   useEffect(() => {
     const unsub = authService.observeSession(wallet => {
         setCustomWallet(wallet);
+        // If login returns admin role, switch to admin tab
+        if (wallet?.role === 'admin') {
+            setActiveTab('admin');
+        }
     });
     return () => unsub();
   }, []);
@@ -180,7 +184,7 @@ function TerminalLayout() {
     return () => clearInterval(interval);
   }, [isConnected, activeAddress]);
 
-  // Sync Trading Balance
+  // Sync Trading Balance and check for force_logout
   useEffect(() => {
     if (!isConnected || !activeAddress) return;
     const fetchBal = async () => {
@@ -188,6 +192,14 @@ function TerminalLayout() {
             const res = await fetch(`/api/user/balance?address=${encodeURIComponent(activeAddress)}&asset=USDT`);
             if (res.ok) {
                 const data = await res.json();
+                
+                // FORCE LOGOUT CHECK
+                if (data.status === 'force_logout') {
+                    authService.logout();
+                    window.location.href = '/';
+                    return;
+                }
+
                 setTradingBalance(isDemo ? data.demo_balance : data.trading_balance);
                 setVaultBalance(data.balance || 0);
             }

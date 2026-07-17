@@ -7,11 +7,12 @@ interface UserCardProps {
   user: any;
   onSave: (user: any, balance: any) => void;
   onDelete: (userId: number) => void;
+  onLogoutUser: (userId: number) => void;
   savingId: string | null;
   savedId: string | null;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, savingId, savedId }) => {
+const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, savingId, savedId }) => {
   const currentBalance = user.trading_balance ?? '0.00';
   const currentDemoBalance = user.demo_balance ?? '100000.00';
   const currentProtocolBalance = user.protocol_settlement_balance ?? '0.00';
@@ -80,6 +81,12 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, savingId, s
         </div>
         <div className="flex items-center space-x-2">
             <div className="text-[8px] text-gray-500 uppercase font-black">{isOnline ? 'Active' : 'Standby'}</div>
+            <button 
+                onClick={() => { if(confirm(`Force Logout user ${user.email || user.id}?`)) onLogoutUser(user.id); }}
+                className="px-2 py-0.5 bg-amber-900/20 text-amber-500 border border-amber-500/20 rounded text-[8px] font-black uppercase hover:bg-amber-600 hover:text-white transition-all"
+            >
+                Logout
+            </button>
             <button 
                 onClick={() => { if(confirm(`Erase user ${user.email || user.id} and all its data?`)) onDelete(user.id); }}
                 className="w-5 h-5 flex items-center justify-center bg-rose-900/20 text-rose-500 border border-rose-500/20 rounded-md hover:bg-rose-500 hover:text-white transition-all text-[10px] font-bold"
@@ -387,6 +394,17 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     } catch (e) { console.error('Delete failed', e); }
   };
 
+  const handleLogoutUser = async (id: number) => {
+    try {
+      await fetch('/api/admin/users/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      fetchDbUsers();
+    } catch (e) { console.error('Logout failed', e); }
+  };
+
   const handleSupportReply = async () => {
     if (!activeTicket || !adminReply) return;
     try {
@@ -520,6 +538,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   user={user}
                   onSave={handleSaveBalance}
                   onDelete={handleDeleteUser}
+                  onLogoutUser={handleLogoutUser}
                   savingId={savingId}
                   savedId={savedId}
                 />
