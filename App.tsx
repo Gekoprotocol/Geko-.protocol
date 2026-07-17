@@ -123,7 +123,11 @@ export default function App() {
 function TerminalLayout() {
   const { publicKey, connected, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Initialize tab based on existing session role
+  const initialSession = authService.getSession();
+  const [activeTab, setActiveTab] = useState(initialSession?.role === 'admin' ? 'admin' : 'dashboard');
+  
   const [userData, setUserData] = useState<any>(null);
   const [vaultBalance, setVaultBalance] = useState(0);
   const [prices, setPrices] = useState<any[]>([]);

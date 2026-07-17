@@ -57,6 +57,7 @@ export const authService = {
       address: result.user.address,
       id: result.user.id,
       status: result.user.status,
+      role: result.user.role,
       pending_deposit_currency: result.user.pending_deposit_currency,
       pending_deposit_amount: result.user.pending_deposit_amount
     };
