@@ -36,6 +36,7 @@ export interface ActiveTrade {
   startTime: number;
   duration: number; 
   status: 'pending' | 'won' | 'lost';
+  leverage?: number;
   forceOutcome?: 'win' | 'loss';
   isBot?: boolean;
   isAI?: boolean;

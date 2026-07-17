@@ -49,7 +49,9 @@ import {
   RefreshCw,
   LayoutGrid,
   LogOut,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
@@ -141,6 +143,17 @@ function TerminalLayout() {
   const [tradingBalance, setTradingBalance] = useState(0);
   const [customWallet, setCustomWallet] = useState<WalletData | null>(null);
   const [shouldOpenDeposit, setShouldOpenDeposit] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   // Load Session
   useEffect(() => {
@@ -176,6 +189,7 @@ function TerminalLayout() {
                     entryPrice: parseFloat(t.entry_price),
                     startTime: new Date(t.created_at).getTime(),
                     duration: t.duration,
+                    leverage: t.leverage,
                     status: t.status,
                     forceOutcome: t.force_outcome
                 }));
@@ -468,18 +482,26 @@ function TerminalLayout() {
   }
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-[#0B0E11] text-[#EAECEF] font-sans">
+    <div className={`h-screen w-screen flex overflow-hidden ${isDarkMode ? 'bg-[#0B0E11] text-[#EAECEF]' : 'bg-gray-50 text-gray-900'} font-sans`}>
       {/* SIDEBAR */}
       <div className="w-64 border-r border-white/5 flex flex-col glass z-50 shrink-0">
         {/* Header / Logo */}
-        <div className="p-6 flex items-center gap-3 border-b border-white/5 cursor-pointer select-none">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
-            <span className="text-white font-black text-xs italic">GK</span>
+        <div className="p-6 flex items-center justify-between border-b border-white/5 cursor-pointer select-none">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
+              <span className="text-white font-black text-xs italic">GK</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-black tracking-tighter text-lg uppercase italic leading-none">GEKO</span>
+              <span className="text-[8px] text-gray-500 font-bold uppercase tracking-[0.2em]">Institutional Terminal</span>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="font-black tracking-tighter text-lg uppercase italic leading-none">GEKO</span>
-            <span className="text-[8px] text-gray-500 font-bold uppercase tracking-[0.2em]">Institutional Terminal</span>
-          </div>
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2 hover:bg-white/5 rounded-lg transition-all"
+          >
+            {isDarkMode ? <Sun size={14} className="text-amber-500" /> : <Moon size={14} className="text-indigo-400" />}
+          </button>
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
