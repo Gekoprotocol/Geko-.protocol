@@ -8,12 +8,11 @@ interface MarketChartProps {
   activeTrades?: ActiveTrade[];
 }
 
-const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) => {
+const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = false, activeTrades = [] }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
   const activeTradesRef = useRef<ActiveTrade[]>(activeTrades);
 
   // Sync active trades to ref for use in intervals without re-triggering effects
@@ -42,7 +41,8 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
   // Initialize Chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
-
+    
+    let isCancelled = false;
     console.log(`[Chart] Initializing instance for ${symbol}`);
     
     let chart: IChartApi;
@@ -86,7 +86,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
             const res = await fetch(`/api/binance/klines?symbol=${symbol}USDT&interval=1m&limit=100`);
             if (res.ok) {
                 const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
+                if (Array.isArray(data) && data.length > 0 && !isCancelled) {
                     const formatted = data.map((d: any) => ({
                         time: d[0] / 1000,
                         open: parseFloat(d[1]),
@@ -102,7 +102,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
             console.error("[Chart] Initial data fetch failed", e);
         }
 
-        if (!success) {
+        if (!success && !isCancelled) {
             console.warn("[Chart] Using fallback mock data");
             const now = Math.floor(Date.now() / 1000);
             const mock = [];
@@ -136,6 +136,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
     window.addEventListener('resize', handleResize);
 
     return () => {
+      isCancelled = true;
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
       chart.remove();
