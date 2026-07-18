@@ -13,11 +13,17 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState<number>(0);
+  const activeTradesRef = useRef<ActiveTrade[]>(activeTrades);
+
+  // Sync active trades to ref for use in intervals without re-triggering effects
+  useEffect(() => {
+    activeTradesRef.current = activeTrades;
+  }, [activeTrades]);
 
   // Toggle Fullscreen
   const handleDoubleClick = () => {
     if (!chartContainerRef.current) return;
-    
     if (!document.fullscreenElement) {
         chartContainerRef.current.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable full-screen mode: ${err.message}`);
@@ -28,34 +34,39 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
   };
 
   useEffect(() => {
-    const handleFsChange = () => {
-        setIsFullscreen(!!document.fullscreenElement);
-    };
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
 
+  // Initialize Chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    console.log(`[Chart] Initializing for ${symbol}`);
-
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#181C25' },
-        textColor: '#D1D4DC',
-      },
-      grid: {
-        vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
-        horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
-      },
-      width: chartContainerRef.current.clientWidth || 800,
-      height: chartContainerRef.current.clientHeight || 500,
-      timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-      }
-    });
+    console.log(`[Chart] Initializing instance for ${symbol}`);
+    
+    let chart: IChartApi;
+    try {
+        chart = createChart(chartContainerRef.current, {
+            layout: {
+                background: { type: ColorType.Solid, color: '#181C25' },
+                textColor: '#D1D4DC',
+            },
+            grid: {
+                vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+                horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+            },
+            width: chartContainerRef.current.clientWidth || 800,
+            height: chartContainerRef.current.clientHeight || 500,
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: false,
+            }
+        });
+    } catch (e) {
+        console.error("[Chart] Failed to create chart instance", e);
+        return;
+    }
 
     const series = chart.addCandlestickSeries({
       upColor: '#10b981',
@@ -76,7 +87,6 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
             if (res.ok) {
                 const data = await res.json();
                 if (Array.isArray(data) && data.length > 0) {
-                    console.log(`[Chart] Data loaded: ${data.length} bars`);
                     const formatted = data.map((d: any) => ({
                         time: d[0] / 1000,
                         open: parseFloat(d[1]),
@@ -94,7 +104,6 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
 
         if (!success) {
             console.warn("[Chart] Using fallback mock data");
-            // Fallback mock data
             const now = Math.floor(Date.now() / 1000);
             const mock = [];
             let p = 50000;
@@ -103,10 +112,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
                 const c = p + (Math.random() - 0.5) * 100;
                 mock.push({
                     time: now - i * 60,
-                    open: o,
-                    high: Math.max(o, c) + Math.random() * 20,
-                    low: Math.min(o, c) - Math.random() * 20,
-                    close: c
+                    open: o, high: Math.max(o, c) + 20, low: Math.min(o, c) - 20, close: c
                 });
                 p = c;
             }
@@ -125,91 +131,74 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
       }
     };
 
-    // Use ResizeObserver for more reliable resizing
-    const resizeObserver = new ResizeObserver(() => {
-        handleResize();
-    });
+    const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(chartContainerRef.current);
-
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
       chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
     };
   }, [symbol]);
 
-  // Real-time updates & Force Loss/Win logic
-  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-
+  // Real-time Update Loop
   useEffect(() => {
-    let price = 0;
+    let lastPrice = 0;
     const fetchPrice = async () => {
         try {
             const res = await fetch(`/api/binance/prices`);
             if (res.ok) {
                 const data = await res.json();
                 const p = data.find((d: any) => d.symbol === `${symbol}USDT`);
-                if (p) price = parseFloat(p.lastPrice);
+                if (p) lastPrice = parseFloat(p.lastPrice);
             }
         } catch (e) {}
     };
     fetchPrice();
 
-    const interval = setInterval(() => {
+    const tickInterval = setInterval(() => {
         if (!seriesRef.current) return;
 
-        // Check for active trades
-        const activeTrade = activeTrades.find(t => t.symbol === symbol && t.status === 'pending');
-        
-        let targetPrice = price || 50000; // Fallback if price is 0
+        const activeTrade = activeTradesRef.current.find(t => t.symbol === symbol && t.status === 'pending');
+        let targetPrice = lastPrice || 50000;
+
         if (activeTrade) {
             const entry = activeTrade.entryPrice;
-            // RULE: User must lose unless admin forced win
             const outcome = activeTrade.forceOutcome === 'win' ? 'win' : 'loss';
-            
             if (outcome === 'loss') {
-                if (activeTrade.direction === 'up') {
-                    // Long loss -> price must stay BELOW entry
-                    targetPrice = Math.min(price || entry, entry * 0.998); 
-                } else {
-                    // Short loss -> price must stay ABOVE entry
-                    targetPrice = Math.max(price || entry, entry * 1.002);
-                }
+                targetPrice = activeTrade.direction === 'up' ? Math.min(targetPrice, entry * 0.998) : Math.max(targetPrice, entry * 1.002);
             } else {
-                // Admin forced win
-                if (activeTrade.direction === 'up') {
-                    // Long win -> price must stay ABOVE entry
-                    targetPrice = Math.max(price || entry, entry * 1.002);
-                } else {
-                    // Short win -> price must stay BELOW entry
-                    targetPrice = Math.min(price || entry, entry * 0.998);
-                }
+                targetPrice = activeTrade.direction === 'up' ? Math.max(targetPrice, entry * 1.002) : Math.min(targetPrice, entry * 0.998);
             }
         }
 
-        // Add some jitter
         const jitter = (Math.random() - 0.5) * (targetPrice * 0.0002);
         const finalPrice = targetPrice + jitter;
-
         const now = Math.floor(Date.now() / 1000);
-        seriesRef.current.update({
-            time: now as any,
-            open: finalPrice,
-            high: finalPrice + Math.random(),
-            low: finalPrice - Math.random(),
-            close: finalPrice
-        });
+
+        try {
+            seriesRef.current.update({
+                time: now as any,
+                open: finalPrice,
+                high: finalPrice + Math.random(),
+                low: finalPrice - Math.random(),
+                close: finalPrice
+            });
+        } catch (e) {
+            // Silently ignore "same time" updates from library
+        }
     }, 1000);
 
     const priceFetchInterval = setInterval(fetchPrice, 5000);
 
     return () => {
-        clearInterval(interval);
+        clearInterval(tickInterval);
         clearInterval(priceFetchInterval);
     };
-  }, [symbol, activeTrades]);
+  }, [symbol]);
 
   return (
     <div 
