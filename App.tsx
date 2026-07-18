@@ -70,6 +70,37 @@ import { WalletData, AssetInfo, ActiveTrade } from './types';
 const API_BASE = window.location.origin;
 
 /**
+ * ERROR BOUNDARY
+ */
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("[CRITICAL_UI_FAILURE]", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] text-gray-400 p-10 text-center">
+          <h1 className="text-2xl font-black text-rose-500 mb-4 uppercase">Terminal Fault Detected</h1>
+          <p className="max-w-md text-sm leading-relaxed mb-8 font-mono">The Geko Protocol kernel encountered an unexpected exception in this view. The secure link remains active.</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-8 py-3 bg-indigo-600 text-white font-black uppercase rounded-xl hover:bg-indigo-500 transition-all shadow-xl"
+          >
+            Re-Initialize Terminal
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/**
  * MAIN APP COMPONENT
  */
 export default function App() {
@@ -109,13 +140,15 @@ export default function App() {
   ], []);
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider featuredWallets={10}>
-          <TerminalLayout />
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <ErrorBoundary>
+        <ConnectionProvider endpoint={endpoint}>
+          <WalletProvider wallets={wallets} autoConnect>
+            <WalletModalProvider featuredWallets={10}>
+              <TerminalLayout />
+            </WalletModalProvider>
+          </WalletProvider>
+        </ConnectionProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -180,19 +213,22 @@ function TerminalLayout() {
             const res = await fetch(`/api/user/active-trades?address=${encodeURIComponent(activeAddress)}`);
             if (res.ok) {
                 const data = await res.json();
-                const synced: ActiveTrade[] = data.map((t: any) => ({
-                    id: t.id,
-                    symbol: t.symbol,
-                    userName: 'Local_Node',
-                    direction: t.direction.toLowerCase() as 'up' | 'down',
-                    amount: t.amount.toString(),
-                    entryPrice: parseFloat(t.entry_price),
-                    startTime: new Date(t.created_at).getTime(),
-                    duration: t.duration,
-                    leverage: t.leverage,
-                    status: t.status,
-                    forceOutcome: t.force_outcome
-                }));
+                const synced: ActiveTrade[] = (Array.isArray(data) ? data : []).map((t: any) => {
+                    const createdDate = new Date(t.created_at || Date.now());
+                    return {
+                        id: t.id,
+                        symbol: t.symbol,
+                        userName: 'Local_Node',
+                        direction: (t.direction || 'up').toLowerCase() as 'up' | 'down',
+                        amount: (t.amount || '0').toString(),
+                        entryPrice: parseFloat(t.entry_price || '0'),
+                        startTime: isNaN(createdDate.getTime()) ? Date.now() : createdDate.getTime(),
+                        duration: parseInt(t.duration || '60'),
+                        leverage: parseInt(t.leverage || '1'),
+                        status: t.status || 'pending',
+                        forceOutcome: t.force_outcome
+                    };
+                });
                 setActiveTrades(synced);
             }
         } catch (e) { console.warn("Trade sync failed", e); }
