@@ -76,7 +76,6 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
           });
           if (res.ok) {
               if (onRefreshBalances) onRefreshBalances();
-              alert('Settlement Request Received. Waiting for Admin confirmation.');
               setShowDeposit(false);
           }
       } catch (e) {
