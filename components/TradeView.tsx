@@ -284,8 +284,8 @@ const TradeView: React.FC<TradeViewProps> = ({
 
       <div className="flex-1 relative overflow-hidden flex bg-[#0B0E11]">
         {/* Graph Area */}
-        <div className="flex-1 relative h-full flex flex-col overflow-hidden">
-            <div className="flex-1 relative">
+        <div className="flex-1 relative h-full min-h-0 flex flex-col overflow-hidden">
+            <div className="flex-1 relative min-h-[450px] bg-[#0B0E11]">
                 <MarketChart 
                     symbol={selectedSymbol} 
                     showIndicators={showIndicators} 

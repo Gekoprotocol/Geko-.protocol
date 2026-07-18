@@ -38,6 +38,8 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    console.log(`[Chart] Initializing for ${symbol}`);
+
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#181C25' },
@@ -47,8 +49,8 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
         vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
         horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight,
+      width: chartContainerRef.current.clientWidth || 800,
+      height: chartContainerRef.current.clientHeight || 500,
       timeScale: {
           timeVisible: true,
           secondsVisible: false,
@@ -73,7 +75,8 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
             const res = await fetch(`/api/binance/klines?symbol=${symbol}USDT&interval=1m&limit=100`);
             if (res.ok) {
                 const data = await res.json();
-                if (Array.isArray(data)) {
+                if (Array.isArray(data) && data.length > 0) {
+                    console.log(`[Chart] Data loaded: ${data.length} bars`);
                     const formatted = data.map((d: any) => ({
                         time: d[0] / 1000,
                         open: parseFloat(d[1]),
@@ -86,10 +89,11 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
                 }
             }
         } catch (e) {
-            console.error("Initial data fetch failed", e);
+            console.error("[Chart] Initial data fetch failed", e);
         }
 
         if (!success) {
+            console.warn("[Chart] Using fallback mock data");
             // Fallback mock data
             const now = Math.floor(Date.now() / 1000);
             const mock = [];
@@ -113,18 +117,25 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
     fetchInitialData();
 
     const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ 
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({ 
             width: chartContainerRef.current.clientWidth,
             height: chartContainerRef.current.clientHeight
         });
       }
     };
 
+    // Use ResizeObserver for more reliable resizing
+    const resizeObserver = new ResizeObserver(() => {
+        handleResize();
+    });
+    resizeObserver.observe(chartContainerRef.current);
+
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       chart.remove();
     };
   }, [symbol]);
