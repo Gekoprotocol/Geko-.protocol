@@ -284,33 +284,39 @@ const TradeView: React.FC<TradeViewProps> = ({
 
       <div className="flex-1 relative overflow-hidden flex bg-[#0B0E11]">
         {/* Graph Area */}
-        <div className="flex-1 relative h-full flex flex-col">
+        <div className="flex-1 relative h-full flex flex-col overflow-hidden">
             <div className="flex-1 relative">
                 <MarketChart 
-                    data={marketData} 
                     symbol={selectedSymbol} 
                     showIndicators={showIndicators} 
+                    activeTrades={localActiveTrades}
                 />
-            </div>
-            
-            {/* Minimalist Positions View (Strip at bottom of chart) */}
-            {userActiveTrades.length > 0 && (
-                <div className="h-48 bg-[#181C25]/80 backdrop-blur-md border-t border-[#2B3139] flex flex-col p-4 overflow-y-auto no-scrollbar shrink-0 z-20">
-                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-3">Live Orders:</span>
-                    <div className="space-y-2">
-                        {userActiveTrades.map(t => (
-                            <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-5 py-3 rounded-2xl border border-[#2B3139] animate-in slide-in-from-bottom-2">
-                                <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                    {t.direction === 'up' ? 'Long' : 'Short'} ${t.amount} {t.leverage ? `· ${t.leverage}x` : ''}
-                                </span>
-                                <span className="text-[10px] font-mono font-bold text-gray-500">
-                                    {Math.max(0, t.duration - Math.floor((Date.now() - t.startTime)/1000))}s remaining
-                                </span>
-                            </div>
-                        ))}
+
+                {/* Minimalist Positions View (Overlay at bottom of chart) */}
+                {userActiveTrades.length > 0 && (
+                    <div className="absolute bottom-0 left-0 right-0 max-h-48 bg-[#181C25]/80 backdrop-blur-md border-t border-[#2B3139] flex flex-col p-4 overflow-y-auto no-scrollbar z-20 animate-in slide-in-from-bottom-10">
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Live Orders:</span>
+                            <span className="text-[8px] text-gray-600 font-bold uppercase">{userActiveTrades.length} Active Settlement{userActiveTrades.length > 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="space-y-2">
+                            {userActiveTrades.map(t => (
+                                <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-5 py-3 rounded-2xl border border-[#2B3139] shadow-lg">
+                                    <div className="flex items-center space-x-3">
+                                        <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
+                                        <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                            {t.direction === 'up' ? 'Long' : 'Short'} ${t.amount} {t.leverage ? `· ${t.leverage}x` : ''}
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] font-mono font-bold text-indigo-400">
+                                        {Math.max(0, t.duration - Math.floor((Date.now() - t.startTime)/1000))}s
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
 
         {/* Execution Control Sidebar */}

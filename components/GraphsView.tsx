@@ -71,7 +71,7 @@ const GraphsView: React.FC<GraphsViewProps> = ({ assets, selectedAsset, marketDa
             </div>
 
             <div className="w-full bg-[#0B0E11] rounded-[32px] border border-[#2B3139] overflow-hidden" style={{ height: '500px' }}>
-              <MarketChart data={marketData} symbol={selectedAsset.symbol} showIndicators showVolume={true} />
+              <MarketChart symbol={selectedAsset.symbol} showIndicators />
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
