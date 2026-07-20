@@ -293,14 +293,18 @@ function TerminalLayout() {
   // Map prices to AssetInfo format
   const assets: AssetInfo[] = useMemo(() => {
     if (!Array.isArray(prices)) return [];
-    return prices.map(p => ({
-      symbol: (p.symbol || '').replace('USDT', ''),
-      name: p.symbol || 'Unknown',
-      price: parseFloat(p.lastPrice || '0'),
-      change24h: parseFloat(p.priceChangePercent || '0'),
-      marketCap: 'N/A',
-      volume24h: p.volume || '0'
-    }));
+    return prices.map(p => {
+      const price = parseFloat(p.lastPrice);
+      const change = parseFloat(p.priceChangePercent);
+      return {
+        symbol: (p.symbol || '').replace('USDT', ''),
+        name: p.symbol || 'Unknown',
+        price: isNaN(price) ? 0 : price,
+        change24h: isNaN(change) ? 0 : change,
+        marketCap: 'N/A',
+        volume24h: p.volume || '0'
+      };
+    });
   }, [prices]);
 
   const selectedAsset = useMemo(() => {
