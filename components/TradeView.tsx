@@ -60,9 +60,10 @@ const TradeView: React.FC<TradeViewProps> = ({
   useEffect(() => {
     if (activeTrades) {
         setLocalActiveTrades(prev => {
-            // Keep local trades that are not yet in the incoming activeTrades (e.g. just placed)
-            // But also sync with server state
-            return activeTrades;
+            // Keep local trades that are not yet in the server response
+            const serverIds = new Set(activeTrades.map(t => t.id));
+            const stillLocal = prev.filter(t => !serverIds.has(t.id) && (Date.now() - t.startTime < 10000)); // 10s grace
+            return [...activeTrades, ...stillLocal];
         });
     }
   }, [activeTrades]);
