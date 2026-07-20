@@ -61,7 +61,7 @@ const TradeView: React.FC<TradeViewProps> = ({
     if (activeTrades) {
         setLocalActiveTrades(prev => {
             const serverIds = new Set(activeTrades.map(t => t.id));
-            const stillLocal = prev.filter(t => !serverIds.has(t.id) && (Date.now() - t.startTime < 10000));
+            const stillLocal = prev.filter(t => !serverIds.has(t.id) && (Date.now() - (t.startTime || 0) < 10000));
             return [...activeTrades, ...stillLocal];
         });
     }
@@ -177,7 +177,7 @@ const TradeView: React.FC<TradeViewProps> = ({
           setTradeStatus({ msg: data.error || 'Order rejected', ok: false });
           setLocalActiveTrades(prev => prev.filter(t => t.id !== tradeId));
         } else {
-          setTradeStatus({ msg: `Order placed · -$${parsedAmount} margin`, ok: true });
+          // Success message removed per user request
           setTradingBalance(prev => prev - parsedAmount);
         }
       } catch (e) {
@@ -259,7 +259,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             >
                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center">
                     Institutional Pair
-                    <svg className="w-3 h-3 ml-1 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                    <svg className="w-3 v-3 ml-1 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
                 </span>
                 <span className="text-gray-100 font-black text-lg italic tracking-tighter group-hover:text-indigo-400">{selectedSymbol}/USDT</span>
             </button>
@@ -289,38 +289,67 @@ const TradeView: React.FC<TradeViewProps> = ({
       </div>
 
       <div className="flex-1 relative overflow-hidden flex bg-[#0B0E11]">
-        <div className="flex-1 relative h-full min-h-0 flex flex-col overflow-hidden">
-            <div className="flex-1 relative min-h-[450px] bg-[#0B0E11]">
+        <div className="flex-1 relative h-full min-h-0 flex flex-col overflow-y-auto custom-scrollbar">
+            <div className="w-full h-[600px] shrink-0 relative bg-[#0B0E11]">
                 <MarketChart 
                     symbol={selectedSymbol} 
                     showIndicators={showIndicators} 
                     activeTrades={localActiveTrades}
                 />
-
-                {userActiveTrades.length > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 max-h-48 bg-[#181C25]/80 backdrop-blur-md border-t border-[#2B3139] flex flex-col p-4 overflow-y-auto no-scrollbar z-20 animate-in slide-in-from-bottom-10">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Live Orders:</span>
-                            <span className="text-[8px] text-gray-600 font-bold uppercase">{userActiveTrades.length} Active Settlement{userActiveTrades.length > 1 ? 's' : ''}</span>
-                        </div>
-                        <div className="space-y-2">
-                            {userActiveTrades.map(t => (
-                                <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-5 py-3 rounded-2xl border border-[#2B3139] shadow-lg">
-                                    <div className="flex items-center space-x-3">
-                                        <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
-                                        <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                            {t.direction === 'up' ? 'Long' : 'Short'} ${t.amount} {t.leverage ? `· ${t.leverage}x` : ''}
-                                        </span>
-                                    </div>
-                                    <span className="text-[10px] font-mono font-bold text-indigo-400">
-                                        {Math.max(0, t.duration - Math.floor((Date.now() - (t.startTime || Date.now()))/1000))}s
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
+
+            {userActiveTrades.length > 0 && (
+                <div className="p-6 border-t border-[#2B3139] bg-[#181C25]/50 shrink-0">
+                    <div className="flex items-center justify-between mb-4">
+                        <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-2">Active Settlements</span>
+                        <span className="text-[8px] text-gray-600 font-bold uppercase">{userActiveTrades.length} Pending Execution{userActiveTrades.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {userActiveTrades.map(t => (
+                            <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-6 py-4 rounded-[24px] border border-[#2B3139] shadow-lg hover:border-indigo-500/30 transition-all group">
+                                <div className="flex items-center space-x-4">
+                                    <div className={`w-3 h-3 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]`}></div>
+                                    <div className="flex flex-col">
+                                        <span className={`text-[11px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                            {t.direction === 'up' ? 'Long' : 'Short'} ${t.amount}
+                                        </span>
+                                        <span className="text-[8px] text-gray-600 font-bold uppercase tracking-widest">{t.leverage}x Leverage</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-[10px] font-black text-gray-100 italic tracking-tighter">{t.symbol}/USDT</span>
+                                    <span className="text-[8px] text-indigo-500/50 font-mono uppercase tracking-[0.2em]">Settlement Pending</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {userSettled.length > 0 && (
+                <div className="p-6 border-t border-[#2B3139] bg-[#0B0E11] shrink-0">
+                    <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-4 px-2">Recent Results</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {userSettled.map(t => {
+                            const isWin = t.status === 'won';
+                            return (
+                                <div key={t.id} className={`flex items-center justify-between px-6 py-4 rounded-[24px] border text-[9px] font-black ${isWin ? 'bg-emerald-900/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-900/5 border-rose-500/10 text-rose-400'}`}>
+                                    <div className="flex flex-col">
+                                        <span className="uppercase tracking-widest mb-0.5">{t.symbol} · {t.duration}s</span>
+                                        <span className="text-[8px] opacity-50 uppercase">{t.leverage}x Position</span>
+                                    </div>
+                                    <div className="text-right flex flex-col">
+                                        <span className={`text-[12px] italic ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {isWin ? '+' : ''}{t.pnl !== undefined ? `$${Math.abs(t.pnl).toFixed(2)}` : t.status.toUpperCase()}
+                                        </span>
+                                        <span className="text-[7px] text-gray-600 uppercase font-bold tracking-widest">Protocol Finalized</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
 
         <div className="w-72 bg-[#181C25] border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto no-scrollbar">
@@ -414,21 +443,6 @@ const TradeView: React.FC<TradeViewProps> = ({
                         <span className="relative z-10">SELL / SHORT ↓</span>
                     </button>
                 </div>
-
-                {userSettled.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                        <div className="text-[8px] text-gray-600 font-black uppercase tracking-widest px-1">Recent Results</div>
-                        {userSettled.map(t => {
-                            const isWin = t.status === 'won';
-                            return (
-                                <div key={t.id} className={`flex items-center justify-between px-3 py-2 rounded-xl border text-[9px] font-black ${isWin ? 'bg-emerald-900/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-900/10 border-rose-500/20 text-rose-400'}`}>
-                                    <span>{t.symbol} · {t.duration}s {t.leverage ? `· ${t.leverage}x` : ''}</span>
-                                    <span>{isWin ? '+' : ''}{t.pnl !== undefined ? `$${Math.abs(t.pnl).toFixed(2)}` : t.status.toUpperCase()}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
             </div>
         </div>
 
