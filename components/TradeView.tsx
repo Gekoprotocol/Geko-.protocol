@@ -191,58 +191,59 @@ const TradeView: React.FC<TradeViewProps> = ({
   useEffect(() => {
     const interval = setInterval(async () => {
       const now = Date.now();
+      const toSettle = localActiveTrades.filter(t => (now - (t.startTime || now)) >= (t.duration * 1000));
       
-      setLocalActiveTrades(currentTrades => {
-          const toSettle = currentTrades.filter(t => (now - t.startTime) >= (t.duration * 1000));
-          if (toSettle.length === 0) return currentTrades;
+      if (toSettle.length === 0) return;
 
-          const settledIds = new Set(toSettle.map(t => t.id));
-          const newlySettled: ActiveTrade[] = [];
+      const settledIds = new Set(toSettle.map(t => t.id));
+      const newlySettled: ActiveTrade[] = [];
 
-          for (const trade of toSettle) {
-            let isWin = false;
-            if (trade.forceOutcome === 'win') isWin = true;
-            else if (trade.forceOutcome === 'loss') isWin = false;
-            else isWin = false; 
+      for (const trade of toSettle) {
+        let isWin = false;
+        if (trade.forceOutcome === 'win') isWin = true;
+        else if (trade.forceOutcome === 'loss') isWin = false;
+        else isWin = false; 
 
-            const leverageFactor = (trade.leverage || 1) / 10;
-            const pnl = isWin ? parseFloat(trade.amount) * (1 + (PAYOUT_RATE * leverageFactor)) : 0;
+        const leverageFactor = (trade.leverage || 10) / 10;
+        const pnl = isWin ? parseFloat(trade.amount) * (1 + (PAYOUT_RATE * leverageFactor)) : 0;
 
-            if (wallet?.address) {
-              fetch('/api/settle-trade', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  walletAddress: wallet.address,
-                  asset: trade.symbol,
-                  payout: isNaN(pnl) ? "0.00" : pnl.toFixed(2),
-                  tradeRef: trade.id,
-                  isDemo: wallet?.isDemo,
-                  status: isWin ? 'won' : 'lost'
-                })
-              }).then(res => {
-                  if (res.ok && isWin && !isNaN(pnl)) {
-                      setTradingBalance(prev => prev + pnl);
-                  }
-              }).catch(e => console.error('Settlement sync failed'));
+        if (wallet?.address) {
+          try {
+            const res = await fetch('/api/settle-trade', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                walletAddress: wallet.address,
+                asset: trade.symbol,
+                payout: isNaN(pnl) ? "0.00" : pnl.toFixed(2),
+                tradeRef: trade.id,
+                isDemo: wallet?.isDemo,
+                status: isWin ? 'won' : 'lost'
+              })
+            });
+            if (res.ok && isWin && !isNaN(pnl)) {
+                setTradingBalance(prev => prev + pnl);
             }
-
-            const settledTrade: ActiveTrade = {
-              ...trade,
-              status: isWin ? 'won' : 'lost',
-              pnl: isWin ? (pnl - (parseFloat(trade.amount) || 0)) : -(parseFloat(trade.amount) || 0),
-              settledAt: now
-            };
-            newlySettled.push(settledTrade);
+          } catch (e) {
+            console.error('Settlement sync failed', e);
           }
+        }
 
-          setLocalSettledTrades(prev => [...newlySettled, ...prev].slice(0, 10));
-          return currentTrades.filter(t => !settledIds.has(t.id));
-      });
+        const settledTrade: ActiveTrade = {
+          ...trade,
+          status: isWin ? 'won' : 'lost',
+          pnl: isWin ? (pnl - (parseFloat(trade.amount) || 0)) : -(parseFloat(trade.amount) || 0),
+          settledAt: now
+        };
+        newlySettled.push(settledTrade);
+      }
+
+      setLocalSettledTrades(prev => [...newlySettled, ...prev].slice(0, 10));
+      setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [wallet?.address, wallet?.isDemo]);
+  }, [localActiveTrades, wallet?.address, wallet?.isDemo]);
 
   const userActiveTrades = localActiveTrades;
   const userSettled = localSettledTrades;

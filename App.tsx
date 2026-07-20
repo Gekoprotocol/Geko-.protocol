@@ -252,14 +252,14 @@ function TerminalLayout() {
                 const data = await res.json();
                 
                 // FORCE LOGOUT CHECK
-                if (data.status === 'force_logout') {
+                if (data?.status === 'force_logout') {
                     authService.logout();
                     window.location.href = '/';
                     return;
                 }
 
-                setTradingBalance(isDemo ? data.demo_balance : data.trading_balance);
-                setVaultBalance(data.balance || 0);
+                setTradingBalance(isDemo ? (data?.demo_balance || 0) : (data?.trading_balance || 0));
+                setVaultBalance(data?.balance || 0);
             }
         } catch (e) { console.warn("Balance sync failed", e); }
     };
@@ -298,16 +298,17 @@ function TerminalLayout() {
   const assets: AssetInfo[] = useMemo(() => {
     if (!Array.isArray(prices)) return [];
     return prices.map(p => {
-      if (!p) return null;
+      if (!p || typeof p !== 'object') return null;
       const price = parseFloat(p.lastPrice || '0');
       const change = parseFloat(p.priceChangePercent || '0');
+      const sym = (p.symbol || 'BTCUSDT').replace('USDT', '');
       return {
-        symbol: (p.symbol || '').replace('USDT', ''),
-        name: p.symbol || 'Unknown',
+        symbol: sym,
+        name: sym,
         price: isNaN(price) ? 0 : price,
         change24h: isNaN(change) ? 0 : change,
         marketCap: 'N/A',
-        volume24h: p.volume || '0'
+        volume24h: String(p.volume || '0')
       };
     }).filter((a): a is AssetInfo => a !== null);
   }, [prices]);
@@ -614,14 +615,18 @@ function TerminalLayout() {
           </div>
           <div className="flex items-center gap-6">
              <div className="hidden lg:flex items-center space-x-6">
-                {(Array.isArray(prices) ? prices : []).filter(p => p && p.symbol).slice(0, 2).map(p => (
-                <div key={p.symbol} className="flex flex-col items-end">
-                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
-                    <span className={`text-xs font-mono font-bold ${parseFloat(p.priceChangePercent || '0') >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    ${parseFloat(p.lastPrice || '0').toLocaleString()}
-                    </span>
-                </div>
-                ))}
+                {(Array.isArray(prices) ? prices : []).filter(p => p && typeof p === 'object' && p.symbol).slice(0, 2).map(p => {
+                    const price = parseFloat(p.lastPrice || '0');
+                    const change = parseFloat(p.priceChangePercent || '0');
+                    return (
+                        <div key={p.symbol} className="flex flex-col items-end">
+                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
+                            <span className={`text-xs font-mono font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                ${price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    );
+                })}
              </div>
              <div className="w-px h-6 bg-white/10" />
              <WalletMultiButton className="!bg-indigo-600 !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-indigo-500 transition-all border-none" />

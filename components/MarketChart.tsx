@@ -41,6 +41,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
     let tickInterval: any = null;
     let priceFetchInterval: any = null;
     let lastPrice = 0;
+    let lastTickTime = 0;
 
     // CLEANUP: Ensure container is empty safely
     try {
@@ -71,6 +72,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
             },
             rightPriceScale: {
                 borderColor: '#2b3139',
+                autoScale: true,
             }
         });
         chartRef.current = chart;
@@ -94,8 +96,9 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
                 if (Array.isArray(data) && data.length > 0) {
                     const formatted = data.map((d: any) => {
                         try {
+                            const t = Math.floor(parseFloat(d[0]) / 1000);
                             return {
-                                time: Math.floor(parseFloat(d[0]) / 1000),
+                                time: t,
                                 open: parseFloat(d[1]) || 0,
                                 high: parseFloat(d[2]) || 0,
                                 low: parseFloat(d[3]) || 0,
@@ -108,6 +111,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
                     
                     if (formatted.length > 0 && seriesRef.current && !isCancelled) {
                         series.setData(formatted);
+                        lastTickTime = formatted[formatted.length - 1].time;
                         success = true;
                     }
                 }
@@ -121,16 +125,18 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
             const mock = [];
             let p = 50000;
             for (let i = 100; i >= 0; i--) {
+                const t = now - i * 60;
                 const o = p;
                 const c = p + (Math.random() - 0.5) * 100;
                 mock.push({
-                    time: (now - i * 60) as any,
+                    time: t as any,
                     open: o, high: Math.max(o, c) + 20, low: Math.min(o, c) - 20, close: c
                 });
                 p = c;
             }
             try {
                 series.setData(mock);
+                lastTickTime = mock[mock.length - 1].time;
             } catch (e) {}
         }
     };
@@ -152,13 +158,18 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
     tickInterval = setInterval(() => {
         if (!seriesRef.current || isCancelled) return;
 
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (nowSec <= lastTickTime) return; // Prevent "less than last bar time" error
+
         const activeTrade = (activeTradesRef.current || []).find(t => t && t.symbol === symbol && t.status === 'pending');
         let targetPrice = lastPrice || 50000;
 
         if (activeTrade) {
             const entryPrice = parseFloat(activeTrade.entryPrice as any) || 50000;
-            const timeElapsed = Date.now() - activeTrade.startTime;
-            const progress = Math.min(1, timeElapsed / (activeTrade.duration * 1000));
+            const startTime = activeTrade.startTime || Date.now();
+            const duration = activeTrade.duration || 60;
+            const timeElapsed = Date.now() - startTime;
+            const progress = Math.min(1, timeElapsed / (duration * 1000));
             
             if (activeTrade.forceOutcome === 'win') {
                 targetPrice = activeTrade.direction === 'up' 
@@ -175,12 +186,13 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
         try {
             if (seriesRef.current && !isCancelled) {
                 series.update({
-                    time: Math.floor(Date.now() / 1000) as any,
+                    time: nowSec as any,
                     open: finalPrice,
-                    high: finalPrice + Math.random(),
-                    low: finalPrice - Math.random(),
+                    high: finalPrice + 0.5,
+                    low: finalPrice - 0.5,
                     close: finalPrice
                 });
+                lastTickTime = nowSec;
             }
         } catch (e) {}
     }, 1000);
