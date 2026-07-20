@@ -7,14 +7,13 @@ interface SwapViewProps {
   wallet?: (WalletData & { pending_deposit_currency?: string, pending_deposit_amount?: number }) | null;
   onConnect: () => void;
   onSignUp: () => void;
-  onConfirm: (info: string, callback: () => void) => void;
   onSwap: (from: string, to: string, amount: string) => void;
   onDeposit: (amount: string, asset: string) => void;
   onRefreshBalances?: () => void;
   depositAddress?: string;
 }
 
-const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onConfirm, onSwap, onDeposit, onRefreshBalances, depositAddress }) => {
+const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onSwap, onDeposit, onRefreshBalances, depositAddress }) => {
   const [fromAsset, setFromAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol !== 'USDT') || assets[0] || null);
   const [toAsset, setToAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol === 'USDT') || assets[1] || null);
   const [amount, setAmount] = useState('');

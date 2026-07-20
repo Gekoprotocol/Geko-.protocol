@@ -253,7 +253,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           isConnected={false} 
           onConnect={onConnectWalletClick}
           onSignUp={() => setView('signup')}
-          onConfirm={(i, c) => { if(confirm(i)) c(); }}
           onSwap={() => {}}
           onDeposit={() => {}}
         />
