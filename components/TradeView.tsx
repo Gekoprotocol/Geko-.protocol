@@ -44,8 +44,11 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [leverage, setLeverage] = useState(20);
 
   // Live DB balance (Vault)
-  const [vaultBalance, setVaultBalance] = useState<number>(wallet?.protocolBalances?.[0]?.amount ? parseFloat(wallet.protocolBalances[0].amount) : 0);
-  const [tradingBalance, setTradingBalance] = useState<number>(wallet?.trading_balance || 0);
+  const [vaultBalance, setVaultBalance] = useState<number>(() => {
+    const amt = wallet?.protocolBalances?.[0]?.amount;
+    return amt ? (parseFloat(amt) || 0) : 0;
+  });
+  const [tradingBalance, setTradingBalance] = useState<number>(() => wallet?.trading_balance || 0);
   const [balLoading, setBalLoading]     = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
@@ -55,13 +58,21 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [localSettledTrades, setLocalSettledTrades] = useState<ActiveTrade[]>([]);
 
   useEffect(() => {
-    setLocalActiveTrades(activeTrades);
+    if (activeTrades) {
+        setLocalActiveTrades(prev => {
+            // Keep local trades that are not yet in the server response
+            const serverIds = new Set(activeTrades.map(t => t.id));
+            const stillLocal = prev.filter(t => !serverIds.has(t.id) && (Date.now() - t.startTime < 10000)); // 10s grace
+            return [...activeTrades, ...stillLocal];
+        });
+    }
   }, [activeTrades]);
 
   useEffect(() => {
     if (wallet) {
         setTradingBalance(wallet.trading_balance || 0);
-        if (wallet.protocolBalances?.[0]) setVaultBalance(parseFloat(wallet.protocolBalances[0].amount));
+        const vAmt = wallet.protocolBalances?.[0]?.amount;
+        if (vAmt) setVaultBalance(parseFloat(vAmt) || 0);
     }
   }, [wallet?.trading_balance, wallet?.protocolBalances]);
 
@@ -92,11 +103,10 @@ const TradeView: React.FC<TradeViewProps> = ({
           direction: transferDirection
         })
       });
-      if (!res.ok) throw new Error("Transfer failed");
       const data = await res.json();
       if (res.ok) {
-        setVaultBalance(parseFloat(data.vault_balance));
-        setTradingBalance(parseFloat(data.trading_balance));
+        setVaultBalance(parseFloat(data.vault_balance) || 0);
+        setTradingBalance(parseFloat(data.trading_balance) || 0);
         setShowTransferModal(false);
         setTransferAmount('');
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
@@ -183,16 +193,18 @@ const TradeView: React.FC<TradeViewProps> = ({
   useEffect(() => {
     const interval = setInterval(async () => {
       const now = Date.now();
-      const toSettle = localActiveTrades.filter(t => now - t.startTime >= t.duration * 1000);
+      const toSettle = localActiveTrades.filter(t => (now - t.startTime) >= (t.duration * 1000));
       
       if (toSettle.length === 0) return;
 
+      const settledIds = new Set();
+      const newlySettled = [];
+
       for (const trade of toSettle) {
-        // Settlement Logic: Check for forceOutcome from admin, otherwise simulate
         let isWin = false;
         if (trade.forceOutcome === 'win') isWin = true;
         else if (trade.forceOutcome === 'loss') isWin = false;
-        else isWin = false; // Everytime the user trades he must loose
+        else isWin = false; 
 
         const leverageFactor = (trade.leverage || 1) / 10;
         const pnl = isWin ? parseFloat(trade.amount) * (1 + (PAYOUT_RATE * leverageFactor)) : 0;
@@ -205,13 +217,13 @@ const TradeView: React.FC<TradeViewProps> = ({
               body: JSON.stringify({
                 walletAddress: wallet.address,
                 asset: trade.symbol,
-                payout: pnl.toFixed(2),
+                payout: isNaN(pnl) ? "0.00" : pnl.toFixed(2),
                 tradeRef: trade.id,
                 isDemo: wallet?.isDemo,
                 status: isWin ? 'won' : 'lost'
               })
             });
-            if (isWin) setTradingBalance(prev => prev + pnl);
+            if (isWin && !isNaN(pnl)) setTradingBalance(prev => prev + pnl);
           } catch (e) {
             console.error('Settlement sync failed');
           }
@@ -220,17 +232,22 @@ const TradeView: React.FC<TradeViewProps> = ({
         const settledTrade: ActiveTrade = {
           ...trade,
           status: isWin ? 'won' : 'lost',
-          pnl: isWin ? pnl - parseFloat(trade.amount) : -parseFloat(trade.amount),
+          pnl: isWin ? (pnl - (parseFloat(trade.amount) || 0)) : -(parseFloat(trade.amount) || 0),
           settledAt: now
         };
 
-        setLocalSettledTrades(prev => [settledTrade, ...prev].slice(0, 10));
-        setLocalActiveTrades(prev => prev.filter(t => t.id !== trade.id));
+        newlySettled.push(settledTrade);
+        settledIds.add(trade.id);
+      }
+
+      if (settledIds.size > 0) {
+          setLocalSettledTrades(prev => [...newlySettled, ...prev].slice(0, 10));
+          setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [localActiveTrades, wallet?.address, wallet?.isDemo]);
+  }, [localActiveTrades.length, wallet?.address, wallet?.isDemo]);
 
   const userPending  = localActiveTrades;
   const userSettled  = localSettledTrades;

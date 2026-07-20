@@ -8,42 +8,50 @@ interface MarketChartProps {
   activeTrades?: ActiveTrade[];
 }
 
-const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) => {
+const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = false, activeTrades = [] }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
   const activeTradesRef = useRef<ActiveTrade[]>(activeTrades);
+  const mountedRef = useRef<boolean>(true);
 
-  // Sync active trades to ref for use in intervals without re-triggering effects
+  // Sync active trades to ref
   useEffect(() => {
     activeTradesRef.current = activeTrades;
   }, [activeTrades]);
 
-  // Toggle Fullscreen
+  // Handle Fullscreen
   const handleDoubleClick = () => {
     if (!chartContainerRef.current) return;
-    if (!document.fullscreenElement) {
-        chartContainerRef.current.requestFullscreen().catch(err => {
-            console.error(`Error attempting to enable full-screen mode: ${err.message}`);
-        });
-    } else {
-        document.exitFullscreen();
-    }
+    try {
+        if (!document.fullscreenElement) {
+            chartContainerRef.current.requestFullscreen().catch(() => {});
+        } else {
+            document.exitFullscreen();
+        }
+    } catch (e) {}
   };
 
   useEffect(() => {
-    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    mountedRef.current = true;
+    const handleFsChange = () => {
+        if (mountedRef.current) setIsFullscreen(!!document.fullscreenElement);
+    };
     document.addEventListener('fullscreenchange', handleFsChange);
-    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+    return () => {
+        mountedRef.current = false;
+        document.removeEventListener('fullscreenchange', handleFsChange);
+    };
   }, []);
 
   // Initialize Chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
+    let isCancelled = false;
 
-    console.log(`[Chart] Initializing instance for ${symbol}`);
+    // CLEANUP: Ensure container is empty
+    chartContainerRef.current.innerHTML = '';
     
     let chart: IChartApi;
     try {
@@ -64,7 +72,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
             }
         });
     } catch (e) {
-        console.error("[Chart] Failed to create chart instance", e);
+        console.error("[Chart] Fatal initialization error", e);
         return;
     }
 
@@ -84,26 +92,30 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
         let success = false;
         try {
             const res = await fetch(`/api/binance/klines?symbol=${symbol}USDT&interval=1m&limit=100`);
-            if (res.ok) {
+            if (res.ok && !isCancelled) {
                 const data = await res.json();
                 if (Array.isArray(data) && data.length > 0) {
                     const formatted = data.map((d: any) => ({
-                        time: d[0] / 1000,
-                        open: parseFloat(d[1]),
-                        high: parseFloat(d[2]),
-                        low: parseFloat(d[3]),
-                        close: parseFloat(d[4]),
-                    }));
-                    series.setData(formatted);
-                    success = true;
+                        time: Math.floor(parseFloat(d[0]) / 1000),
+                        open: parseFloat(d[1]) || 0,
+                        high: parseFloat(d[2]) || 0,
+                        low: parseFloat(d[3]) || 0,
+                        close: parseFloat(d[4]) || 0,
+                    })).filter(d => !isNaN(d.time));
+                    
+                    try {
+                        series.setData(formatted);
+                        success = true;
+                    } catch (err) {
+                        console.warn("[Chart] setData failed:", err);
+                    }
                 }
             }
         } catch (e) {
-            console.error("[Chart] Initial data fetch failed", e);
+            console.warn("[Chart] Klines fetch failed, using fallback", e);
         }
 
-        if (!success) {
-            console.warn("[Chart] Using fallback mock data");
+        if (!success && !isCancelled) {
             const now = Math.floor(Date.now() / 1000);
             const mock = [];
             let p = 50000;
@@ -111,34 +123,43 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
                 const o = p;
                 const c = p + (Math.random() - 0.5) * 100;
                 mock.push({
-                    time: now - i * 60,
+                    time: (now - i * 60) as any,
                     open: o, high: Math.max(o, c) + 20, low: Math.min(o, c) - 20, close: c
                 });
                 p = c;
             }
-            series.setData(mock);
+            try {
+                series.setData(mock);
+            } catch (e) {}
         }
     };
 
     fetchInitialData();
 
     const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ 
-            width: chartContainerRef.current.clientWidth,
-            height: chartContainerRef.current.clientHeight
-        });
-      }
+      try {
+        if (chartContainerRef.current && chartRef.current && !isCancelled) {
+            const w = chartContainerRef.current.clientWidth || 800;
+            const h = chartContainerRef.current.clientHeight || 500;
+            chartRef.current.applyOptions({ width: w, height: h });
+        }
+      } catch (e) {}
     };
 
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(chartContainerRef.current);
+    let resizeObserver: any = null;
+    if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(handleResize);
+        resizeObserver.observe(chartContainerRef.current);
+    }
     window.addEventListener('resize', handleResize);
 
     return () => {
+      isCancelled = true;
       window.removeEventListener('resize', handleResize);
-      resizeObserver.disconnect();
-      chart.remove();
+      if (resizeObserver) resizeObserver.disconnect();
+      try {
+          chart.remove();
+      } catch (e) {}
       chartRef.current = null;
       seriesRef.current = null;
     };
@@ -147,12 +168,14 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
   // Real-time Update Loop
   useEffect(() => {
     let lastPrice = 0;
+    let isCancelled = false;
+
     const fetchPrice = async () => {
         try {
             const res = await fetch(`/api/binance/prices`);
-            if (res.ok) {
+            if (res.ok && !isCancelled) {
                 const data = await res.json();
-                const p = data.find((d: any) => d.symbol === `${symbol}USDT`);
+                const p = (Array.isArray(data) ? data : []).find((d: any) => d.symbol === `${symbol}USDT`);
                 if (p) lastPrice = parseFloat(p.lastPrice);
             }
         } catch (e) {}
@@ -160,9 +183,9 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
     fetchPrice();
 
     const tickInterval = setInterval(() => {
-        if (!seriesRef.current) return;
+        if (!seriesRef.current || isCancelled) return;
 
-        const activeTrade = activeTradesRef.current.find(t => t.symbol === symbol && t.status === 'pending');
+        const activeTrade = (activeTradesRef.current || []).find(t => t.symbol === symbol && t.status === 'pending');
         let targetPrice = lastPrice || 50000;
 
         if (activeTrade) {
@@ -187,14 +210,13 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, activeTrades = [] }) 
                 low: finalPrice - Math.random(),
                 close: finalPrice
             });
-        } catch (e) {
-            // Silently ignore "same time" updates from library
-        }
+        } catch (e) {}
     }, 1000);
 
     const priceFetchInterval = setInterval(fetchPrice, 5000);
 
     return () => {
+        isCancelled = true;
         clearInterval(tickInterval);
         clearInterval(priceFetchInterval);
     };

