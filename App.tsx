@@ -137,6 +137,7 @@ export default function App() {
     new SpotWalletAdapter(),
     new TokenaryWalletAdapter(),
     new TokenPocketWalletAdapter(),
+    new TorusWalletAdapter(),
     new TrezorWalletAdapter(),
     new WalletConnectWalletAdapter({ network: WalletAdapterNetwork.Mainnet, options: { projectId: 'e9057f920251e06f52e5c6a1e9444458' } }),
     new XDEFIWalletAdapter()
