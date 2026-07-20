@@ -72,12 +72,12 @@ const API_BASE = window.location.origin;
 /**
  * ERROR BOUNDARY
  */
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
   constructor(props: any) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
-  static getDerivedStateFromError() { return { hasError: true }; }
+  static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
   componentDidCatch(error: any, errorInfo: any) {
     console.error("[CRITICAL_UI_FAILURE]", error, errorInfo);
   }
@@ -86,7 +86,10 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
       return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] text-gray-400 p-10 text-center">
           <h1 className="text-2xl font-black text-rose-500 mb-4 uppercase">Terminal Fault Detected</h1>
-          <p className="max-w-md text-sm leading-relaxed mb-8 font-mono">The Geko Protocol kernel encountered an unexpected exception in this view. The secure link remains active.</p>
+          <div className="max-w-xl bg-[#181C25] border border-rose-500/20 p-6 rounded-2xl mb-8 text-left">
+            <p className="text-xs font-mono text-rose-400 mb-4">Exception: {this.state.error?.message || "Unknown error"}</p>
+            <pre className="text-[10px] font-mono text-gray-600 overflow-auto max-h-40">{this.state.error?.stack}</pre>
+          </div>
           <button 
             onClick={() => window.location.reload()}
             className="px-8 py-3 bg-indigo-600 text-white font-black uppercase rounded-xl hover:bg-indigo-500 transition-all shadow-xl"
@@ -214,21 +217,22 @@ function TerminalLayout() {
             if (res.ok) {
                 const data = await res.json();
                 const synced: ActiveTrade[] = (Array.isArray(data) ? data : []).map((t: any) => {
+                    if (!t) return null;
                     const createdDate = new Date(t.created_at || Date.now());
                     return {
-                        id: t.id,
-                        symbol: t.symbol,
+                        id: String(t.id || Math.random().toString(36).substring(7)),
+                        symbol: String(t.symbol || 'BTC'),
                         userName: 'Local_Node',
-                        direction: (t.direction || 'up').toLowerCase() as 'up' | 'down',
+                        direction: String(t.direction || 'up').toLowerCase() as 'up' | 'down',
                         amount: (t.amount || '0').toString(),
                         entryPrice: parseFloat(t.entry_price || '0'),
                         startTime: isNaN(createdDate.getTime()) ? Date.now() : createdDate.getTime(),
                         duration: parseInt(t.duration || '60'),
                         leverage: parseInt(t.leverage || '1'),
-                        status: t.status || 'pending',
+                        status: (t.status || 'pending') as any,
                         forceOutcome: t.force_outcome
                     };
-                });
+                }).filter((t): t is ActiveTrade => t !== null);
                 setActiveTrades(synced);
             }
         } catch (e) { console.warn("Trade sync failed", e); }
@@ -248,14 +252,14 @@ function TerminalLayout() {
                 const data = await res.json();
                 
                 // FORCE LOGOUT CHECK
-                if (data.status === 'force_logout') {
+                if (data?.status === 'force_logout') {
                     authService.logout();
                     window.location.href = '/';
                     return;
                 }
 
-                setTradingBalance(isDemo ? data.demo_balance : data.trading_balance);
-                setVaultBalance(data.balance || 0);
+                setTradingBalance(isDemo ? (data?.demo_balance || 0) : (data?.trading_balance || 0));
+                setVaultBalance(data?.balance || 0);
             }
         } catch (e) { console.warn("Balance sync failed", e); }
     };
@@ -294,17 +298,19 @@ function TerminalLayout() {
   const assets: AssetInfo[] = useMemo(() => {
     if (!Array.isArray(prices)) return [];
     return prices.map(p => {
-      const price = parseFloat(p.lastPrice);
-      const change = parseFloat(p.priceChangePercent);
+      if (!p || typeof p !== 'object') return null;
+      const price = parseFloat(p.lastPrice || '0');
+      const change = parseFloat(p.priceChangePercent || '0');
+      const sym = (p.symbol || 'BTCUSDT').replace('USDT', '');
       return {
-        symbol: (p.symbol || '').replace('USDT', ''),
-        name: p.symbol || 'Unknown',
+        symbol: sym,
+        name: sym,
         price: isNaN(price) ? 0 : price,
         change24h: isNaN(change) ? 0 : change,
         marketCap: 'N/A',
-        volume24h: p.volume || '0'
+        volume24h: String(p.volume || '0')
       };
-    });
+    }).filter((a): a is AssetInfo => a !== null);
   }, [prices]);
 
   const selectedAsset = useMemo(() => {
@@ -609,14 +615,18 @@ function TerminalLayout() {
           </div>
           <div className="flex items-center gap-6">
              <div className="hidden lg:flex items-center space-x-6">
-                {(Array.isArray(prices) ? prices : []).slice(0, 2).map(p => (
-                <div key={p.symbol} className="flex flex-col items-end">
-                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
-                    <span className={`text-xs font-mono font-bold ${parseFloat(p.priceChangePercent || '0') >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    ${parseFloat(p.lastPrice || '0').toLocaleString()}
-                    </span>
-                </div>
-                ))}
+                {(Array.isArray(prices) ? prices : []).filter(p => p && typeof p === 'object' && p.symbol).slice(0, 2).map(p => {
+                    const price = parseFloat(p.lastPrice || '0');
+                    const change = parseFloat(p.priceChangePercent || '0');
+                    return (
+                        <div key={p.symbol} className="flex flex-col items-end">
+                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
+                            <span className={`text-xs font-mono font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                ${price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    );
+                })}
              </div>
              <div className="w-px h-6 bg-white/10" />
              <WalletMultiButton className="!bg-indigo-600 !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-indigo-500 transition-all border-none" />

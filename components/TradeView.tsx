@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AssetInfo, MarketData, ActiveTrade, WalletData } from '../types';
 import MarketChart from './MarketChart';
 import GeminiAdvisor from './GeminiAdvisor';
@@ -14,7 +13,7 @@ interface TradeViewProps {
   onPlaceTrade: (trade: { direction: 'up' | 'down', amount: string, duration: number }) => void;
   activeTrades: ActiveTrade[];
   wallet?: (WalletData & { email?: string }) | null;
-  onRefreshBalances?: () => void;
+  onRefreshBalances: () => void;
 }
 
 const MIN_TRADE   = 1;
@@ -54,15 +53,15 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [transferAmount, setTransferAmount] = useState('');
   const [transferDirection, setTransferDirection] = useState<'vault_to_trade' | 'trade_to_vault'>('vault_to_trade');
   const [transferLoading, setTransferLoading] = useState(false);
+
   const [localActiveTrades, setLocalActiveTrades] = useState<ActiveTrade[]>(activeTrades || []);
   const [localSettledTrades, setLocalSettledTrades] = useState<ActiveTrade[]>([]);
 
   useEffect(() => {
     if (activeTrades) {
         setLocalActiveTrades(prev => {
-            // Keep local trades that are not yet in the server response
             const serverIds = new Set(activeTrades.map(t => t.id));
-            const stillLocal = prev.filter(t => !serverIds.has(t.id) && (Date.now() - t.startTime < 10000)); // 10s grace
+            const stillLocal = prev.filter(t => !serverIds.has(t.id) && (Date.now() - t.startTime < 10000));
             return [...activeTrades, ...stillLocal];
         });
     }
@@ -76,12 +75,13 @@ const TradeView: React.FC<TradeViewProps> = ({
     }
   }, [wallet?.trading_balance, wallet?.protocolBalances]);
 
-  // Validation
-  const parsedAmount  = parseFloat(amount) || 0;
-  const hasSufficient = tradingBalance >= parsedAmount;
-  const isBelowMin    = parsedAmount < MIN_TRADE;
+  const parsedAmount = parseFloat(amount) || 0;
+  const isBelowMin   = parsedAmount < MIN_TRADE;
+  const hasSufficient = (tradingBalance || 0) >= parsedAmount;
   const canTrade      = !isBelowMin && hasSufficient && parsedAmount > 0;
-  const potentialProfit = parseFloat((parsedAmount * (leverage / 10) * PAYOUT_RATE).toFixed(2));
+  
+  const leverageFactor = leverage / 10;
+  const potentialProfit = parsedAmount * (1 + (PAYOUT_RATE * leverageFactor));
 
   const handleTransfer = async () => {
     if (!wallet?.address || !transferAmount) return;
@@ -110,16 +110,15 @@ const TradeView: React.FC<TradeViewProps> = ({
         setShowTransferModal(false);
         setTransferAmount('');
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
-        setTimeout(() => setTradeStatus(null), 3000);
+        if (onRefreshBalances) onRefreshBalances();
       } else {
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
-        setTimeout(() => setTradeStatus(null), 3000);
       }
     } catch (e) {
       setTradeStatus({ msg: 'Network error during transfer', ok: false });
-      setTimeout(() => setTradeStatus(null), 3000);
     } finally {
       setTransferLoading(false);
+      setTimeout(() => setTradeStatus(null), 3000);
     }
   };
 
@@ -160,12 +159,12 @@ const TradeView: React.FC<TradeViewProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            walletAddress: wallet?.address,
+            walletAddress: wallet.address,
             asset:         selectedSymbol,
             tradeSize:     amount,
             leverage,
             type:          direction === 'up' ? 'LONG' : 'SHORT',
-            isDemo:        wallet?.isDemo,
+            isDemo:        wallet.isDemo,
             entryPrice:    selectedAsset.price,
             duration:      duration,
             tradeId:       tradeId
@@ -189,16 +188,15 @@ const TradeView: React.FC<TradeViewProps> = ({
     }
   };
 
-  // Settlement Loop
   useEffect(() => {
     const interval = setInterval(async () => {
       const now = Date.now();
-      const toSettle = localActiveTrades.filter(t => (now - t.startTime) >= (t.duration * 1000));
+      const toSettle = localActiveTrades.filter(t => (now - (t.startTime || now)) >= (t.duration * 1000));
       
       if (toSettle.length === 0) return;
 
-      const settledIds = new Set();
-      const newlySettled = [];
+      const settledIds = new Set(toSettle.map(t => t.id));
+      const newlySettled: ActiveTrade[] = [];
 
       for (const trade of toSettle) {
         let isWin = false;
@@ -206,12 +204,12 @@ const TradeView: React.FC<TradeViewProps> = ({
         else if (trade.forceOutcome === 'loss') isWin = false;
         else isWin = false; 
 
-        const leverageFactor = (trade.leverage || 1) / 10;
+        const leverageFactor = (trade.leverage || 10) / 10;
         const pnl = isWin ? parseFloat(trade.amount) * (1 + (PAYOUT_RATE * leverageFactor)) : 0;
-        
+
         if (wallet?.address) {
           try {
-            await fetch('/api/settle-trade', {
+            const res = await fetch('/api/settle-trade', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -223,9 +221,11 @@ const TradeView: React.FC<TradeViewProps> = ({
                 status: isWin ? 'won' : 'lost'
               })
             });
-            if (isWin && !isNaN(pnl)) setTradingBalance(prev => prev + pnl);
+            if (res.ok && isWin && !isNaN(pnl)) {
+                setTradingBalance(prev => prev + pnl);
+            }
           } catch (e) {
-            console.error('Settlement sync failed');
+            console.error('Settlement sync failed', e);
           }
         }
 
@@ -235,23 +235,18 @@ const TradeView: React.FC<TradeViewProps> = ({
           pnl: isWin ? (pnl - (parseFloat(trade.amount) || 0)) : -(parseFloat(trade.amount) || 0),
           settledAt: now
         };
-
         newlySettled.push(settledTrade);
-        settledIds.add(trade.id);
       }
 
-      if (settledIds.size > 0) {
-          setLocalSettledTrades(prev => [...newlySettled, ...prev].slice(0, 10));
-          setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
-      }
+      setLocalSettledTrades(prev => [...newlySettled, ...prev].slice(0, 10));
+      setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [localActiveTrades.length, wallet?.address, wallet?.isDemo]);
+  }, [localActiveTrades, wallet?.address, wallet?.isDemo]);
 
-  const userPending  = localActiveTrades;
-  const userSettled  = localSettledTrades;
-  const userActiveTrades = userPending;
+  const userActiveTrades = localActiveTrades;
+  const userSettled = localSettledTrades;
 
   return (
     <div className="flex flex-col h-full bg-[#0B0E11] text-gray-300 font-mono select-none overflow-hidden relative">
@@ -271,7 +266,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             <div className="flex flex-col">
                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Oracle Index</span>
                 <span className={`text-lg font-black tabular-nums ${selectedAsset.price > 0 ? (selectedAsset.change24h >= 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-gray-600'}`}>
-                    ${selectedAsset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    ${(selectedAsset.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
             </div>
             <div className="hidden lg:flex items-center space-x-3 bg-[#0B0E11] px-4 py-2 rounded-xl border border-[#2B3139]">
@@ -289,18 +284,11 @@ const TradeView: React.FC<TradeViewProps> = ({
           <div className="flex items-center space-x-3 bg-indigo-900/10 px-5 py-2 rounded-xl border border-indigo-500/20 group cursor-default relative">
              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Protocol Handshake: Secured</span>
-             
-             {/* Tooltip detail for the "Sync" */}
-             <div className="absolute top-full right-0 mt-2 w-48 bg-[#1E2329] border border-[#2B3139] p-3 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-2xl">
-                <div className="text-[8px] text-gray-500 font-black uppercase mb-1">Telemetry Origin</div>
-                <div className="text-[9px] text-indigo-400 font-mono">github.com/ceejay-web/Geko---protocol</div>
-             </div>
           </div>
         </div>
       </div>
 
       <div className="flex-1 relative overflow-hidden flex bg-[#0B0E11]">
-        {/* Graph Area */}
         <div className="flex-1 relative h-full min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 relative min-h-[450px] bg-[#0B0E11]">
                 <MarketChart 
@@ -309,7 +297,6 @@ const TradeView: React.FC<TradeViewProps> = ({
                     activeTrades={localActiveTrades}
                 />
 
-                {/* Minimalist Positions View (Overlay at bottom of chart) */}
                 {userActiveTrades.length > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 max-h-48 bg-[#181C25]/80 backdrop-blur-md border-t border-[#2B3139] flex flex-col p-4 overflow-y-auto no-scrollbar z-20 animate-in slide-in-from-bottom-10">
                         <div className="flex items-center justify-between mb-3">
@@ -326,7 +313,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                                         </span>
                                     </div>
                                     <span className="text-[10px] font-mono font-bold text-indigo-400">
-                                        {Math.max(0, t.duration - Math.floor((Date.now() - t.startTime)/1000))}s
+                                        {Math.max(0, t.duration - Math.floor((Date.now() - (t.startTime || Date.now()))/1000))}s
                                     </span>
                                 </div>
                             ))}
@@ -336,85 +323,45 @@ const TradeView: React.FC<TradeViewProps> = ({
             </div>
         </div>
 
-        {/* Execution Control Sidebar */}
         <div className="w-72 bg-[#181C25] border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto no-scrollbar">
             <div className="p-5 space-y-5 flex-1 flex flex-col">
-
-                {/* Trading Balance Card */}
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="flex justify-between items-center mb-1">
                         <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Available Balance (DEMO)' : 'Available Balance'}</div>
                         <button onClick={() => setShowTransferModal(true)} className="text-[8px] text-indigo-500 font-black uppercase hover:text-indigo-400 transition-colors">Transfer</button>
                     </div>
-                    {balLoading && tradingBalance === 0 ? (
+                    {balLoading ? (
                         <div className="h-5 w-24 bg-[#2B3139] rounded animate-pulse"></div>
                     ) : (
-                        <div className="flex items-baseline space-x-1">
-                            <span className={`text-lg font-black font-mono tabular-nums ${!hasSufficient ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                ${tradingBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                            <span className="text-[9px] text-gray-600 font-black">USDT</span>
-                            <button onClick={onRefreshBalances} className="ml-auto text-gray-600 hover:text-gray-400 transition-colors">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                            </button>
+                        <div className={`text-xl font-black tabular-nums ${!hasSufficient ? 'text-rose-500' : 'text-gray-100'}`}>
+                            ${(tradingBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
                     )}
-                    {!hasSufficient && tradingBalance > 0 && (
-                        <div className="text-[8px] text-rose-400 font-black mt-1">Exceeds available balance</div>
-                    )}
-                    <div className="mt-2 pt-2 border-t border-[#2B3139] flex justify-between items-center">
-                        <span className="text-[7px] text-gray-600 font-black uppercase">Protocol Balance</span>
-                        <span className="text-[8px] text-indigo-400 font-mono font-bold">${vaultBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div className="space-y-3">
+                    <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase tracking-widest px-1">
+                        <span>Trade Size</span>
+                        <span className="text-indigo-400">${parsedAmount.toLocaleString()}</span>
+                    </div>
+                    <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-black text-xs">$</span>
+                        <input 
+                            type="text" 
+                            value={amount} 
+                            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                            className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl py-4 pl-8 pr-4 text-sm font-black text-gray-100 outline-none transition-all"
+                        />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        {PRESETS.map(p => (
+                            <button key={p} onClick={() => setAmount(p.toString())} className="py-2 text-[9px] font-black text-gray-500 bg-[#0B0E11] border border-[#2B3139] rounded-xl hover:text-gray-200 hover:border-gray-600 transition-all">
+                                ${p >= 1000 ? `${p/1000}K` : p}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                {/* Trade Size */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center px-1">
-                        <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Trade Size (USDT)</label>
-                        <span className="text-[8px] text-gray-600 font-black">Min $1</span>
-                    </div>
-                    <input
-                        type="number"
-                        value={amount}
-                        min={MIN_TRADE}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className={`w-full bg-[#0B0E11] border rounded-2xl p-4 text-sm text-gray-100 outline-none font-mono transition-all shadow-inner ${isBelowMin ? 'border-rose-500/50 focus:border-rose-500' : !hasSufficient ? 'border-rose-500/50' : 'border-[#2B3139] focus:border-indigo-500'}`}
-                    />
-                    {/* Quick-select preset amounts */}
-                    <div className="grid grid-cols-3 gap-1.5">
-                        {PRESETS.map(p => {
-                            const disabled = tradingBalance !== null && p > tradingBalance;
-                            return (
-                                <button
-                                    key={p}
-                                    disabled={disabled}
-                                    onClick={() => setAmount(String(p))}
-                                    className={`py-1.5 text-[9px] font-black rounded-xl border transition-all ${
-                                        parsedAmount === p
-                                            ? 'bg-indigo-600 border-indigo-500 text-white'
-                                            : disabled
-                                                ? 'border-[#2B3139] text-gray-700 cursor-not-allowed'
-                                                : 'border-[#2B3139] text-gray-500 hover:border-indigo-500/40 hover:text-gray-300'
-                                    }`}
-                                >
-                                    ${p >= 1000 ? `${p/1000}K` : p}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {/* Max button */}
-                    {tradingBalance !== null && tradingBalance > 0 && (
-                        <button
-                            onClick={() => setAmount(tradingBalance.toFixed(2))}
-                            className="w-full py-1 text-[8px] font-black uppercase tracking-widest text-indigo-500 border border-indigo-500/20 rounded-xl hover:bg-indigo-500/10 transition-all"
-                        >
-                            Use Max — ${tradingBalance.toFixed(2)}
-                        </button>
-                    )}
-                </div>
-
-                {/* Potential Profit Preview */}
                 {parsedAmount >= MIN_TRADE && hasSufficient && (
                     <div className="flex justify-between items-center px-3 py-2 bg-emerald-900/10 border border-emerald-500/15 rounded-xl">
                         <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">If Profit (85%)</span>
@@ -422,7 +369,6 @@ const TradeView: React.FC<TradeViewProps> = ({
                     </div>
                 )}
 
-                {/* Leverage */}
                 <div className="space-y-3">
                     <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase tracking-widest px-1">
                         <span>Leverage</span>
@@ -434,7 +380,6 @@ const TradeView: React.FC<TradeViewProps> = ({
                     </div>
                 </div>
 
-                {/* Duration */}
                 <div className="space-y-2">
                     <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Settlement</label>
                     <div className="grid grid-cols-3 gap-2">
@@ -446,7 +391,6 @@ const TradeView: React.FC<TradeViewProps> = ({
                     </div>
                 </div>
 
-                {/* Status / Trade Buttons */}
                 <div className="flex flex-col space-y-3 pt-1">
                     {tradeStatus && (
                       <div className={`text-[9px] font-black uppercase tracking-widest text-center px-3 py-2 rounded-xl border ${tradeStatus.ok ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-400' : 'bg-rose-900/30 border-rose-500/30 text-rose-400'}`}>
@@ -471,7 +415,6 @@ const TradeView: React.FC<TradeViewProps> = ({
                     </button>
                 </div>
 
-                {/* Recent settled trades */}
                 {userSettled.length > 0 && (
                     <div className="space-y-1.5 pt-1">
                         <div className="text-[8px] text-gray-600 font-black uppercase tracking-widest px-1">Recent Results</div>
@@ -487,156 +430,96 @@ const TradeView: React.FC<TradeViewProps> = ({
                     </div>
                 )}
             </div>
-
-            <div className="p-4 bg-[#0B0E11] border-t border-[#2B3139] shrink-0">
-                <div className="flex items-center justify-between text-[7px] text-gray-600 font-black uppercase tracking-widest">
-                    <span>Fee: 0%</span>
-                    <span>Geko Mainnet</span>
-                </div>
-            </div>
         </div>
 
-        {/* Dynamic AI Sidebar Overlay */}
         {showAI && (
             <div className="w-96 border-l border-[#2B3139] bg-[#181C25]/95 backdrop-blur-md z-40 animate-in slide-in-from-right absolute right-0 top-0 bottom-0 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
-                <GeminiAdvisor 
-                    symbol={selectedSymbol} 
-                    data={marketData} 
-                />
-                <button 
-                    onClick={() => setShowAI(false)}
-                    className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors"
-                >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+                <GeminiAdvisor symbol={selectedSymbol} onAction={() => setShowAI(false)} />
             </div>
         )}
       </div>
 
-      {/* Asset Selector Modal */}
       {isAssetSelectorOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="absolute inset-0" onClick={() => setIsAssetSelectorOpen(false)} />
-          <div className="relative w-full max-w-2xl bg-[#181C25] border border-[#2B3139] rounded-[48px] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-            <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
-                <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Market Index</h2>
-                <button onClick={() => setIsAssetSelectorOpen(false)} className="p-2 hover:bg-[#2B3139] rounded-full transition-colors">
-                    <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsAssetSelectorOpen(false)}>
+          <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#2B3139] flex justify-between items-center bg-[#0B0E11]/50">
+                <h3 className="text-sm font-black text-gray-100 uppercase tracking-widest">Select Institutional Pair</h3>
+                <button onClick={() => setIsAssetSelectorOpen(false)} className="text-gray-500 hover:text-white transition-colors">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-4 custom-scrollbar">
-                {assets.map((asset) => (
+            <div className="p-4 grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                {assets.map(asset => (
                     <button 
                         key={asset.symbol}
-                        onClick={() => {
-                            setSelectedSymbol(asset.symbol);
-                            setIsAssetSelectorOpen(false);
-                        }}
-                        className={`flex items-center justify-between p-6 rounded-3xl border transition-all hover:scale-[1.02] ${
-                            selectedSymbol === asset.symbol 
-                            ? 'bg-indigo-600/20 border-indigo-500 shadow-lg shadow-indigo-500/10' 
-                            : 'bg-[#0B0E11] border-[#2B3139] hover:border-gray-600'
-                        }`}
+                        onClick={() => { setSelectedSymbol(asset.symbol); setIsAssetSelectorOpen(false); }}
+                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${selectedSymbol === asset.symbol ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400' : 'bg-[#0B0E11] border-[#2B3139] hover:border-gray-600 text-gray-400'}`}
                     >
-                        <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-[#1E2329] rounded-2xl flex items-center justify-center font-black text-xs text-gray-400 border border-[#363C45]">
-                                {asset.symbol[0]}
-                            </div>
-                            <div className="text-left">
-                                <div className="text-lg font-black text-gray-100">{asset.symbol}/USDT</div>
-                                <div className="text-[10px] text-gray-500 uppercase font-black">{asset.name}</div>
-                            </div>
+                        <div className="flex flex-col text-left">
+                            <span className="text-xs font-black text-white">{asset.symbol}/USDT</span>
+                            <span className="text-[10px] text-gray-500">{asset.name}</span>
                         </div>
-                        <div className="text-right">
-                            <div className="text-lg font-bold text-gray-100 font-mono">${asset.price.toLocaleString()}</div>
-                            <div className={`text-[10px] font-black ${asset.change24h >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {asset.change24h > 0 ? '+' : ''}{asset.change24h}%
-                            </div>
-                        </div>
+                        <span className={`text-xs font-mono font-bold ${asset.change24h >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {asset.change24h >= 0 ? '+' : ''}{asset.change24h}%
+                        </span>
                     </button>
                 ))}
-            </div>
-            <div className="p-6 bg-[#0B0E11] border-t border-[#2B3139] text-center">
-                <span className="text-[10px] text-gray-600 font-black uppercase tracking-[0.4em]">Establishing low-latency protocol link...</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Transfer Modal */}
       {showTransferModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="absolute inset-0" onClick={() => setShowTransferModal(false)} />
-          <div className="relative w-full max-w-md bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
-            <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Internal Transfer</h2>
-                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Move funds between Protocol and Available</p>
-              </div>
-              <button onClick={() => setShowTransferModal(false)} className="text-gray-500 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-3 p-1 bg-[#0B0E11] rounded-2xl border border-[#2B3139]">
-                <button 
-                  onClick={() => setTransferDirection('vault_to_trade')}
-                  className={`py-3 text-[10px] font-black uppercase rounded-xl transition-all ${transferDirection === 'vault_to_trade' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  To Trading
-                </button>
-                <button 
-                  onClick={() => setTransferDirection('trade_to_vault')}
-                  className={`py-3 text-[10px] font-black uppercase rounded-xl transition-all ${transferDirection === 'trade_to_vault' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  To Protocol
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                  <span className="text-gray-500">Available {transferDirection === 'vault_to_trade' ? 'Protocol' : 'Trading'}</span>
-                  <span className="text-indigo-400">
-                    ${(transferDirection === 'vault_to_trade' ? vaultBalance : tradingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl p-8">
+            <div className="text-center space-y-6">
+                <div className="space-y-2">
+                    <h3 className="text-xl font-black text-white uppercase italic tracking-tight">Internal Asset Transfer</h3>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Move funds between Vault and Trading Pool</p>
                 </div>
-                
-                <div className="relative">
-                  <input 
-                    type="number"
-                    value={transferAmount}
-                    onChange={(e) => setTransferAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-5 text-lg font-mono font-bold text-gray-100 outline-none transition-all"
-                  />
-                  <button 
-                    onClick={() => setTransferAmount((transferDirection === 'vault_to_trade' ? vaultBalance : tradingBalance).toString())}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase text-indigo-500 hover:text-indigo-400"
-                  >
-                    Max
-                  </button>
+
+                <div className="flex bg-[#0B0E11] p-1 rounded-2xl border border-[#2B3139]">
+                    <button 
+                        onClick={() => setTransferDirection('vault_to_trade')}
+                        className={`flex-1 py-3 text-[9px] font-black uppercase rounded-xl transition-all ${transferDirection === 'vault_to_trade' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                        Vault → Trade
+                    </button>
+                    <button 
+                        onClick={() => setTransferDirection('trade_to_vault')}
+                        className={`flex-1 py-3 text-[9px] font-black uppercase rounded-xl transition-all ${transferDirection === 'trade_to_vault' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                        Trade → Vault
+                    </button>
                 </div>
-              </div>
 
-              <button 
-                onClick={handleTransfer}
-                disabled={transferLoading || !transferAmount || parseFloat(transferAmount) <= 0}
-                className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black uppercase italic tracking-[0.2em] rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-3"
-              >
-                {transferLoading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>Confirm Transfer</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                  </>
-                )}
-              </button>
-            </div>
+                <div className="space-y-4">
+                    <div className="flex justify-between text-[8px] text-gray-500 font-black uppercase px-1">
+                        <span>Source Balance</span>
+                        <span className="text-gray-300">${(transferDirection === 'vault_to_trade' ? vaultBalance : tradingBalance).toLocaleString()}</span>
+                    </div>
+                    <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-black text-xs">$</span>
+                        <input 
+                            type="text" 
+                            placeholder="0.00"
+                            value={transferAmount}
+                            onChange={(e) => setTransferAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                            className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl py-5 pl-8 pr-4 text-base font-black text-gray-100 outline-none transition-all"
+                        />
+                    </div>
+                </div>
 
-            <div className="p-4 bg-[#0B0E11] border-t border-[#2B3139] text-center">
-              <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Secure Protocol Settlement Layer</span>
+                <div className="flex gap-3">
+                    <button onClick={() => setShowTransferModal(false)} className="flex-1 py-4 text-[10px] font-black uppercase text-gray-500 hover:text-white transition-colors">Cancel</button>
+                    <button 
+                        onClick={handleTransfer}
+                        disabled={transferLoading || !transferAmount || parseFloat(transferAmount) <= 0}
+                        className={`flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl transition-all`}
+                    >
+                        {transferLoading ? 'Processing...' : 'Confirm Transfer'}
+                    </button>
+                </div>
             </div>
           </div>
         </div>
