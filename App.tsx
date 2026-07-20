@@ -471,33 +471,44 @@ function TerminalLayout() {
 
   const walletData: WalletData | null = useMemo(() => {
     if (!activeAddress) return null;
-    return {
-      address: activeAddress,
-      source: customWallet?.source || (connected ? 'Solana' : 'Unknown'),
-      trading_balance: activeTradingBalance,
-      isDemo: isDemo,
-      balances: customWallet?.balances || [],
-      protocolBalances: [
-        { symbol: 'USDT', amount: vaultBalance.toString(), valueUsd: vaultBalance.toString() }
-      ],
-      history: customWallet?.history || []
-    };
+    try {
+        return {
+          address: String(activeAddress),
+          source: String(customWallet?.source || (connected ? 'Solana' : 'Unknown')),
+          trading_balance: Number(activeTradingBalance || 0),
+          isDemo: Boolean(isDemo),
+          balances: Array.isArray(customWallet?.balances) ? customWallet.balances : [],
+          protocolBalances: [
+            { 
+                symbol: 'USDT', 
+                amount: String(vaultBalance || 0), 
+                valueUsd: String(vaultBalance || 0) 
+            }
+          ],
+          history: Array.isArray(customWallet?.history) ? customWallet.history : []
+        };
+    } catch (e) {
+        console.error("[Identity] Failed to construct walletData", e);
+        return null;
+    }
   }, [activeAddress, customWallet, connected, userData, vaultBalance, activeTradingBalance, isDemo]);
 
   if (activeTab === 'admin') {
     return (
-      <AdminDesk 
-        onClose={() => setActiveTab('dashboard')} 
-        managedWallet={walletData} 
-        activeTrades={activeTrades} 
-        onForceOutcome={handleForceOutcome} 
-      />
+      <ErrorBoundary>
+          <AdminDesk 
+            onClose={() => setActiveTab('dashboard')} 
+            managedWallet={walletData} 
+            activeTrades={activeTrades} 
+            onForceOutcome={handleForceOutcome} 
+          />
+      </ErrorBoundary>
     );
   }
 
   if (!isConnected) {
     return (
-      <>
+      <SafeView>
         <LandingPage 
           onLoginSuccess={handleWalletConnect} 
           onConnectWalletClick={() => setIsWalletModalOpen(true)}
@@ -508,21 +519,23 @@ function TerminalLayout() {
         {isWalletModalOpen && (
           <ConnectWallet onConnect={handleWalletConnect} onClose={() => setIsWalletModalOpen(false)} />
         )}
-      </>
+      </SafeView>
     );
   }
 
   if (isConnected && !walletData) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] space-y-4">
-        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] space-y-4 text-center">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
         <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Synchronizing Identity...</div>
-        <button 
-          onClick={() => { authService.logout(); window.location.href = '/'; }}
-          className="mt-8 text-[8px] text-gray-600 uppercase font-black tracking-widest hover:text-rose-500 transition-colors"
-        >
-          Reset Session
-        </button>
+        <div className="pt-8">
+            <button 
+              onClick={() => { authService.logout(); window.location.href = '/'; }}
+              className="text-[8px] text-gray-600 uppercase font-black tracking-widest hover:text-rose-500 transition-colors"
+            >
+              Reset Session
+            </button>
+        </div>
       </div>
     );
   }
@@ -634,29 +647,23 @@ function TerminalLayout() {
         </header>
 
         <main className="flex-1 overflow-hidden relative">
-          {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
-          {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onConfirm={(i, c) => { if(confirm(i)) c(); }} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
-          {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-          {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
-          {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
-          {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
-          {activeTab === 'support' && <div className="p-20 text-center space-y-4">
-              <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Support Node</h2>
-              <p className="text-gray-500">Use the widget in the bottom right corner for live assistance.</p>
-            </div>}
-          {activeTab === 'leaderboard' && <div className="p-20 text-center">
-              <h2 className="text-3xl font-black uppercase italic italic tracking-tighter">Global Rankings</h2>
-              <p className="text-gray-500">Leaderboard data streaming shortly...</p>
-            </div>}
-          {activeTab === 'admin' && (
-            <AdminDesk 
-              onClose={() => setActiveTab('dashboard')} 
-              managedWallet={walletData} 
-              activeTrades={activeTrades} 
-              onForceOutcome={handleForceOutcome} 
-            />
-          )}
+          <SafeView>
+              {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+              {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
+              {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onConfirm={(i, c) => { if(confirm(i)) c(); }} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
+              {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
+              {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+              {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
+              {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+              {activeTab === 'support' && <div className="p-20 text-center space-y-4">
+                  <h2 className="text-3xl font-black uppercase italic tracking-tighter">Support Node</h2>
+                  <p className="text-gray-500">Use the widget in the bottom right corner for live assistance.</p>
+                </div>}
+              {activeTab === 'leaderboard' && <div className="p-20 text-center">
+                  <h2 className="text-3xl font-black uppercase italic tracking-tighter">Global Rankings</h2>
+                  <p className="text-gray-500">Leaderboard data streaming shortly...</p>
+                </div>}
+          </SafeView>
         </main>
 
         <SupportWidget wallet={walletData} />
@@ -706,6 +713,14 @@ function TerminalLayout() {
       )}
     </div>
   );
+}
+
+function SafeView({ children }: { children: React.ReactNode }) {
+    return (
+        <ErrorBoundary>
+            {children}
+        </ErrorBoundary>
+    );
 }
 
 function NavItem({ active, icon, label, onClick }: any) {
