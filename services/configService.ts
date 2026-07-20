@@ -13,9 +13,13 @@ const DEFAULT_CONFIG: SystemConfig = {
 export const configService = {
   // Subscribe to real-time config changes
   subscribe: (callback: (config: SystemConfig) => void) => {
-      // Local Mode: Listen to LocalStorage events
-      const localStr = localStorage.getItem('geko_system_config');
-      callback(localStr ? JSON.parse(localStr) : DEFAULT_CONFIG);
+      let current: SystemConfig = DEFAULT_CONFIG;
+      try {
+          const localStr = localStorage.getItem('geko_system_config');
+          if (localStr) current = JSON.parse(localStr);
+      } catch (e) {}
+      
+      callback(current);
 
       const handleStorage = (e: any) => {
           if (e.type === 'geko-config-update') {
@@ -28,12 +32,18 @@ export const configService = {
 
   // Update configuration
   update: async (newConfig: Partial<SystemConfig>) => {
-    const currentStr = localStorage.getItem('geko_system_config');
-    const current = currentStr ? JSON.parse(currentStr) : DEFAULT_CONFIG;
+    let current = DEFAULT_CONFIG;
+    try {
+        const currentStr = localStorage.getItem('geko_system_config');
+        if (currentStr) current = JSON.parse(currentStr);
+    } catch (e) {}
+    
     const merged = { ...current, ...newConfig };
 
-    // Always update local cache for immediate UI feedback
-    localStorage.setItem('geko_system_config', JSON.stringify(merged));
+    try {
+        localStorage.setItem('geko_system_config', JSON.stringify(merged));
+    } catch (e) {}
+    
     window.dispatchEvent(new CustomEvent('geko-config-update', { detail: merged }));
   }
 };

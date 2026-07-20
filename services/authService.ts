@@ -1,11 +1,17 @@
-
 import { WalletData } from "../types";
 
 const USERS_KEY = 'geko_users_db_v1';
 const SESSION_KEY = 'geko_active_session_v1';
 
-// Cross-tab sync channel to simulate real-time backend push
-const syncChannel = new BroadcastChannel('geko_protocol_sync');
+// Cross-tab sync channel - SAFE WRAPPER
+let syncChannel: any = null;
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    syncChannel = new BroadcastChannel('geko_protocol_sync');
+  }
+} catch (e) {
+  console.warn("[Sync] BroadcastChannel unavailable:", e);
+}
 
 export interface UserRecord {
     walletData: WalletData;
@@ -14,8 +20,11 @@ export interface UserRecord {
 
 export const authService = {
   saveSession: (walletData: WalletData) => {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(walletData));
-    syncChannel.postMessage({ type: 'SESSION_UPDATE', walletData });
+    try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(walletData));
+    } catch (e) { console.warn("[Storage] localStorage failed", e); }
+    
+    if (syncChannel) syncChannel.postMessage({ type: 'SESSION_UPDATE', walletData });
     window.dispatchEvent(new CustomEvent('geko-session-local-update', { detail: walletData }));
   },
 
@@ -46,7 +55,7 @@ export const authService = {
       result = JSON.parse(text);
     } catch (e) {
       console.error('Server response was not JSON:', text);
-      throw new Error(`Malformed server response (Status ${response.status}). Check terminal console.`);
+      throw new Error(`Malformed server response (Status ${response.status}).`);
     }
     
     if (!response.ok) throw new Error(result.error || "Authentication failed");
@@ -79,7 +88,7 @@ export const authService = {
       result = JSON.parse(text);
     } catch (e) {
       console.error('Server response was not JSON:', text);
-      throw new Error(`Malformed server response (Status ${response.status}). Check terminal console.`);
+      throw new Error(`Malformed server response (Status ${response.status}).`);
     }
     
     if (!response.ok) throw new Error(result.error || "Signup failed");
@@ -91,8 +100,10 @@ export const authService = {
       if (users[key]) {
           users[key].walletData = walletData;
           users[key].lastActive = Date.now();
-          localStorage.setItem(USERS_KEY, JSON.stringify(users));
-          syncChannel.postMessage({ type: 'USER_REGISTRY_UPDATE' });
+          try {
+              localStorage.setItem(USERS_KEY, JSON.stringify(users));
+          } catch (e) {}
+          if (syncChannel) syncChannel.postMessage({ type: 'USER_REGISTRY_UPDATE' });
           window.dispatchEvent(new Event('geko-user-update'));
           return true;
       }
@@ -111,8 +122,10 @@ export const authService = {
               console.error('Logout sync failed', e);
           }
       }
-      localStorage.removeItem(SESSION_KEY);
-      syncChannel.postMessage({ type: 'LOGOUT_EVENT' });
+      try {
+          localStorage.removeItem(SESSION_KEY);
+      } catch (e) {}
+      if (syncChannel) syncChannel.postMessage({ type: 'LOGOUT_EVENT' });
       window.dispatchEvent(new CustomEvent('geko-session-local-update', { detail: null }));
   },
 
@@ -127,15 +140,14 @@ export const authService = {
         }
     };
     
-    syncChannel.addEventListener('message', listener);
+    if (syncChannel) syncChannel.addEventListener('message', listener);
     window.addEventListener('geko-session-local-update', listener);
     
     check();
     
     return () => {
-      syncChannel.removeEventListener('message', listener);
+      if (syncChannel) syncChannel.removeEventListener('message', listener);
       window.removeEventListener('geko-session-local-update', listener);
     };
   }
 };
-
