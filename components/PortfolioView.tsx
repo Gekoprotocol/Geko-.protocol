@@ -309,7 +309,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="space-y-3">
-            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Equity Center</h1>
+            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Assets</h1>
             <div className="flex items-center space-x-4">
                 <p className="text-[10px] text-gray-500 font-mono tracking-tight bg-[#181C25] px-3 py-1 rounded-lg border border-[#2B3139] w-fit uppercase">Node: {wallet.address.slice(0,12)}...</p>
                 <div className="flex items-center space-x-2 bg-indigo-900/20 border border-indigo-500/20 px-3 py-1 rounded-lg">

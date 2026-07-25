@@ -57,6 +57,7 @@ import {
 import { LandingPage } from './components/LandingPage';
 import { ConnectWallet } from './components/ConnectWallet';
 import { authService } from './services/authService';
+import HomeView from './components/HomeView';
 import TradeView from './components/TradeView';
 import { PortfolioView } from './components/PortfolioView';
 import SwapView from './components/SwapView';
@@ -165,7 +166,7 @@ function TerminalLayout() {
   
   // Initialize tab based on existing session role
   const initialSession = authService.getSession();
-  const [activeTab, setActiveTab] = useState(initialSession?.role === 'admin' ? 'admin' : 'dashboard');
+  const [activeTab, setActiveTab] = useState(initialSession?.role === 'admin' ? 'admin' : 'home');
   
   const [userData, setUserData] = useState<any>(null);
   const [vaultBalance, setVaultBalance] = useState(0);
@@ -498,7 +499,7 @@ function TerminalLayout() {
     return (
       <ErrorBoundary>
           <AdminDesk 
-            onClose={() => setActiveTab('dashboard')} 
+            onClose={() => setActiveTab('home')} 
             managedWallet={walletData} 
             activeTrades={activeTrades} 
             onForceOutcome={handleForceOutcome} 
@@ -565,11 +566,11 @@ function TerminalLayout() {
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
-          <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={18}/>} label="Market Overview" />
-          <NavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade Engine" />
+          <NavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
+          <NavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade" />
           <NavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap Magregator" />
-          <NavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Visualizer" />
-          <NavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Equity Center" />
+          <NavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Markets" />
+          <NavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Assets" />
           <NavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
           
           <div className="pt-6 pb-2 text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] pl-4">Compliance</div>
@@ -649,7 +650,7 @@ function TerminalLayout() {
 
         <main className="flex-1 overflow-hidden relative">
           <SafeView>
-              {activeTab === 'dashboard' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+              {activeTab === 'home' && <HomeView wallet={walletData} assets={assets} onNavigate={(t) => setActiveTab(t)} />}
               {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
               {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
               {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
