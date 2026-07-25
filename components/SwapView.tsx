@@ -132,7 +132,7 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
         
         <div className="text-center space-y-4">
           <div className="space-y-1">
-            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Swap Magregator</h1>
+            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Swap</h1>
             <p className="text-xs text-indigo-500 font-bold uppercase tracking-[0.4em]">Atomic Cross-Chain Bridge</p>
           </div>
         </div>

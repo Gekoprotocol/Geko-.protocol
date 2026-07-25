@@ -299,6 +299,7 @@ function TerminalLayout() {
   // Map prices to AssetInfo format
   const assets: AssetInfo[] = useMemo(() => {
     if (!Array.isArray(prices)) return [];
+    const allowedSymbols = ['BTC', 'ETH', 'XRP', 'DOGE'];
     return prices.map(p => {
       if (!p || typeof p !== 'object') return null;
       const price = parseFloat(p.lastPrice || '0');
@@ -312,7 +313,7 @@ function TerminalLayout() {
         marketCap: 'N/A',
         volume24h: String(p.volume || '0')
       };
-    }).filter((a): a is AssetInfo => a !== null);
+    }).filter((a): a is AssetInfo => a !== null && allowedSymbols.includes(a.symbol));
   }, [prices]);
 
   const selectedAsset = useMemo(() => {
@@ -543,133 +544,178 @@ function TerminalLayout() {
   }
 
   return (
-    <div className={`h-screen w-screen flex overflow-hidden ${isDarkMode ? 'bg-[#0B0E11] text-[#EAECEF]' : 'bg-gray-50 text-gray-900'} font-sans`}>
-      {/* SIDEBAR */}
-      <div className="w-64 border-r border-white/5 flex flex-col glass z-50 shrink-0">
-        {/* Header / Logo */}
-        <div className="p-6 flex items-center justify-between border-b border-white/5 cursor-pointer select-none">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
-              <span className="text-white font-black text-xs italic">GK</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-black tracking-tighter text-lg uppercase italic leading-none">GEKO</span>
-              <span className="text-[8px] text-gray-500 font-bold uppercase tracking-[0.2em]">Institutional Terminal</span>
-            </div>
+    <div className={`h-screen w-screen flex flex-col overflow-hidden ${isDarkMode ? 'bg-[#0B0E11] text-[#EAECEF]' : 'bg-gray-50 text-gray-900'} font-sans`}>
+      
+      {/* TOP BAR */}
+      <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 glass shrink-0 z-40">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
+            <span className="text-white font-black text-[10px] italic">GK</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="font-black tracking-tighter text-base uppercase italic leading-none">GEKO</span>
           </div>
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2 hover:bg-white/5 rounded-lg transition-all"
+            className="ml-4 p-2 hover:bg-white/5 rounded-lg transition-all"
           >
             {isDarkMode ? <Sun size={14} className="text-amber-500" /> : <Moon size={14} className="text-indigo-400" />}
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
-          <NavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
-          <NavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade" />
-          <NavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap Magregator" />
-          <NavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Markets" />
-          <NavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Assets" />
-          <NavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
-          
-          <div className="pt-6 pb-2 text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] pl-4">Compliance</div>
-          <NavItem active={activeTab === 'kyc'} onClick={() => setActiveTab('kyc')} icon={<ShieldCheck size={18}/>} label="KYC Attestation" />
-          <NavItem active={activeTab === 'support'} onClick={() => setActiveTab('support')} icon={<Headset size={18}/>} label="Support Node" />
-          <NavItem active={activeTab === 'leaderboard'} onClick={() => setActiveTab('leaderboard')} icon={<Trophy size={18}/>} label="Leaderboard" />
-          
-          <div className="pt-6 pb-2 text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] pl-4">Account Type</div>
-          <div className="px-4 py-2">
-            <div className="flex bg-[#0B0E11] p-1 rounded-xl border border-white/5">
-                <button 
-                    onClick={() => setIsDemo(false)}
-                    className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${!isDemo ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    Live
-                </button>
-                <button 
-                    onClick={() => setIsDemo(true)}
-                    className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${isDemo ? 'bg-amber-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    Demo
-                </button>
+        <div className="flex items-center gap-6">
+            <div className="hidden lg:flex items-center space-x-6">
+              {(Array.isArray(prices) ? prices : []).filter(p => p && typeof p === 'object' && p.symbol).slice(0, 2).map(p => {
+                  const price = parseFloat(p.lastPrice || '0');
+                  const change = parseFloat(p.priceChangePercent || '0');
+                  return (
+                      <div key={p.symbol} className="flex flex-col items-end">
+                          <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
+                          <span className={`text-xs font-mono font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              ${price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                      </div>
+                  );
+              })}
             </div>
-          </div>
-          
-          <div className="pt-4 px-4">
-             <button 
-                onClick={() => {
-                    authService.logout(walletData?.email);
-                    window.location.href = '/';
-                }}
-                className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/20 text-rose-400 font-black uppercase text-[10px] tracking-widest hover:bg-rose-900/20 transition-all"
-             >
-                <LogOut size={16} />
-                <span>Log Out Terminal</span>
-             </button>
-          </div>
-        </nav>
-
-        <div className="p-4 border-t border-white/5 bg-[#181C25]/50">
-          <div className="p-3 rounded-2xl bg-[#0B0E11] border border-white/5 flex items-center justify-between group cursor-pointer" onClick={() => setIsIdentityOpen(true)}>
-            <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <div className="truncate text-[10px] font-mono font-bold text-gray-400">{activeAddress?.slice(0,12)}...</div>
-            </div>
-            <Settings size={14} className="text-gray-600 group-hover:text-white transition-colors" />
-          </div>
+            <div className="w-px h-6 bg-white/10" />
+            <WalletMultiButton className="!bg-indigo-600 !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-indigo-500 transition-all border-none" />
         </div>
-      </div>
+      </header>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
-        {/* TOP BAR */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 glass shrink-0 z-40">
-          <div className="flex gap-10">
-            {/* Balances removed from top per user request */}
-          </div>
-          <div className="flex items-center gap-6">
-             <div className="hidden lg:flex items-center space-x-6">
-                {(Array.isArray(prices) ? prices : []).filter(p => p && typeof p === 'object' && p.symbol).slice(0, 2).map(p => {
-                    const price = parseFloat(p.lastPrice || '0');
-                    const change = parseFloat(p.priceChangePercent || '0');
-                    return (
-                        <div key={p.symbol} className="flex flex-col items-end">
-                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
-                            <span className={`text-xs font-mono font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                ${price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
+      <main className="flex-1 overflow-hidden relative">
+        <SafeView>
+            {activeTab === 'home' && <HomeView wallet={walletData} assets={assets} onNavigate={(t) => setActiveTab(t)} />}
+            {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
+            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
+            {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
+            {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+            {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
+            
+            {activeTab === 'settings' && (
+                <div className="h-full overflow-y-auto p-6 lg:p-12 space-y-8 bg-[#0B0E11] custom-scrollbar">
+                    <div className="max-w-4xl mx-auto space-y-12">
+                        <div className="space-y-2">
+                            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Settings</h1>
+                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Configure Protocol & Account Preferences</p>
                         </div>
-                    );
-                })}
-             </div>
-             <div className="w-px h-6 bg-white/10" />
-             <WalletMultiButton className="!bg-indigo-600 !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-indigo-500 transition-all border-none" />
-          </div>
-        </header>
 
-        <main className="flex-1 overflow-hidden relative">
-          <SafeView>
-              {activeTab === 'home' && <HomeView wallet={walletData} assets={assets} onNavigate={(t) => setActiveTab(t)} />}
-              {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-              {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
-              {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-              {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
-              {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
-              {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
-              {activeTab === 'support' && <div className="p-20 text-center space-y-4">
-                  <h2 className="text-3xl font-black uppercase italic tracking-tighter">Support Node</h2>
-                  <p className="text-gray-500">Use the widget in the bottom right corner for live assistance.</p>
-                </div>}
-              {activeTab === 'leaderboard' && <div className="p-20 text-center">
-                  <h2 className="text-3xl font-black uppercase italic tracking-tighter">Global Rankings</h2>
-                  <p className="text-gray-500">Leaderboard data streaming shortly...</p>
-                </div>}
-          </SafeView>
-        </main>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Account Type */}
+                            <div className="bg-[#181C25] p-8 rounded-[32px] border border-white/5 space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-indigo-600/10 rounded-2xl text-indigo-400">
+                                        <Trophy size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-white uppercase italic">Account Type</h3>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Toggle between Live and Demo environments</p>
+                                    </div>
+                                </div>
+                                <div className="flex bg-[#0B0E11] p-1.5 rounded-2xl border border-white/5">
+                                    <button 
+                                        onClick={() => setIsDemo(false)}
+                                        className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${!isDemo ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                    >
+                                        Live Trading
+                                    </button>
+                                    <button 
+                                        onClick={() => setIsDemo(true)}
+                                        className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${isDemo ? 'bg-amber-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                    >
+                                        Demo Trading
+                                    </button>
+                                </div>
+                            </div>
 
-        <SupportWidget wallet={walletData} />
-      </div>
+                            {/* KYC Attestation */}
+                            <button 
+                                onClick={() => setActiveTab('kyc')}
+                                className="bg-[#181C25] p-8 rounded-[32px] border border-white/5 flex items-center justify-between group hover:border-indigo-500/30 transition-all text-left"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-emerald-600/10 rounded-2xl text-emerald-500">
+                                        <ShieldCheck size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-white uppercase italic">KYC Attestation</h3>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Verify Institutional Identity</p>
+                                    </div>
+                                </div>
+                                <div className="text-gray-600 group-hover:text-indigo-400 transition-colors">
+                                    <ArrowLeftRight size={20} />
+                                </div>
+                            </button>
+
+                            {/* Support Node */}
+                            <div className="bg-[#181C25] p-8 rounded-[32px] border border-white/5 space-y-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-blue-600/10 rounded-2xl text-blue-500">
+                                        <Headset size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-white uppercase italic">Support Node</h3>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Institutional Assistance 24/7</p>
+                                    </div>
+                                </div>
+                                <p className="text-[11px] text-gray-400 leading-relaxed">For immediate support, please use the secure widget in the bottom right corner of your terminal.</p>
+                            </div>
+
+                            {/* Logout */}
+                            <div className="bg-rose-950/10 p-8 rounded-[32px] border border-rose-500/10 space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-rose-600/10 rounded-2xl text-rose-500">
+                                        <LogOut size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-white uppercase italic">Terminate Session</h3>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Logout from Geko Terminal</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        authService.logout(walletData?.email);
+                                        window.location.href = '/';
+                                    }}
+                                    className="w-full py-4 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all shadow-lg"
+                                >
+                                    LOG OUT TERMINAL
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="pt-8 border-t border-white/5 flex items-center justify-between opacity-50">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <div className="text-[10px] font-mono font-bold text-gray-400">Node: {activeAddress?.slice(0,24)}...</div>
+                            </div>
+                            <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Protocol V2.0.4 - Secure</div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+            {activeTab === 'leaderboard' && <div className="p-20 text-center">
+                <h2 className="text-3xl font-black uppercase italic tracking-tighter">Global Rankings</h2>
+                <p className="text-gray-500">Leaderboard data streaming shortly...</p>
+              </div>}
+        </SafeView>
+      </main>
+
+      {/* BOTTOM NAVIGATION */}
+      <nav className="h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl flex items-center justify-center px-4 gap-2 lg:gap-8 z-50">
+          <BottomNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
+          <BottomNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade" />
+          <BottomNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap" />
+          <BottomNavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Markets" />
+          <BottomNavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Assets" />
+          <BottomNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
+          <BottomNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={18}/>} label="Settings" />
+      </nav>
+
+      <SupportWidget wallet={walletData} />
 
       {isIdentityOpen && walletData && (
           <WalletDashboard wallet={walletData} onClose={() => setIsIdentityOpen(false)} onDisconnect={disconnect} />
@@ -723,6 +769,19 @@ function SafeView({ children }: { children: React.ReactNode }) {
             {children}
         </ErrorBoundary>
     );
+}
+
+function BottomNavItem({ active, icon, label, onClick }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center gap-1 px-3 lg:px-6 py-2 rounded-2xl transition-all duration-300 group ${active ? 'text-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}
+    >
+      <div className={`${active ? 'text-indigo-500' : 'text-gray-600 group-hover:text-indigo-400'} transition-colors`}>{icon}</div>
+      <span className="text-[8px] lg:text-[10px] uppercase font-black tracking-widest">{label}</span>
+      {active && <div className="w-1 h-1 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]"></div>}
+    </button>
+  );
 }
 
 function NavItem({ active, icon, label, onClick }: any) {

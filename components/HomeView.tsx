@@ -111,7 +111,7 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-indigo-600/5 border border-indigo-500/10 p-8 rounded-[32px] flex items-center justify-between group hover:bg-indigo-600/10 transition-all cursor-pointer" onClick={() => onNavigate('swap')}>
                 <div className="space-y-2">
-                    <div className="text-xs font-black text-indigo-400 uppercase tracking-widest">Magregator Swap</div>
+                    <div className="text-xs font-black text-indigo-400 uppercase tracking-widest">Swap</div>
                     <div className="text-lg font-black text-gray-100 italic uppercase">Execute Instant Exchange</div>
                 </div>
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
