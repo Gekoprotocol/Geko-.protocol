@@ -340,7 +340,12 @@ function TerminalLayout() {
   };
 
   // Fetch User Data & Balances
-  const [solanaDepositAddress, setSolanaDepositAddress] = useState('6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
+  const [protocolConfig, setProtocolConfig] = useState<any>({
+    solana_deposit_address: '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw',
+    btc_deposit_address: '',
+    eth_deposit_address: '',
+    usdt_deposit_address: ''
+  });
 
   // Fetch Global Config
   useEffect(() => {
@@ -349,7 +354,7 @@ function TerminalLayout() {
         const res = await fetch('/api/config');
         if (res.ok) {
           const data = await res.json();
-          if (data.solana_deposit_address) setSolanaDepositAddress(data.solana_deposit_address);
+          setProtocolConfig(data);
         }
       } catch (_) {}
     };
@@ -588,9 +593,9 @@ function TerminalLayout() {
         <SafeView>
             {activeTab === 'home' && <HomeView wallet={walletData} assets={assets} onNavigate={(t) => setActiveTab(t)} />}
             {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={solanaDepositAddress} />}
+            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} />}
             {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-            {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+            {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
             {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
             
             {activeTab === 'settings' && (

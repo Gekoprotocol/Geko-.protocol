@@ -75,24 +75,30 @@ export const authService = {
     return walletData;
   },
 
-  signup: async (email: string, password: string, invitationCode: string): Promise<any> => {
-    const response = await fetch('/api/auth/signup', {
+  signupRequest: async (email: string, password: string): Promise<any> => {
+    const response = await fetch('/api/auth/signup-request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, invitationCode })
+      body: JSON.stringify({ email, password })
     });
-    
-    let result;
-    const text = await response.text();
-    try {
-      result = JSON.parse(text);
-    } catch (e) {
-      console.error('Server response was not JSON:', text);
-      throw new Error(`Malformed server response (Status ${response.status}).`);
-    }
-    
-    if (!response.ok) throw new Error(result.error || "Signup failed");
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Signup request failed");
     return result;
+  },
+
+  signupConfirm: async (email: string, code: string): Promise<any> => {
+    const response = await fetch('/api/auth/signup-confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Signup confirmation failed");
+    return result;
+  },
+
+  signup: async (email: string, password: string, invitationCode: string): Promise<any> => {
+    throw new Error('Endpoint deprecated. Use signupRequest and signupConfirm.');
   },
 
   updateUser: async (key: string, walletData: WalletData): Promise<boolean> => {

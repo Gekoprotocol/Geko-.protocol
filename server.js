@@ -130,8 +130,19 @@ const initializeDatabase = async () => {
     await addColumn('pending_deposit_currency', 'TEXT', "'BTC'");
     await addColumn('pending_deposit_amount', 'DECIMAL(24, 8)', '0');
     await addColumn('swap_sent', 'BOOLEAN', 'FALSE');
+    await addColumn('signup_code', 'TEXT', "NULL");
 
-    // Step 3: Constraints & Cleanup
+    // Step 3: Config Defaults
+    const addConfig = async (key, val) => {
+      try {
+        await pool.query(`INSERT INTO geko_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`, [key, val]);
+      } catch (e) {}
+    };
+
+    await addConfig('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
+    await addConfig('btc_deposit_address', '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa');
+    await addConfig('eth_deposit_address', '0x742d35Cc6634C0532925a3b844Bc454e4438f44e');
+    await addConfig('usdt_deposit_address', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
     await pool.query(`
       DO $$ 
       BEGIN 
@@ -505,20 +516,32 @@ app.get('/api/config', async (req, res) => {
       return res.json({ ...globalConfig, ...dbConfig });
     } catch (e) { console.error('Config fetch error:', e.message); }
   }
-  res.json({ ...globalConfig, solana_deposit_address: '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw' });
+  res.json({ 
+    ...globalConfig, 
+    solana_deposit_address: '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw',
+    btc_deposit_address: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+    eth_deposit_address: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+    usdt_deposit_address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
+  });
 });
 
 app.post('/api/admin/config', async (req, res) => {
-  const { solana_deposit_address } = req.body;
+  const { solana_deposit_address, btc_deposit_address, eth_deposit_address, usdt_deposit_address } = req.body;
 
   if (dbAvailable && pool) {
     try {
-      if (solana_deposit_address) {
+      const updates = [];
+      if (solana_deposit_address) updates.push(['solana_deposit_address', solana_deposit_address]);
+      if (btc_deposit_address) updates.push(['btc_deposit_address', btc_deposit_address]);
+      if (eth_deposit_address) updates.push(['eth_deposit_address', eth_deposit_address]);
+      if (usdt_deposit_address) updates.push(['usdt_deposit_address', usdt_deposit_address]);
+
+      for (const [key, val] of updates) {
         await pool.query(
           `INSERT INTO geko_config (key, value, updated_at)
-           VALUES ('solana_deposit_address', $1, NOW())
+           VALUES ($1, $2, NOW())
            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-          [solana_deposit_address]
+          [key, val]
         );
       }
       return res.json({ success: true });
@@ -529,6 +552,9 @@ app.post('/api/admin/config', async (req, res) => {
   }
   
   if (solana_deposit_address !== undefined) globalConfig.solana_deposit_address = solana_deposit_address;
+  if (btc_deposit_address !== undefined) globalConfig.btc_deposit_address = btc_deposit_address;
+  if (eth_deposit_address !== undefined) globalConfig.eth_deposit_address = eth_deposit_address;
+  if (usdt_deposit_address !== undefined) globalConfig.usdt_deposit_address = usdt_deposit_address;
   res.json({ success: true, config: globalConfig });
 });
 
@@ -807,28 +833,65 @@ app.get('/api/user/data', async (req, res) => {
 });
 
 // ─── Email Auth: Login & Signup ──────────────────────────────────────────────
-app.post('/api/auth/signup', async (req, res) => {
-  const { email, password, invitationCode } = req.body;
-  if (!email || !password || !invitationCode) return res.status(400).json({ error: 'All fields required' });
-  if (invitationCode !== '196405') return res.status(400).json({ error: 'Invalid invitation code' });
+app.post('/api/auth/signup-request', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
     const userEmail = email.toLowerCase().trim();
-    const nickname = userEmail.split('@')[0].toUpperCase();
-    const virtualAddress = '0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40);
+    // Check if user already exists and is approved
+    const existing = await pool.query('SELECT status FROM geko_users WHERE email = $1', [userEmail]);
+    if (existing.rows.length > 0 && existing.rows[0].status === 'approved') {
+        return res.status(400).json({ error: 'Email already registered and approved' });
+    }
 
-    const result = await pool.query(
-      `INSERT INTO geko_users (email, password, invitation_code, nickname, wallet_address, status, last_seen) 
+    const signupCode = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`[Signup] VERIFICATION_CODE for ${userEmail}: ${signupCode}`);
+
+    // Upsert the pending registration
+    const virtualAddress = '0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40);
+    const nickname = userEmail.split('@')[0].toUpperCase();
+
+    await pool.query(
+      `INSERT INTO geko_users (email, password, signup_code, nickname, wallet_address, status, last_seen) 
        VALUES ($1, $2, $3, $4, $5, 'guest', NOW())
-       RETURNING *`,
-      [userEmail, password, invitationCode, nickname, virtualAddress]
+       ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password, signup_code = EXCLUDED.signup_code, last_seen = NOW()`,
+      [userEmail, password, signupCode, nickname, virtualAddress]
     );
-    res.json({ success: true, user: result.rows[0] });
+
+    res.json({ success: true, message: 'Verification code sent to your email' });
   } catch (e) {
-    if (e.message.includes('unique constraint')) return res.status(400).json({ error: 'Email already registered' });
     res.status(500).json({ error: e.message });
   }
+});
+
+app.post('/api/auth/signup-confirm', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM geko_users WHERE email = $1 AND signup_code = $2`,
+      [email.toLowerCase().trim(), code]
+    );
+
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid verification code' });
+
+    await pool.query(
+      `UPDATE geko_users SET status = 'pending_approval', signup_code = NULL WHERE id = $1`,
+      [result.rows[0].id]
+    );
+
+    res.json({ success: true, message: 'Registration confirmed! Waiting for admin approval.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/auth/signup', async (req, res) => {
+  res.status(410).json({ error: 'Endpoint deprecated. Use signup-request and signup-confirm.' });
 });
 
 app.post('/api/auth/login', async (req, res) => {

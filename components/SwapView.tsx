@@ -11,9 +11,10 @@ interface SwapViewProps {
   onDeposit: (amount: string, asset: string) => void;
   onRefreshBalances?: () => void;
   depositAddress?: string;
-}
+  protocolConfig?: any;
+  }
 
-const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onSwap, onDeposit, onRefreshBalances, depositAddress }) => {
+  const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onConfirm, onSwap, onDeposit, onRefreshBalances, depositAddress, protocolConfig }) => {
   const [fromAsset, setFromAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol !== 'USDT') || assets[0] || null);
   const [toAsset, setToAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol === 'USDT') || assets[1] || null);
   const [amount, setAmount] = useState('');
@@ -23,6 +24,19 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
   const [isSwapping, setIsSwapping] = useState(false);
   const [showDeposit, setShowDeposit] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [selectedChain, setSelectedChain] = useState<'SOL' | 'BTC' | 'ETH' | 'USDT'>('SOL');
+
+  const solanaAddr = protocolConfig?.solana_deposit_address || depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw';
+  const btcAddr    = protocolConfig?.btc_deposit_address || '';
+  const ethAddr    = protocolConfig?.eth_deposit_address || '';
+  const usdtAddr   = protocolConfig?.usdt_deposit_address || '';
+
+  const activeDepositAddress = useMemo(() => {
+    if (selectedChain === 'BTC') return btcAddr;
+    if (selectedChain === 'ETH') return ethAddr;
+    if (selectedChain === 'USDT') return usdtAddr;
+    return solanaAddr;
+  }, [selectedChain, solanaAddr, btcAddr, ethAddr, usdtAddr]);
 
   useEffect(() => {
     if (assets.length >= 2) {
@@ -156,40 +170,61 @@ const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConn
             <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-[40px] p-10 space-y-8 animate-in slide-in-from-top-4">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center space-x-6">
-                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg">
-                            {fromAsset?.symbol[0] || 'D'}
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg text-2xl">
+                            {selectedChain[0]}
                         </div>
                         <div>
-                            <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Deposit Address Generated</div>
-                            <div className="text-2xl font-black text-white italic">Send {amount} {fromAsset?.symbol}</div>
+                            <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Protocol Node Address</div>
+                            <div className="text-2xl font-black text-white italic">Add {selectedChain} Liquidity</div>
                             <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Institutional swap waiting for settlement</div>
                         </div>
                     </div>
                     <div className="flex flex-col items-end space-y-2">
-                        <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Equivalent USDT</div>
-                        <div className="text-3xl font-black text-emerald-500 font-mono">${equivalentUsdt}</div>
+                        <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Receive Equivalent</div>
+                        <div className="text-3xl font-black text-emerald-500 font-mono">${equivalentUsdt} USDT</div>
                     </div>
                 </div>
 
-                <div className="space-y-3">
-                    <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest pl-1">Master Deposit Address</div>
-                    <div className="flex items-center space-x-3 bg-[#0B0E11] p-6 rounded-2xl border border-indigo-500/20 group">
-                        <input 
-                            type="text"
-                            readOnly
-                            value={depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'}
-                            className="flex-1 bg-transparent text-sm font-mono font-bold text-indigo-400 outline-none"
-                        />
-                        <button 
-                            onClick={() => { navigator.clipboard.writeText(depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                            className="p-2 hover:bg-[#181C25] rounded-xl transition-colors text-indigo-500/50 hover:text-indigo-500"
-                        >
-                            {copied ? (
-                                <span className="text-[9px] font-black uppercase">Copied</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-4 gap-2">
+                            {['SOL', 'BTC', 'ETH', 'USDT'].map(c => (
+                                <button 
+                                    key={c}
+                                    onClick={() => setSelectedChain(c as any)}
+                                    className={`py-2 rounded-xl text-[10px] font-black border transition-all ${selectedChain === c ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#0B0E11] border-[#2B3139] text-gray-500'}`}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Copy {selectedChain} Address</label>
+                            <div className="flex items-center space-x-2 bg-[#0B0E11] p-5 rounded-2xl border border-[#2B3139] group">
+                                <span className="flex-1 text-xs font-mono font-bold text-indigo-400 break-all">{activeDepositAddress || 'NOT_CONFIGURED'}</span>
+                                {activeDepositAddress && (
+                                    <button onClick={() => { navigator.clipboard.writeText(activeDepositAddress); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="text-gray-500 hover:text-white">
+                                        {copied ? <span className="text-[10px] font-black text-emerald-500 uppercase">✓</span> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div className="p-5 bg-indigo-900/20 rounded-2xl border border-indigo-500/20">
+                            <p className="text-[10px] text-indigo-400 font-bold leading-relaxed uppercase tracking-wider">
+                                SEND {selectedChain} TO THIS ADDRESS. SYSTEM SYNCHRONIZATION OCCURS AFTER 3 NETWORK CONFIRMATIONS.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col items-center space-y-4">
+                        <div className="p-4 bg-white rounded-3xl shadow-2xl">
+                            {activeDepositAddress ? (
+                                <QRCodeSVG value={activeDepositAddress} size={180} level="H" />
                             ) : (
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                <div className="w-[180px] h-[180px] flex items-center justify-center text-gray-400 text-[10px] font-black uppercase text-center p-4">Address Not Configured</div>
                             )}
-                        </button>
+                        </div>
+                        <span className="text-[8px] text-gray-500 font-black uppercase tracking-[0.3em]">Institutional QR Link</span>
                     </div>
                 </div>
 

@@ -225,6 +225,9 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const [depositInput, setDepositInput] = useState('6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
+  const [btcAddress, setBtcAddress]     = useState('');
+  const [ethAddress, setEthAddress]     = useState('');
+  const [usdtAddress, setUsdtAddress]   = useState('');
   const [sysStatus, setSysStatus] = useState<any>(null);
 
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
@@ -238,7 +241,10 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
         const res = await fetch('/api/config');
         if (res.ok) {
           const data = await res.json();
-          setDepositInput(data.deposit_address || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw');
+          setDepositInput(data.solana_deposit_address || '');
+          setBtcAddress(data.btc_deposit_address || '');
+          setEthAddress(data.eth_deposit_address || '');
+          setUsdtAddress(data.usdt_deposit_address || '');
         }
       } catch (_) {}
     };
@@ -466,7 +472,12 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
       const res = await fetch('/api/admin/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ solana_deposit_address: depositInput })
+        body: JSON.stringify({ 
+            solana_deposit_address: depositInput,
+            btc_deposit_address: btcAddress,
+            eth_deposit_address: ethAddress,
+            usdt_deposit_address: usdtAddress
+        })
       });
       if (res.ok) {
         window.dispatchEvent(new CustomEvent('configUpdated'));
@@ -480,8 +491,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     }
   };
 
-  const guestUsers = dbUsers.filter(u => u.status === 'guest');
-  const approvedUsers = dbUsers.filter(u => u.status !== 'guest');
+  const guestUsers = dbUsers.filter(u => u.status === 'guest' || u.status === 'pending_approval');
+  const approvedUsers = dbUsers.filter(u => u.status !== 'guest' && u.status !== 'pending_approval');
 
   return (
     <div className="fixed inset-0 z-[1000] bg-[#0B0E11] text-gray-200 font-mono flex flex-col border-4 border-indigo-900/20">
@@ -795,21 +806,48 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
           <div className="space-y-6 max-w-2xl">
             <h2 className="text-lg font-black uppercase italic text-indigo-400 px-4">Protocol Overrides</h2>
             <div className="bg-[#181C25] border border-[#2B3139] p-8 rounded-[40px] space-y-8">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Master Deposit Address</label>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">Solana Deposit Address</label>
+                  <input
+                    type="text"
+                    value={depositInput}
+                    onChange={e => setDepositInput(e.target.value)}
+                    className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 rounded-2xl p-4 text-sm text-indigo-400 font-mono outline-none transition-all"
+                  />
                 </div>
-                <input
-                  type="text"
-                  value={depositInput}
-                  onChange={e => setDepositInput(e.target.value)}
-                  className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 rounded-2xl p-5 text-base text-indigo-400 font-mono outline-none"
-                />
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">Bitcoin Deposit Address</label>
+                  <input
+                    type="text"
+                    value={btcAddress}
+                    onChange={e => setBtcAddress(e.target.value)}
+                    className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 rounded-2xl p-4 text-sm text-indigo-400 font-mono outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">Ethereum Deposit Address</label>
+                  <input
+                    type="text"
+                    value={ethAddress}
+                    onChange={e => setEthAddress(e.target.value)}
+                    className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 rounded-2xl p-4 text-sm text-indigo-400 font-mono outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest ml-1">USDT (TRC20) Deposit Address</label>
+                  <input
+                    type="text"
+                    value={usdtAddress}
+                    onChange={e => setUsdtAddress(e.target.value)}
+                    className="w-full bg-[#0B0E11] border-2 border-indigo-500/40 rounded-2xl p-4 text-sm text-indigo-400 font-mono outline-none transition-all"
+                  />
+                </div>
               </div>
               <button
                 onClick={handleSaveConfig}
                 disabled={configSaving}
-                className="w-full py-5 font-black uppercase tracking-widest rounded-2xl bg-indigo-600 text-white"
+                className="w-full py-5 font-black uppercase tracking-widest rounded-2xl bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 transition-all"
               >
                 {configSaving ? 'Saving...' : 'Save & Broadcast Changes'}
               </button>

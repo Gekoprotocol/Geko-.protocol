@@ -23,6 +23,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onAdminAccess
 }) => {
   const [view, setView] = useState<'login' | 'signup' | 'wait'>(initialView);
+  const [signupStep, setSignupStep] = useState<'initial' | 'verify'>('initial');
 
   useEffect(() => {
     if (initialView) setView(initialView);
@@ -30,7 +31,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [invitationCode, setInvitationCode] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -43,13 +44,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
     try {
       if (view === 'signup') {
-        if (password !== confirmPassword) throw new Error('Passwords do not match');
-        await authService.signup(email, password, invitationCode);
-        setMsg('Signup successful! Please wait for admin approval.');
-        setView('wait');
+        if (signupStep === 'initial') {
+            if (password !== confirmPassword) throw new Error('Passwords do not match');
+            await authService.signupRequest(email, password);
+            setSignupStep('verify');
+            setMsg('Verification code sent to your email.');
+        } else {
+            await authService.signupConfirm(email, verificationCode);
+            setMsg('Signup successful! Please wait for admin approval.');
+            setView('wait');
+        }
       } else {
         const walletData = await authService.login(email, password);
-        if (walletData.status === 'guest') {
+        if (walletData.status === 'guest' || walletData.status === 'pending_approval') {
             setView('wait');
         } else {
             onLoginSuccess(walletData);
@@ -70,8 +77,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <svg className="w-12 h-12 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
                 <div className="space-y-4">
-                    <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">Identity Pending</h2>
-                    <p className="text-gray-500 text-sm leading-relaxed uppercase font-bold tracking-widest">Your account is currently under institutional review. Protocol access will be granted upon administrator clearance.</p>
+                    <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">Account Pending</h2>
+                    <p className="text-gray-500 text-sm leading-relaxed uppercase font-bold tracking-widest">Your account is currently under institutional review. Access will be granted once approved by the administrator.</p>
                 </div>
                 <div className="pt-6 border-t border-white/5">
                     <button 
@@ -131,62 +138,65 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="relative z-10 space-y-8">
                       <div className="text-center space-y-1">
                           <h2 className="text-2xl font-black text-gray-100 uppercase italic tracking-tight">
-                              {view === 'login' ? 'Login' : 'Signup'}
+                              {view === 'login' ? 'Login' : (signupStep === 'initial' ? 'Signup' : 'Verify Email')}
                           </h2>
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
-                              {view === 'login' ? 'Secure Cryptographic Entry' : 'Institutional Clearance Required'}
+                              {view === 'login' ? 'Secure Cryptographic Entry' : (signupStep === 'initial' ? 'Institutional Clearance Required' : 'Enter the code sent to your email')}
                           </p>
                       </div>
 
                       <form onSubmit={handleAuth} className="space-y-4">
                           <div className="space-y-4">
-                              <div className="space-y-1">
-                                  <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Terminal ID (Email)</label>
-                                  <input 
-                                      type="email" 
-                                      required 
-                                      value={email}
-                                      onChange={(e) => setEmail(e.target.value)}
-                                      placeholder="operator@geko.institutional"
-                                      className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                                  />
-                              </div>
-                              <div className="space-y-1">
-                                  <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Access Key (Password)</label>
-                                  <input 
-                                      type="password" 
-                                      required 
-                                      value={password}
-                                      onChange={(e) => setPassword(e.target.value)}
-                                      placeholder="••••••••"
-                                      className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                                  />
-                              </div>
-                              {view === 'signup' && (
+                              {view === 'login' || signupStep === 'initial' ? (
                                   <>
                                       <div className="space-y-1">
-                                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Access Key</label>
+                                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Email ID</label>
+                                          <input 
+                                              type="email" 
+                                              required 
+                                              value={email}
+                                              onChange={(e) => setEmail(e.target.value)}
+                                              placeholder="operator@geko.institutional"
+                                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                                          />
+                                      </div>
+                                      <div className="space-y-1">
+                                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Password</label>
                                           <input 
                                               type="password" 
                                               required 
-                                              value={confirmPassword}
-                                              onChange={(e) => setConfirmPassword(e.target.value)}
+                                              value={password}
+                                              onChange={(e) => setPassword(e.target.value)}
                                               placeholder="••••••••"
                                               className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
                                           />
                                       </div>
-                                      <div className="space-y-1">
-                                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Invitation Code</label>
-                                          <input 
-                                              type="text" 
-                                              required 
-                                              value={invitationCode}
-                                              onChange={(e) => setInvitationCode(e.target.value)}
-                                              placeholder="XXXXXX"
-                                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                                          />
-                                      </div>
+                                      {view === 'signup' && (
+                                          <div className="space-y-1">
+                                              <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Password</label>
+                                              <input 
+                                                  type="password" 
+                                                  required 
+                                                  value={confirmPassword}
+                                                  onChange={(e) => setConfirmPassword(e.target.value)}
+                                                  placeholder="••••••••"
+                                                  className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                                              />
+                                          </div>
+                                      )}
                                   </>
+                              ) : (
+                                  <div className="space-y-1">
+                                      <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Verification Code</label>
+                                      <input 
+                                          type="text" 
+                                          required 
+                                          value={verificationCode}
+                                          onChange={(e) => setVerificationCode(e.target.value)}
+                                          placeholder="XXXXXX"
+                                          className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all text-center tracking-[0.5em]"
+                                      />
+                                  </div>
                               )}
                           </div>
 
@@ -210,7 +220,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                               {isLoading ? (
                                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                               ) : (
-                                  <span>{view === 'login' ? 'Login' : 'Signup'}</span>
+                                  <span>{view === 'login' ? 'Login' : (signupStep === 'initial' ? 'Signup' : 'Confirm Code')}</span>
                               )}
                           </button>
 
@@ -219,6 +229,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                   type="button"
                                   onClick={() => {
                                       setView(view === 'login' ? 'signup' : 'login');
+                                      setSignupStep('initial');
                                       setError('');
                                       setMsg('');
                                   }}
