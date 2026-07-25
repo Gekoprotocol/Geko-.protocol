@@ -131,7 +131,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="relative z-10 space-y-8">
                       <div className="text-center space-y-1">
                           <h2 className="text-2xl font-black text-gray-100 uppercase italic tracking-tight">
-                              {view === 'login' ? 'Access Terminal' : 'Protocol Onboarding'}
+                              {view === 'login' ? 'Login' : 'Signup'}
                           </h2>
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
                               {view === 'login' ? 'Secure Cryptographic Entry' : 'Institutional Clearance Required'}
@@ -210,7 +210,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                               {isLoading ? (
                                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                               ) : (
-                                  <span>{view === 'login' ? 'Initialize Identity' : 'Request Clearance'}</span>
+                                  <span>{view === 'login' ? 'Login' : 'Signup'}</span>
                               )}
                           </button>
 
@@ -224,7 +224,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                   }}
                                   className="text-[10px] text-gray-500 font-black uppercase tracking-widest hover:text-indigo-400 transition-colors"
                               >
-                                  {view === 'login' ? "Need institutional access? Request account" : "Already have clearance? Access terminal"}
+                                  {view === 'login' ? "Need account? Signup" : "Already have clearance? Login"}
                               </button>
                           </div>
                       </form>
