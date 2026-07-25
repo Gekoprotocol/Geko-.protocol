@@ -16,9 +16,9 @@ interface TradeViewProps {
   onRefreshBalances: () => void;
 }
 
-const MIN_TRADE   = 1;
+const MIN_TRADE   = 100;
 const PAYOUT_RATE = 0.85;
-const PRESETS     = [10, 25, 50, 100, 250, 500];
+const PRESETS     = [100, 250, 500, 1000, 2500, 5000];
 
 const TradeView: React.FC<TradeViewProps> = ({
   assets,
@@ -400,12 +400,19 @@ const TradeView: React.FC<TradeViewProps> = ({
 
                 <div className="space-y-3">
                     <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase tracking-widest px-1">
-                        <span>Leverage</span>
+                        <span>Leverage Options</span>
                         <span className="text-indigo-400">{leverage}x</span>
                     </div>
-                    <input type="range" min="1" max="100" value={leverage} onChange={(e) => setLeverage(parseInt(e.target.value))} className="w-full h-1.5 bg-[#2B3139] rounded-full appearance-none cursor-pointer accent-indigo-500" />
-                    <div className="flex justify-between text-[7px] text-gray-600 font-black uppercase">
-                        <span>1x</span><span>50x</span><span>100x</span>
+                    <div className="grid grid-cols-3 gap-2">
+                        {[20, 50, 100].map(l => (
+                            <button 
+                                key={l} 
+                                onClick={() => setLeverage(l)} 
+                                className={`py-2.5 text-[10px] font-black rounded-xl border transition-all ${leverage === l ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'border-[#2B3139] text-gray-500 hover:border-gray-600'}`}
+                            >
+                                {l}x
+                            </button>
+                        ))}
                     </div>
                 </div>
 
