@@ -1458,7 +1458,7 @@ app.use(express.static(publicPath));
 app.use(express.static(rootPath));
 
 app.get('*', (req, res) => {
-  if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found' });
+  if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found on server' });
   
   // Try to serve index.html for SPA routing
   const possiblePaths = [
