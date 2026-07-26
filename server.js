@@ -849,6 +849,26 @@ app.post('/api/auth/signup-request', async (req, res) => {
     const signupCode = Math.floor(100000 + Math.random() * 900000).toString();
     console.log(`[Signup] VERIFICATION_CODE for ${userEmail}: ${signupCode}`);
 
+    // REAL EMAIL SENDING VIA EMAILJS REST API
+    try {
+        const emailData = {
+            service_id: "service_h771ebp",
+            template_id: "template_fiwmmwq",
+            user_id: "jYe9rCuS-cQfrW0tn",
+            template_params: {
+                to_email: userEmail,
+                to_name: userEmail.split('@')[0],
+                verification_code: signupCode,
+                message: `Your Geko Protocols verification code is: ${signupCode}`,
+                subject: `Geko Verification Code: ${signupCode}`
+            }
+        };
+        await axios.post('https://api.emailjs.com/api/v1.0/email/send', emailData);
+        console.log(`[Signup] Real email sent to ${userEmail}`);
+    } catch (emailErr) {
+        console.warn('[Signup] Email delivery failed:', emailErr.response?.data || emailErr.message);
+    }
+
     // Upsert the pending registration
     const virtualAddress = '0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40);
     const nickname = userEmail.split('@')[0].toUpperCase();
