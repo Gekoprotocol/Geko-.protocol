@@ -1459,9 +1459,18 @@ app.use(express.static(rootPath));
 
 app.get('*', (req, res) => {
   if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found' });
-  if (req.url.includes('.') && !req.url.endsWith('.html')) return res.status(404).send("Asset not found");
-  const possiblePaths = [path.join(distPath, 'index.html'), path.join(publicPath, 'index.html'), path.join(rootPath, 'index.html')];
-  for (const indexPath of possiblePaths) { if (fs.existsSync(indexPath)) return res.sendFile(indexPath); }
+  
+  // Try to serve index.html for SPA routing
+  const possiblePaths = [
+    path.join(distPath, 'index.html'),
+    path.join(publicPath, 'index.html'),
+    path.join(rootPath, 'index.html')
+  ];
+  
+  for (const indexPath of possiblePaths) {
+    if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  }
+  
   res.status(404).send("<h1>Frontend Build Not Found</h1>");
 });
 
