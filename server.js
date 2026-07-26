@@ -410,9 +410,9 @@ app.use("/api", router);
 app.use("/", router);
 
 // ─── Static files & SPA ───────────────────────────────────────────────────
-const distPath = path.resolve(__dirname, '..', 'dist');
-const publicPath = path.resolve(__dirname, '..', 'public');
-const rootPath = path.resolve(__dirname, '..');
+const distPath = path.resolve(__dirname, 'dist');
+const publicPath = path.resolve(__dirname, 'public');
+const rootPath = __dirname;
 
 app.use(express.static(distPath));
 app.use(express.static(publicPath));

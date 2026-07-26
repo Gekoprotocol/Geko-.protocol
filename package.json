@@ -3,11 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "main": "server.js",
   "scripts": {
-    "start": "node api/index.js",
+    "start": "node server.js",
     "dev": "vite",
-    "backend": "node api/index.js",
-    "FIX-PREVIEW": "fuser -k 8080/tcp 8081/tcp 5173/tcp || true; npm run build && node api/index.js",
+    "backend": "node server.js",
+    "FIX-PREVIEW": "fuser -k 8080/tcp 8081/tcp 5173/tcp || true; npm run build && node server.js",
     "build": "vite build"
   },
   "dependencies": {
