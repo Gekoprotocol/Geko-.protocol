@@ -1449,9 +1449,9 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
 });
 
 // ─── Static files & SPA ───────────────────────────────────────────────────
-const distPath = path.resolve(__dirname, 'dist');
-const publicPath = path.resolve(__dirname, 'public');
-const rootPath = __dirname;
+const distPath = path.resolve(__dirname, '..', 'dist');
+const publicPath = path.resolve(__dirname, '..', 'public');
+const rootPath = path.resolve(__dirname, '..');
 
 app.use(express.static(distPath));
 app.use(express.static(publicPath));
@@ -1474,7 +1474,15 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Geko Protocols Server: http://0.0.0.0:${port}`);
-  console.log(`🗄️  Database Status: ${dbAvailable ? 'CONNECTED ✅' : 'DISCONNECTED ❌'}`);
-});
+const startServer = () => {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Geko Protocols Server: http://0.0.0.0:${port}`);
+    console.log(`🗄️  Database Status: ${dbAvailable ? 'CONNECTED ✅' : 'DISCONNECTED ❌'}`);
+  });
+};
+
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  startServer();
+}
+
+export default app;

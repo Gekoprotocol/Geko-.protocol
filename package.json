@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node api/index.js",
     "dev": "vite",
-    "backend": "node server.js",
-    "FIX-PREVIEW": "fuser -k 8080/tcp 8081/tcp 5173/tcp || true; npm run build && node server.js",
+    "backend": "node api/index.js",
+    "FIX-PREVIEW": "fuser -k 8080/tcp 8081/tcp 5173/tcp || true; npm run build && node api/index.js",
     "build": "vite build"
   },
   "dependencies": {
@@ -21,7 +21,9 @@
     "@solana/web3.js": "1.91.1",
     "@supabase/supabase-js": "^2.48.0",
     "@vitejs/plugin-react": "^6.0.2",
+    "axios": "^1.6.0",
     "body-parser": "^2.2.2",
+    "bs58": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",
@@ -35,8 +37,7 @@
     "react-dom": "^18.2.0",
     "rpc-websockets": "7.5.0",
     "uuid": "8.3.2",
-    "vite": "^8.0.13",
-    "axios": "^1.6.0"
+    "vite": "^8.0.13"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
