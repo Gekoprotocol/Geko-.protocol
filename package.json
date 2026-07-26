@@ -37,12 +37,14 @@
     "react-dom": "^18.2.0",
     "rpc-websockets": "7.5.0",
     "uuid": "8.3.2",
-    "vite": "^8.0.13"
+    "vite": "^8.0.13",
+    "regenerator-runtime": "^0.13.11"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
-    "typescript": "^5.2.2"
+    "typescript": "^5.2.2",
+    "@vitejs/plugin-legacy": "^2.2.0"
   },
   "overrides": {
     "@solana/web3.js": {
