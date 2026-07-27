@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { AssetInfo, WalletData } from '../types';
 
 interface SwapViewProps {
@@ -50,7 +51,13 @@ interface SwapViewProps {
 
   const equivalentUsdt = useMemo(() => {
     if (!amount || !fromAsset || !toAsset) return '0.00';
-    return (parseFloat(amount) * (fromAsset.price / toAsset.price)).toFixed(2);
+    
+    // Hard-coded safety for USDT if the price feed is slightly off
+    const fromPrice = fromAsset.symbol === 'USDT' ? 1.00 : fromAsset.price;
+    const toPrice = toAsset.symbol === 'USDT' ? 1.00 : toAsset.price;
+
+    if (toPrice === 0) return '0.00';
+    return (parseFloat(amount) * (fromPrice / toPrice)).toFixed(2);
   }, [amount, fromAsset, toAsset]);
 
   const handleAction = async () => {
