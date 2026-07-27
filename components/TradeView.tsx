@@ -288,9 +288,9 @@ const TradeView: React.FC<TradeViewProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-hidden flex bg-[#0B0E11]">
+      <div className="flex-1 relative overflow-hidden flex flex-col lg:flex-row bg-[#0B0E11]">
         <div className="flex-1 relative h-full min-h-0 flex flex-col overflow-y-auto custom-scrollbar">
-            <div className="w-full h-[600px] shrink-0 relative bg-[#0B0E11]">
+            <div className="w-full h-[350px] lg:h-[600px] shrink-0 relative bg-[#0B0E11]">
                 <MarketChart 
                     symbol={selectedSymbol} 
                     showIndicators={showIndicators} 
@@ -299,26 +299,26 @@ const TradeView: React.FC<TradeViewProps> = ({
             </div>
 
             {userActiveTrades.length > 0 && (
-                <div className="p-6 border-t border-[#2B3139] bg-[#181C25]/50 shrink-0">
+                <div className="p-4 lg:p-6 border-t border-[#2B3139] bg-[#181C25]/50 shrink-0">
                     <div className="flex items-center justify-between mb-4">
-                        <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-2">Active Settlements</span>
-                        <span className="text-[8px] text-gray-600 font-bold uppercase">{userActiveTrades.length} Pending Execution{userActiveTrades.length > 1 ? 's' : ''}</span>
+                        <span className="text-[9px] lg:text-[10px] font-black text-indigo-500 uppercase tracking-widest px-2">Active Settlements</span>
+                        <span className="text-[7px] lg:text-[8px] text-gray-600 font-bold uppercase">{userActiveTrades.length} Pending Execution{userActiveTrades.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {userActiveTrades.map(t => (
-                            <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-6 py-4 rounded-[24px] border border-[#2B3139] shadow-lg hover:border-indigo-500/30 transition-all group">
-                                <div className="flex items-center space-x-4">
-                                    <div className={`w-3 h-3 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]`}></div>
+                            <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 lg:px-6 py-3 lg:py-4 rounded-[20px] lg:rounded-[24px] border border-[#2B3139] shadow-lg hover:border-indigo-500/30 transition-all group">
+                                <div className="flex items-center space-x-3 lg:space-x-4">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]`}></div>
                                     <div className="flex flex-col">
-                                        <span className={`text-[11px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                        <span className={`text-[10px] lg:text-[11px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
                                             {t.direction === 'up' ? 'Long' : 'Short'} ${t.amount}
                                         </span>
-                                        <span className="text-[8px] text-gray-600 font-bold uppercase tracking-widest">{t.leverage}x Leverage</span>
+                                        <span className="text-[7px] lg:text-[8px] text-gray-600 font-bold uppercase tracking-widest">{t.leverage}x Leverage</span>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end">
-                                    <span className="text-[10px] font-black text-gray-100 italic tracking-tighter">{t.symbol}/USDT</span>
-                                    <span className="text-[8px] text-indigo-500/50 font-mono uppercase tracking-[0.2em]">Settlement Pending</span>
+                                    <span className="text-[9px] lg:text-[10px] font-black text-gray-100 italic tracking-tighter">{t.symbol}/USDT</span>
+                                    <span className="text-[7px] lg:text-[8px] text-indigo-500/50 font-mono uppercase tracking-[0.2em]">Pending</span>
                                 </div>
                             </div>
                         ))}
@@ -327,22 +327,22 @@ const TradeView: React.FC<TradeViewProps> = ({
             )}
 
             {userSettled.length > 0 && (
-                <div className="p-6 border-t border-[#2B3139] bg-[#0B0E11] shrink-0">
-                    <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-4 px-2">Recent Results</div>
+                <div className="p-4 lg:p-6 border-t border-[#2B3139] bg-[#0B0E11] shrink-0">
+                    <div className="text-[9px] lg:text-[10px] font-black text-gray-600 uppercase tracking-widest mb-4 px-2">Recent Results</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {userSettled.map(t => {
                             const isWin = t.status === 'won';
                             return (
-                                <div key={t.id} className={`flex items-center justify-between px-6 py-4 rounded-[24px] border text-[9px] font-black ${isWin ? 'bg-emerald-900/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-900/5 border-rose-500/10 text-rose-400'}`}>
+                                <div key={t.id} className={`flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 rounded-[20px] lg:rounded-[24px] border text-[8px] lg:text-[9px] font-black ${isWin ? 'bg-emerald-900/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-900/5 border-rose-500/10 text-rose-400'}`}>
                                     <div className="flex flex-col">
                                         <span className="uppercase tracking-widest mb-0.5">{t.symbol} · {t.duration}s</span>
-                                        <span className="text-[8px] opacity-50 uppercase">{t.leverage}x Position</span>
+                                        <span className="text-[7px] lg:text-[8px] opacity-50 uppercase">{t.leverage}x Position</span>
                                     </div>
                                     <div className="text-right flex flex-col">
-                                        <span className={`text-[12px] italic ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        <span className={`text-[11px] lg:text-[12px] italic ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
                                             {isWin ? '+' : ''}{t.pnl !== undefined ? `$${Math.abs(t.pnl).toFixed(2)}` : t.status.toUpperCase()}
                                         </span>
-                                        <span className="text-[7px] text-gray-600 uppercase font-bold tracking-widest">Protocol Finalized</span>
+                                        <span className="text-[7px] text-gray-600 uppercase font-bold tracking-widest">Finalized</span>
                                     </div>
                                 </div>
                             );
@@ -352,17 +352,17 @@ const TradeView: React.FC<TradeViewProps> = ({
             )}
         </div>
 
-        <div className="w-72 bg-[#181C25] border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto no-scrollbar">
-            <div className="p-5 space-y-5 flex-1 flex flex-col">
+        <div className="w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto no-scrollbar">
+            <div className="p-4 lg:p-5 space-y-4 lg:space-y-5 flex-1 flex flex-col">
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="flex justify-between items-center mb-1">
-                        <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Available Balance (DEMO)' : 'Available Balance'}</div>
+                        <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Balance (DEMO)' : 'Balance'}</div>
                         <button onClick={() => setShowTransferModal(true)} className="text-[8px] text-indigo-500 font-black uppercase hover:text-indigo-400 transition-colors">Transfer</button>
                     </div>
                     {balLoading ? (
                         <div className="h-5 w-24 bg-[#2B3139] rounded animate-pulse"></div>
                     ) : (
-                        <div className={`text-xl font-black tabular-nums ${!hasSufficient ? 'text-rose-500' : 'text-gray-100'}`}>
+                        <div className={`text-lg lg:text-xl font-black tabular-nums ${!hasSufficient ? 'text-rose-500' : 'text-gray-100'}`}>
                             ${(tradingBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
                     )}
@@ -379,7 +379,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                             type="text" 
                             value={amount} 
                             onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                            className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl py-4 pl-8 pr-4 text-sm font-black text-gray-100 outline-none transition-all"
+                            className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl py-3 lg:py-4 pl-8 pr-4 text-sm font-black text-gray-100 outline-none transition-all"
                         />
                     </div>
                     <div className="grid grid-cols-3 gap-2">
@@ -393,62 +393,67 @@ const TradeView: React.FC<TradeViewProps> = ({
 
                 {parsedAmount >= MIN_TRADE && hasSufficient && (
                     <div className="flex justify-between items-center px-3 py-2 bg-emerald-900/10 border border-emerald-500/15 rounded-xl">
-                        <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">If Profit (85%)</span>
+                        <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Profit (85%)</span>
                         <span className="text-[10px] text-emerald-400 font-black">+${potentialProfit.toFixed(2)}</span>
                     </div>
                 )}
 
-                <div className="space-y-3">
-                    <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase tracking-widest px-1">
-                        <span>Leverage Options</span>
-                        <span className="text-indigo-400">{leverage}x</span>
+                <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:gap-5">
+                    <div className="space-y-3">
+                        <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase tracking-widest px-1">
+                            <span>Leverage</span>
+                            <span className="text-indigo-400">{leverage}x</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                            {[20, 50, 100].map(l => (
+                                <button 
+                                    key={l} 
+                                    onClick={() => setLeverage(l)} 
+                                    className={`py-2 text-[9px] lg:text-[10px] font-black rounded-xl border transition-all ${leverage === l ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2B3139] text-gray-500'}`}
+                                >
+                                    {l}x
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                        {[20, 50, 100].map(l => (
-                            <button 
-                                key={l} 
-                                onClick={() => setLeverage(l)} 
-                                className={`py-2.5 text-[10px] font-black rounded-xl border transition-all ${leverage === l ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'border-[#2B3139] text-gray-500 hover:border-gray-600'}`}
-                            >
-                                {l}x
-                            </button>
-                        ))}
+
+                    <div className="space-y-3">
+                        <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase tracking-widest px-1">
+                            <span>Duration</span>
+                            <span className="text-indigo-400">{duration}s</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                            {[30, 60, 120].map(s => (
+                                <button key={s} onClick={() => setDuration(s)} className={`py-2 text-[9px] lg:text-[10px] font-black rounded-xl border transition-all ${duration === s ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2B3139] text-gray-500'}`}>
+                                    {s}s
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Settlement</label>
-                    <div className="grid grid-cols-3 gap-2">
-                        {[30, 60, 120].map(s => (
-                            <button key={s} onClick={() => setDuration(s)} className={`py-2.5 text-[10px] font-black rounded-xl border transition-all ${duration === s ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'border-[#2B3139] text-gray-500 hover:border-gray-600'}`}>
-                                {s}s
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex flex-col space-y-3 pt-1">
+                <div className="flex flex-col space-y-2 lg:space-y-3 pt-1">
                     {tradeStatus && (
                       <div className={`text-[9px] font-black uppercase tracking-widest text-center px-3 py-2 rounded-xl border ${tradeStatus.ok ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-400' : 'bg-rose-900/30 border-rose-500/30 text-rose-400'}`}>
                         {tradeStatus.msg}
                       </div>
                     )}
-                    <button
-                        onClick={() => executeTrade('up')}
-                        disabled={!canTrade}
-                        className={`group relative w-full py-4 text-white rounded-[20px] font-black uppercase text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 overflow-hidden ${canTrade ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-900/30 cursor-not-allowed text-emerald-900'}`}
-                    >
-                        <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
-                        <span className="relative z-10">BUY / LONG ↑</span>
-                    </button>
-                    <button
-                        onClick={() => executeTrade('down')}
-                        disabled={!canTrade}
-                        className={`group relative w-full py-4 text-white rounded-[20px] font-black uppercase text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 overflow-hidden ${canTrade ? 'bg-rose-600 hover:bg-rose-500' : 'bg-rose-900/30 cursor-not-allowed text-rose-900'}`}
-                    >
-                        <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
-                        <span className="relative z-10">SELL / SHORT ↓</span>
-                    </button>
+                    <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                        <button
+                            onClick={() => executeTrade('up')}
+                            disabled={!canTrade}
+                            className={`group relative py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 overflow-hidden ${canTrade ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-900/30 text-emerald-900'}`}
+                        >
+                            <span>BUY ↑</span>
+                        </button>
+                        <button
+                            onClick={() => executeTrade('down')}
+                            disabled={!canTrade}
+                            className={`group relative py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 overflow-hidden ${canTrade ? 'bg-rose-600 hover:bg-rose-500' : 'bg-rose-900/30 text-rose-900'}`}
+                        >
+                            <span>SELL ↓</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

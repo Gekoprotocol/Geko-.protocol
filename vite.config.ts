@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      target: 'esnext',
+      target: 'es2020',
       outDir: 'dist',
       emptyOutDir: true,
       rollupOptions: {
