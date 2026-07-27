@@ -40,8 +40,11 @@ interface SwapViewProps {
 
   useEffect(() => {
     if (assets.length >= 2) {
-      if (!fromAsset) setFromAsset(assets.find(a => a.symbol !== 'USDT') || assets[0]);
-      if (!toAsset) setToAsset(assets.find(a => a.symbol === 'USDT') || assets[1]);
+      const currentFrom = fromAsset ? assets.find(a => a.symbol === fromAsset.symbol) : (assets.find(a => a.symbol !== 'USDT') || assets[0]);
+      const currentTo = toAsset ? assets.find(a => a.symbol === toAsset.symbol) : (assets.find(a => a.symbol === 'USDT') || assets[1]);
+      
+      if (currentFrom) setFromAsset(currentFrom);
+      if (currentTo) setToAsset(currentTo);
     }
   }, [assets]);
 
@@ -249,43 +252,53 @@ interface SwapViewProps {
           <div className="space-y-4">
             {/* Swap Input Card */}
             <div className={`glass rounded-[40px] p-2 shadow-xl transition-all duration-500 hover:border-indigo-500/30 bg-[#181C25]/50`}>
-              <div className="bg-[#1E2329] p-8 rounded-[36px] border border-[#2B3139] space-y-6 shadow-sm">
+              <div className="bg-[#1E2329] p-6 lg:p-8 rounded-[36px] border border-[#2B3139] space-y-6 shadow-sm">
                 <div className="flex justify-between items-center px-1">
-                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Pay with</span>
+                   <span className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Pay with</span>
                    <div className="flex items-center space-x-2">
-                      <span className="text-[10px] text-indigo-400 font-mono">~${(parseFloat(amount || '0') * (fromAsset?.price || 0)).toFixed(2)} USD</span>
+                      <button 
+                        onClick={() => {
+                            // Find relevant balance from wallet
+                            const bal = wallet?.balances?.find(b => b.symbol === fromAsset?.symbol)?.amount || '0';
+                            setAmount(bal);
+                        }}
+                        className="text-[9px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-0.5 rounded"
+                      >
+                        MAX
+                      </button>
+                      <span className="text-[10px] text-gray-500 font-mono">~${(parseFloat(amount || '0') * (fromAsset?.price || 0)).toFixed(2)} USD</span>
                    </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="flex-1 bg-transparent text-4xl font-bold outline-none placeholder-gray-600 text-gray-100" />
+                <div className="flex items-center space-x-3 lg:space-x-4">
+                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="flex-1 bg-transparent text-3xl lg:text-4xl font-bold outline-none placeholder-gray-600 text-gray-100 min-w-0" />
                   <button 
                     onClick={() => openSelector('from')}
-                    className="flex items-center space-x-2 bg-[#2B3139] hover:bg-[#363C45] px-5 py-3 rounded-2xl border border-[#2B3139] transition-all active:scale-95 group"
+                    className="flex items-center space-x-2 bg-[#2B3139] hover:bg-[#363C45] px-3 lg:px-5 py-2 lg:py-3 rounded-2xl border border-[#2B3139] transition-all shrink-0"
                   >
-                    <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">{fromAsset?.symbol[0] || '?'}</div>
+                    <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white shrink-0">{fromAsset?.symbol[0] || '?'}</div>
                     <span className="font-black text-sm text-gray-200">{fromAsset?.symbol || '...'}</span>
-                    <svg className="w-4 h-4 text-gray-500 group-hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </button>
                 </div>
               </div>
 
               <div className="flex justify-center -my-4 relative z-20">
-                   <div className="w-12 h-12 bg-[#181C25] border-4 border-[#0B0E11] rounded-2xl flex items-center justify-center shadow-xl text-indigo-500 border-[#2B3139]">
-                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                   <div className="w-10 h-10 lg:w-12 lg:h-12 bg-[#181C25] border-4 border-[#0B0E11] rounded-2xl flex items-center justify-center shadow-xl text-indigo-500 border-[#2B3139]">
+                     <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
                    </div>
               </div>
 
-              <div className="bg-[#1E2329] p-8 rounded-[36px] border border-[#2B3139] space-y-6 shadow-sm">
+              <div className="bg-[#1E2329] p-6 lg:p-8 rounded-[36px] border border-[#2B3139] space-y-6 shadow-sm">
                 <div className="flex justify-between items-center px-1">
-                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Receive Equivalent</span>
-                   <span className="text-[10px] text-emerald-500 font-bold">Best protocol rate</span>
+                   <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">Receive Equivalent</span>
+                   <span className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">Protocol Settlement Rate</span>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <div className="flex-1 text-4xl font-bold text-gray-100 font-mono">
+                <div className="flex items-center space-x-3 lg:space-x-4">
+                  <div className="flex-1 text-3xl lg:text-4xl font-bold text-gray-100 font-mono truncate">
                     {equivalentUsdt}
                   </div>
-                  <div className="flex items-center space-x-2 bg-[#0B0E11] px-5 py-3 rounded-2xl border border-[#2B3139]">
-                    <div className="w-6 h-6 bg-emerald-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white">U</div>
+                  <div className="flex items-center space-x-2 bg-[#0B0E11] px-3 lg:px-5 py-2 lg:py-3 rounded-2xl border border-[#2B3139] shrink-0">
+                    <div className="w-6 h-6 bg-emerald-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white shrink-0">U</div>
                     <span className="font-black text-sm text-gray-200">USDT</span>
                   </div>
                 </div>

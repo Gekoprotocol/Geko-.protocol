@@ -46,23 +46,24 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
     }, [wallet?.address]);
 
     return (
-        <div className="flex-1 flex flex-col p-8 space-y-6 overflow-hidden">
-            <div className="flex justify-between items-center">
+        <div className="h-full flex flex-col p-4 lg:p-8 space-y-6">
+            <div className="flex justify-between items-center px-2">
                 <div>
-                    <h2 className="text-2xl font-black italic uppercase text-indigo-400 tracking-tight">Ledger_Archive</h2>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Full Transaction History</p>
+                    <h2 className="text-xl lg:text-2xl font-black italic uppercase text-indigo-400 tracking-tight">Ledger_Archive</h2>
+                    <p className="text-[9px] lg:text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Full Transaction History</p>
                 </div>
                 <button 
                     onClick={fetchHistory}
-                    className="px-4 py-2 bg-[#1E2329] border border-[#2B3139] rounded-xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all"
+                    className="px-4 py-2 bg-[#1E2329] border border-[#2B3139] rounded-xl text-[9px] lg:text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all"
                 >
-                    Refresh Ledger
+                    Refresh
                 </button>
             </div>
 
-            <div className="flex-1 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col shadow-2xl">
+            <div className="flex-1 bg-[#181C25] border border-[#2B3139] rounded-[24px] lg:rounded-[32px] overflow-hidden flex flex-col shadow-2xl min-h-0">
                 <div className="overflow-y-auto custom-scrollbar flex-1">
-                    <table className="w-full text-left">
+                    <div className="min-w-[600px] lg:min-w-0">
+                        <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-[#0B0E11] text-[9px] text-gray-500 uppercase font-black border-b border-[#2B3139] z-10">
                             <tr>
                                 <th className="px-8 py-4">Timestamp</th>
@@ -123,6 +124,7 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                             )}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>

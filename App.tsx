@@ -549,11 +549,11 @@ function TerminalLayout() {
   }
 
   return (
-    <div className={`h-screen w-screen flex flex-col overflow-hidden ${isDarkMode ? 'bg-[#0B0E11] text-[#EAECEF]' : 'bg-gray-50 text-gray-900'} font-sans`}>
+    <div className={`h-screen h-[100dvh] w-screen flex flex-col overflow-hidden ${isDarkMode ? 'bg-[#0B0E11] text-[#EAECEF]' : 'bg-gray-50 text-gray-900'} font-sans`}>
       
       {/* TOP BAR */}
-      <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 glass shrink-0 z-40">
-        <div className="flex items-center gap-3">
+      <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 glass shrink-0 z-40">
+        <div className="flex items-center gap-2 lg:gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
             <span className="text-white font-black text-[10px] italic">GK</span>
           </div>
