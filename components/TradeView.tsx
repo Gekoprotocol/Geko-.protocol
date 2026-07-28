@@ -280,8 +280,8 @@ const TradeView: React.FC<TradeViewProps> = ({
         </div>
 
         {/* CONTROLS SECTION */}
-        <div className={`w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto no-scrollbar ${mobileView === 'chart' ? 'hidden lg:flex' : 'flex'}`}>
-            <div className="lg:hidden h-8 flex items-center justify-center border-b border-white/5 opacity-40">
+        <div className={`w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto custom-scrollbar ${mobileView === 'chart' ? 'hidden lg:flex' : 'flex'}`}>
+            <div className="lg:hidden h-8 flex items-center justify-center border-b border-white/5 opacity-40 shrink-0">
                 <div className="flex flex-col items-center">
                     <div className="w-12 h-1 bg-gray-600 rounded-full mb-1"></div>
                     <span className="text-[8px] font-black uppercase tracking-[0.3em]">Swipe Up for Chart</span>
