@@ -40,12 +40,6 @@ app.use(cors());
 // Allow framing and basic security headers
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'ALLOWALL');
-  
-  // Force correct MIME types for TypeScript and JSX files to fix "blank screen" issues
-  const url = req.url.toLowerCase();
-  if (url.endsWith('.ts') || url.endsWith('.tsx') || url.endsWith('.jsx')) {
-    res.setHeader('Content-Type', 'application/javascript');
-  }
   next();
 });
 
@@ -1460,18 +1454,19 @@ app.use(express.static(rootPath));
 app.get('*', (req, res) => {
   if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found on server' });
   
-  // Try to serve index.html for SPA routing
-  const possiblePaths = [
-    path.join(distPath, 'index.html'),
-    path.join(publicPath, 'index.html'),
-    path.join(rootPath, 'index.html')
-  ];
-  
-  for (const indexPath of possiblePaths) {
-    if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  // SECURE PRODUCTION ROUTING: Always try dist first for compiled assets
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
   }
   
-  res.status(404).send("<h1>Frontend Build Not Found</h1>");
+  // Fallback for development environments
+  const rootIndexPath = path.join(rootPath, 'index.html');
+  if (fs.existsSync(rootIndexPath)) {
+    return res.sendFile(rootIndexPath);
+  }
+  
+  res.status(404).send("<h1>Frontend Build Not Found</h1><p>Please run <code>npm run build</code> to generate production assets.</p>");
 });
 
 // ─── Global Error Handler ──────────────────────────────────────────────────
