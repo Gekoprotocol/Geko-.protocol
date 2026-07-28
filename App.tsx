@@ -299,7 +299,7 @@ function TerminalLayout() {
   // Map prices to AssetInfo format
   const assets: AssetInfo[] = useMemo(() => {
     if (!Array.isArray(prices)) return [];
-    const allowedSymbols = ['BTC', 'ETH', 'XRP', 'DOGE'];
+    const allowedSymbols = ['BTC', 'ETH', 'XRP', 'DOGE', 'SOL', 'USDT'];
     return prices.map(p => {
       if (!p || typeof p !== 'object') return null;
       const price = parseFloat(p.lastPrice || '0');
