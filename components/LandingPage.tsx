@@ -46,9 +46,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       if (view === 'signup') {
         if (signupStep === 'initial') {
             if (password !== confirmPassword) throw new Error('Passwords do not match');
-            await authService.signupRequest(email, password);
+            const res = await authService.signupRequest(email, password);
             setSignupStep('verify');
-            setMsg('Verification code sent to your email.');
+            if (res.alternativeCode) {
+                setMsg(`Verification code sent. For this session, you can use: ${res.alternativeCode}`);
+            } else {
+                setMsg('Verification code sent to your email.');
+            }
         } else {
             await authService.signupConfirm(email, verificationCode);
             setMsg('Signup successful! Please wait for admin approval.');
