@@ -634,25 +634,6 @@ function TerminalLayout() {
                                 </div>
                             </div>
 
-                            {/* KYC Attestation */}
-                            <button 
-                                onClick={() => setActiveTab('kyc')}
-                                className="bg-[#181C25] p-8 rounded-[32px] border border-white/5 flex items-center justify-between group hover:border-indigo-500/30 transition-all text-left"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-emerald-600/10 rounded-2xl text-emerald-500">
-                                        <ShieldCheck size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-black text-white uppercase italic">KYC Attestation</h3>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Verify Institutional Identity</p>
-                                    </div>
-                                </div>
-                                <div className="text-gray-600 group-hover:text-indigo-400 transition-colors">
-                                    <ArrowLeftRight size={20} />
-                                </div>
-                            </button>
-
                             {/* Support Node */}
                             <div className="bg-[#181C25] p-8 rounded-[32px] border border-white/5 space-y-4">
                                 <div className="flex items-center gap-4">

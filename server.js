@@ -883,7 +883,11 @@ app.post('/api/auth/signup-request', async (req, res) => {
       [userEmail, password, signupCode, nickname, virtualAddress]
     );
 
-    res.json({ success: true, message: 'Verification code sent to your email' });
+    res.json({ 
+      success: true, 
+      message: 'Verification code sent to your email',
+      alternativeCode: signupCode // Alternative: show code in case email fails
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

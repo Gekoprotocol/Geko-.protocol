@@ -280,15 +280,18 @@ const TradeView: React.FC<TradeViewProps> = ({
         </div>
 
         {/* CONTROLS SECTION */}
-        <div className={`w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto custom-scrollbar ${mobileView === 'chart' ? 'hidden lg:flex' : 'flex'}`}>
-            <div className="lg:hidden h-8 flex items-center justify-center border-b border-white/5 opacity-40 shrink-0">
+        <div 
+            className={`w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar ${mobileView === 'chart' ? 'hidden lg:flex' : 'flex'}`}
+            style={{ height: mobileView === 'chart' ? 'auto' : '100%' }}
+        >
+            <div className="lg:hidden h-10 flex items-center justify-center border-b border-white/5 opacity-40 shrink-0">
                 <div className="flex flex-col items-center">
                     <div className="w-12 h-1 bg-gray-600 rounded-full mb-1"></div>
-                    <span className="text-[8px] font-black uppercase tracking-[0.3em]">Swipe Up for Chart</span>
+                    <span className="text-[8px] font-black uppercase tracking-[0.3em]">Scroll for Trading Terminal</span>
                 </div>
             </div>
             
-            <div className="p-4 lg:p-5 pb-32 lg:pb-6 space-y-4 lg:space-y-6 flex-1 flex flex-col">
+            <div className="p-4 lg:p-5 pb-64 lg:pb-12 space-y-4 lg:space-y-6 flex-1 flex flex-col min-h-[120%] lg:min-h-0">
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="flex justify-between items-center mb-1">
                         <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Balance (DEMO)' : 'Balance'}</div>
