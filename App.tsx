@@ -710,7 +710,7 @@ function TerminalLayout() {
       </main>
 
       {/* BOTTOM NAVIGATION */}
-      <nav className="h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl flex items-center justify-center px-4 gap-2 lg:gap-8 z-50">
+      <nav className="h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl flex items-center justify-start lg:justify-center px-4 gap-2 lg:gap-8 z-50 overflow-x-auto no-scrollbar snap-x snap-mandatory">
           <BottomNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
           <BottomNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade" />
           <BottomNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap" />
