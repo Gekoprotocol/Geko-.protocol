@@ -132,10 +132,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       const res = await fetch(`/api/user/balance?address=${encodeURIComponent(wallet.address)}`);
       if (!res.ok) throw new Error("Failed to fetch protocol balance");
       const data = await res.json();
-      if (res.ok && data.balances) {
-        setProtocolBalances(data.balances);
+      if (res.ok) {
+        if (data.balances) setProtocolBalances(data.balances);
         setTradingBalance(data.trading_balance || 0);
         setDemoBalance(data.demo_balance || 100000);
+        
+        // SYNC KYC STATUS
+        if (data.kyc_status && data.kyc_status !== wallet.kyc_status) {
+            onUpdateWallet({ ...wallet, kyc_status: data.kyc_status });
+        }
       }
     } catch (e) {
       console.error('Protocol balance fetch failed', e);
@@ -403,7 +408,19 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
              </button>
              <button onClick={() => setShowTransferModal(true)} className="px-4 md:px-8 py-2 md:py-3 bg-emerald-600/20 text-emerald-500 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border border-emerald-500/20 hover:bg-emerald-600/20 transition-all">Transfer</button>
              <button onClick={handleWithdrawClick} className="px-4 md:px-8 py-2 md:py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
-             <button onClick={() => setActiveModal('kyc')} className="px-4 md:px-8 py-2 md:py-3 bg-amber-600/10 text-amber-500 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border border-amber-500/20 hover:bg-amber-600/20 transition-all">Verify KYC</button>
+             <button 
+                onClick={() => setActiveModal('kyc')} 
+                className={`px-4 md:px-8 py-2 md:py-3 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border transition-all flex items-center justify-center space-x-2 ${
+                    wallet.kyc_status === 'approved' 
+                    ? 'bg-emerald-600/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-600/20' 
+                    : 'bg-amber-600/10 text-amber-500 border-amber-500/20 hover:bg-amber-600/20'
+                }`}
+             >
+                {wallet.kyc_status === 'approved' && (
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                )}
+                <span>{wallet.kyc_status === 'approved' ? 'KYC Verified' : 'Verify KYC'}</span>
+             </button>
           </div>
         </div>
 
