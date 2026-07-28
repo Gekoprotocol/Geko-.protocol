@@ -77,6 +77,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     if (kycCountry === 'USA' && !kycIdBack) return;
 
     setIsKycSubmitting(true);
+    setErrorMsg('');
     try {
         const res = await fetch('/api/kyc/submit', {
             method: 'POST',
@@ -88,16 +89,25 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                 idBack: kycIdBack
             })
         });
+        
         if (res.ok) {
             setStep('success');
             onUpdateWallet({ ...wallet, kyc_status: 'pending' });
             setTimeout(() => {
                 setActiveModal(null);
                 setStep('form');
-            }, 2500);
+                setKycIdFront(null);
+                setKycIdBack(null);
+                setKycCountry('');
+            }, 3000);
+        } else {
+            const data = await res.json();
+            throw new Error(data.error || 'Submission failed');
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error('KYC submission failed', e);
+        setErrorMsg(e.message || 'Error transmitting data. Image might be too large.');
+        setTimeout(() => setErrorMsg(''), 5000);
     } finally {
         setIsKycSubmitting(false);
     }
@@ -629,6 +639,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                                         <h3 className="text-sm font-black text-gray-100 uppercase italic">Identification Attestation</h3>
                                         <p className="text-[10px] text-gray-500 leading-relaxed">Geko Protocols requires high-fidelity identification to comply with cross-chain regulatory frameworks.</p>
                                         
+                                        {errorMsg && (
+                                            <div className="p-4 bg-rose-900/20 border border-rose-500/20 rounded-2xl text-[10px] text-rose-500 font-black uppercase text-center animate-pulse">
+                                                {errorMsg}
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <label className="text-[8px] text-gray-500 uppercase font-black ml-1">Select Country</label>
                                             <select 
