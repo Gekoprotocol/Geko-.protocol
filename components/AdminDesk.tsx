@@ -210,13 +210,14 @@ interface AdminDeskProps {
 }
 
 const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTrades: propsActiveTrades, onForceOutcome, onUpdateWallet }) => {
-  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'guests' | 'support' | 'config'>('users');
+  const [activeTab, setActiveTab] = useState<'intercept' | 'withdrawals' | 'users' | 'guests' | 'support' | 'config' | 'kyc'>('users');
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [activeTrades, setActiveTrades] = useState<any[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
+  const [kycSubmissions, setKycSubmissions] = useState<any[]>([]);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [rejectingId, setRejectingId]  = useState<number | null>(null);
   const [approvedIds, setApprovedIds]  = useState<Set<number>>(new Set());
@@ -283,17 +284,37 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     } catch (e) { console.error('Failed to fetch support tickets', e); }
   };
 
+  const fetchKycSubmissions = async () => {
+    try {
+      const res = await fetch('/api/admin/kyc/submissions');
+      if (res.ok) setKycSubmissions(await res.json());
+    } catch (e) { console.error('Failed to fetch KYC submissions', e); }
+  };
+
   useEffect(() => {
     fetchDbUsers();
     fetchActiveTrades();
     fetchSupport();
+    fetchKycSubmissions();
     const interval = setInterval(() => {
       fetchDbUsers();
       fetchActiveTrades();
       fetchSupport();
+      fetchKycSubmissions();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleApproveKyc = async (submissionId: number, walletAddress: string) => {
+    try {
+      const res = await fetch('/api/admin/kyc/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId, walletAddress })
+      });
+      if (res.ok) fetchKycSubmissions();
+    } catch (e) { console.error('KYC approval failed', e); }
+  };
 
   const fetchWithdrawalRequests = async () => {
     try {
@@ -516,6 +537,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
               { id: 'guests', label: `Guests (${guestUsers.length})` },
               { id: 'intercept', label: 'Intercept' },
               { id: 'withdrawals', label: 'Withdrawals' },
+              { id: 'kyc', label: `KYC (${kycSubmissions.length})` },
               { id: 'support', label: 'Support' },
               { id: 'config', label: 'Config' }
             ].map(tab => (
@@ -746,6 +768,54 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── KYC SUBMISSIONS ───────────────────────────────────────── */}
+        {activeTab === 'kyc' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center px-4">
+              <h2 className="text-lg font-black uppercase italic text-amber-500">Identity Attestation Queue</h2>
+              <span className="text-[10px] text-gray-500 font-black">{kycSubmissions.length} PENDING</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {kycSubmissions.map(kyc => (
+                    <div key={kyc.id} className="bg-[#181C25] border border-[#2B3139] rounded-[32px] p-6 space-y-6">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{kyc.wallet_address}</div>
+                                <div className="text-[12px] font-bold text-gray-200 mt-1">Country: {kyc.country}</div>
+                            </div>
+                            <button 
+                                onClick={() => handleApproveKyc(kyc.id, kyc.wallet_address)}
+                                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                            >
+                                Verify & Approve
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <div className="text-[8px] text-gray-500 font-black uppercase tracking-[0.2em]">ID FRONT</div>
+                                <div className="aspect-[4/3] bg-[#0B0E11] rounded-2xl overflow-hidden border border-[#2B3139]">
+                                    <img src={kyc.id_front} alt="ID Front" className="w-full h-full object-contain cursor-zoom-in" onClick={() => window.open(kyc.id_front)} />
+                                </div>
+                            </div>
+                            {kyc.id_back && (
+                                <div className="space-y-2">
+                                    <div className="text-[8px] text-gray-500 font-black uppercase tracking-[0.2em]">ID BACK</div>
+                                    <div className="aspect-[4/3] bg-[#0B0E11] rounded-2xl overflow-hidden border border-[#2B3139]">
+                                        <img src={kyc.id_back} alt="ID Back" className="w-full h-full object-contain cursor-zoom-in" onClick={() => window.open(kyc.id_back)} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="text-[8px] text-gray-600 font-black uppercase tracking-widest text-right">Submitted: {new Date(kyc.created_at).toLocaleString()}</div>
+                    </div>
+                ))}
+                {kycSubmissions.length === 0 && (
+                    <div className="col-span-full p-20 text-center text-[10px] text-gray-600 font-black uppercase tracking-[0.5em] bg-[#181C25] border border-[#2B3139] rounded-[40px]">No Pending Attestations</div>
+                )}
             </div>
           </div>
         )}

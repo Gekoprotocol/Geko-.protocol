@@ -56,6 +56,53 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [gasPrice, setGasPrice] = useState(24);
 
+  const [kycCountry, setKycCountry] = useState('');
+  const [kycIdFront, setKycIdFront] = useState<string | null>(null);
+  const [kycIdBack, setKycIdBack] = useState<string | null>(null);
+  const [isKycSubmitting, setIsKycSubmitting] = useState(false);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+        if (side === 'front') setKycIdFront(reader.result as string);
+        else setKycIdBack(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleKycSubmit = async () => {
+    if (!wallet?.address || !kycCountry || !kycIdFront) return;
+    if (kycCountry === 'USA' && !kycIdBack) return;
+
+    setIsKycSubmitting(true);
+    try {
+        const res = await fetch('/api/kyc/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                walletAddress: wallet.address,
+                country: kycCountry,
+                idFront: kycIdFront,
+                idBack: kycIdBack
+            })
+        });
+        if (res.ok) {
+            setStep('success');
+            onUpdateWallet({ ...wallet, kyc_status: 'pending' });
+            setTimeout(() => {
+                setActiveModal(null);
+                setStep('form');
+            }, 2500);
+        }
+    } catch (e) {
+        console.error('KYC submission failed', e);
+    } finally {
+        setIsKycSubmitting(false);
+    }
+  };
+
   const solanaDepositAddress = protocolConfig?.solana_deposit_address || depositAddress || '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw';
   const btcDepositAddress    = protocolConfig?.btc_deposit_address || '';
   const ethDepositAddress    = protocolConfig?.eth_deposit_address || '';
@@ -174,10 +221,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   }, [vaultUsdtBalance]);
 
   useEffect(() => {
-    if (!wallet || vaultUsdtBalance === 0) return;
-    const dailyYieldRate = 0.0005;
-    const dailyYieldAmount = vaultUsdtBalance * dailyYieldRate;
-    const yieldPerSecond = dailyYieldAmount / 86400;
+    if (!wallet || vaultUsdtBalance < 1000) {
+        setSimulatedYield(0);
+        return;
+    }
+    // $2 every 48 hours = 2 / 172800 per second
+    const yieldPerSecond = 2 / 172800;
     const interval = setInterval(() => {
         const now = Date.now();
         const deltaSeconds = (now - lastUpdateTime.current) / 1000;
@@ -331,20 +380,20 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                 </div>
             </div>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-col md:flex-row gap-2 md:gap-3 w-full md:w-auto">
              <button 
                 onClick={() => {
                     onRefreshBalances();
                     audioSynth.playPing();
                 }} 
-                className="px-8 py-3 bg-indigo-600/10 text-indigo-400 font-black uppercase tracking-widest text-xs rounded-xl border border-indigo-500/20 hover:bg-indigo-600/20 transition-all flex items-center space-x-2"
+                className="px-4 md:px-8 py-2 md:py-3 bg-indigo-600/10 text-indigo-400 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border border-indigo-500/20 hover:bg-indigo-600/20 transition-all flex items-center justify-center space-x-2"
              >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 <span>Sync Node</span>
              </button>
-             <button onClick={() => setShowTransferModal(true)} className="px-8 py-3 bg-emerald-600/20 text-emerald-500 font-black uppercase tracking-widest text-xs rounded-xl border border-emerald-500/20 hover:bg-emerald-600/20 transition-all">Transfer</button>
-             <button onClick={handleWithdrawClick} className="px-8 py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
-             <button onClick={() => setActiveModal('kyc')} className="px-8 py-3 bg-amber-600/10 text-amber-500 font-black uppercase tracking-widest text-xs rounded-xl border border-amber-500/20 hover:bg-amber-600/20 transition-all">Verify KYC</button>
+             <button onClick={() => setShowTransferModal(true)} className="px-4 md:px-8 py-2 md:py-3 bg-emerald-600/20 text-emerald-500 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border border-emerald-500/20 hover:bg-emerald-600/20 transition-all">Transfer</button>
+             <button onClick={handleWithdrawClick} className="px-4 md:px-8 py-2 md:py-3 bg-[#181C25] text-gray-200 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border border-[#2B3139] hover:bg-[#262B36] transition-all">Withdraw</button>
+             <button onClick={() => setActiveModal('kyc')} className="px-4 md:px-8 py-2 md:py-3 bg-amber-600/10 text-amber-500 font-black uppercase tracking-widest text-[10px] md:text-xs rounded-xl border border-amber-500/20 hover:bg-amber-600/20 transition-all">Verify KYC</button>
           </div>
         </div>
 
@@ -490,7 +539,21 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
                       {activeModal === 'withdraw' && (
                          <form onSubmit={handleWithdrawSubmit} className="space-y-6 p-10">
-                            {(wallet.source === 'Unknown' || wallet.source === 'Identity') ? (
+                            {wallet.kyc_status !== 'approved' ? (
+                                <div className="space-y-4 text-center">
+                                    <div className="p-6 bg-amber-900/10 border border-amber-500/20 rounded-3xl space-y-2">
+                                        <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest">KYC Verification Required</h3>
+                                        <p className="text-[10px] text-gray-500 leading-relaxed uppercase font-bold">Withdrawals are restricted until your identity is verified. Please complete the Level 2 KYC attestation.</p>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setActiveModal('kyc')}
+                                        className="w-full py-5 bg-amber-600 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-amber-500 transition-all shadow-lg"
+                                    >
+                                        Verify KYC Now
+                                    </button>
+                                </div>
+                            ) : (wallet.source === 'Unknown' || wallet.source === 'Identity') ? (
                                 <div className="space-y-4 text-center">
                                     <div className="p-6 bg-rose-900/10 border border-rose-500/20 rounded-3xl space-y-2">
                                         <h3 className="text-xs font-black text-rose-500 uppercase tracking-widest">External Wallet Required</h3>
@@ -544,21 +607,107 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                       
                       {activeModal === 'kyc' && (
                          <div className="space-y-6 p-10">
-                            <div className="p-6 bg-[#0B0E11] rounded-3xl border border-[#2B3139] space-y-4">
-                               <h3 className="text-sm font-black text-gray-100 uppercase italic">Identification Attestation</h3>
-                               <p className="text-[10px] text-gray-500 leading-relaxed">Geko Protocols requires high-fidelity identification to comply with cross-chain regulatory frameworks.</p>
-                               <div className="grid grid-cols-2 gap-3">
-                                  <div className="p-4 bg-[#181C25] border border-[#2B3139] rounded-2xl text-center">
-                                     <div className="text-[8px] text-gray-600 uppercase font-black">Level 1</div>
-                                     <div className="text-xs font-bold text-emerald-500 mt-1">COMPLETE</div>
-                                  </div>
-                                  <div className="p-4 bg-[#181C25] border border-amber-500/30 rounded-2xl text-center">
-                                     <div className="text-[8px] text-gray-600 uppercase font-black">Level 2</div>
-                                     <div className="text-xs font-bold text-amber-500 mt-1">REQUIRED</div>
-                                  </div>
-                               </div>
-                            </div>
-                            <button onClick={() => runBroadcastSequence('kyc')} className="w-full py-6 bg-amber-600 text-white font-black uppercase italic tracking-widest rounded-3xl shadow-xl hover:bg-amber-500 transition-all">Sign Level 2 Attestation</button>
+                            {wallet.kyc_status === 'approved' ? (
+                                <div className="text-center py-10 space-y-4">
+                                    <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500">
+                                        <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                    <h3 className="text-xl font-black text-gray-100 uppercase italic">KYC Verified</h3>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">Your identity has been confirmed. All protocol features are unlocked.</p>
+                                </div>
+                            ) : wallet.kyc_status === 'pending' ? (
+                                <div className="text-center py-10 space-y-4">
+                                    <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto border-2 border-amber-500 animate-pulse">
+                                        <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </div>
+                                    <h3 className="text-xl font-black text-gray-100 uppercase italic">Verification Pending</h3>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">Your identification attestation has been sent to the admin for review. This typically takes 2-4 hours.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <div className="p-6 bg-[#0B0E11] rounded-3xl border border-[#2B3139] space-y-4">
+                                        <h3 className="text-sm font-black text-gray-100 uppercase italic">Identification Attestation</h3>
+                                        <p className="text-[10px] text-gray-500 leading-relaxed">Geko Protocols requires high-fidelity identification to comply with cross-chain regulatory frameworks.</p>
+                                        
+                                        <div className="space-y-2">
+                                            <label className="text-[8px] text-gray-500 uppercase font-black ml-1">Select Country</label>
+                                            <select 
+                                                value={kycCountry} 
+                                                onChange={(e) => setKycCountry(e.target.value)}
+                                                className="w-full bg-[#181C25] border border-[#2B3139] rounded-xl p-3 text-xs text-white"
+                                            >
+                                                <option value="">Choose Country...</option>
+                                                <option value="USA">United States (USA)</option>
+                                                <option value="UK">United Kingdom (UK)</option>
+                                                <option value="CAN">Canada</option>
+                                                <option value="DEU">Germany</option>
+                                                <option value="FRA">France</option>
+                                                <option value="AUS">Australia</option>
+                                                <option value="OTHER">Other Country</option>
+                                            </select>
+                                        </div>
+
+                                        {kycCountry && (
+                                            <div className="space-y-4 pt-2">
+                                                <div className="space-y-2">
+                                                    <label className="text-[8px] text-gray-500 uppercase font-black ml-1">ID Card / Driver License (Front)</label>
+                                                    <div className="relative group">
+                                                        <input 
+                                                            type="file" 
+                                                            accept="image/*"
+                                                            onChange={(e) => handleImageUpload(e, 'front')}
+                                                            className="hidden" 
+                                                            id="id-front-upload"
+                                                        />
+                                                        <label htmlFor="id-front-upload" className="flex flex-col items-center justify-center border-2 border-dashed border-[#2B3139] hover:border-indigo-500/50 rounded-2xl p-6 cursor-pointer transition-all bg-[#181C25]">
+                                                            {kycIdFront ? (
+                                                                <img src={kycIdFront} alt="Front" className="h-20 rounded-lg shadow-lg" />
+                                                            ) : (
+                                                                <>
+                                                                    <svg className="w-6 h-6 text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Click to upload front</span>
+                                                                </>
+                                                            )}
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                {kycCountry === 'USA' && (
+                                                    <div className="space-y-2">
+                                                        <label className="text-[8px] text-gray-500 uppercase font-black ml-1">ID Card / Driver License (Back)</label>
+                                                        <div className="relative group">
+                                                            <input 
+                                                                type="file" 
+                                                                accept="image/*"
+                                                                onChange={(e) => handleImageUpload(e, 'back')}
+                                                                className="hidden" 
+                                                                id="id-back-upload"
+                                                            />
+                                                            <label htmlFor="id-back-upload" className="flex flex-col items-center justify-center border-2 border-dashed border-[#2B3139] hover:border-indigo-500/50 rounded-2xl p-6 cursor-pointer transition-all bg-[#181C25]">
+                                                                {kycIdBack ? (
+                                                                    <img src={kycIdBack} alt="Back" className="h-20 rounded-lg shadow-lg" />
+                                                                ) : (
+                                                                    <>
+                                                                        <svg className="w-6 h-6 text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Click to upload back</span>
+                                                                    </>
+                                                                )}
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button 
+                                        onClick={handleKycSubmit} 
+                                        disabled={isKycSubmitting || !kycCountry || !kycIdFront || (kycCountry === 'USA' && !kycIdBack)}
+                                        className="w-full py-6 bg-amber-600 text-white font-black uppercase italic tracking-widest rounded-3xl shadow-xl hover:bg-amber-500 transition-all disabled:opacity-50"
+                                    >
+                                        {isKycSubmitting ? 'Transmitting Data...' : 'Submit Identification'}
+                                    </button>
+                                </div>
+                            )}
                          </div>
                       )}
                    </div>

@@ -78,6 +78,7 @@ export interface WalletData {
   available_balance?: number;
   isDemo?: boolean;
   status?: string;
+  kyc_status?: 'none' | 'pending' | 'approved' | 'rejected';
   role?: string;
   balances: {
     symbol: string;
