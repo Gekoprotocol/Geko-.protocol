@@ -275,11 +275,18 @@ const initializeDatabase = async () => {
         country TEXT,
         id_type TEXT,
         id_number TEXT,
+        id_front TEXT,
+        id_back TEXT,
         status TEXT DEFAULT 'pending',
         admin_note TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
+    try {
+        await pool.query("ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS id_front TEXT");
+        await pool.query("ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS id_back TEXT");
+    } catch (e) {}
 
     dbAvailable = true;
     console.log('[DB] Database fully initialized and ready.');
@@ -449,43 +456,44 @@ async function getUserBalance(walletAddress, assetSymbol) {
 }
 
 
-// ─── Daily 2% Interest Processor ──────────────────────────────────────────
+// ─── Session Yield Processor (48h / $2) ───────────────────────────────────
 async function processDailyInterest() {
   if (!dbAvailable || !pool) return;
   try {
-    console.log('[Interest] Checking for eligible users for 2% daily increase...');
-    // Find users who haven't received interest in last 24 hours
+    console.log('[Yield] Checking for eligible users for $2 yield (48h cycle)...');
+    // Find users who haven't received yield in last 48 hours
     const res = await pool.query(
-      `SELECT wallet_address, last_interest_at 
+      `SELECT wallet_address, protocol_settlement_balance, last_interest_at 
        FROM geko_users 
-       WHERE last_interest_at <= NOW() - INTERVAL '24 hours'`
+       WHERE (last_interest_at IS NULL OR last_interest_at <= NOW() - INTERVAL '48 hours')
+         AND protocol_settlement_balance >= 1000`
     );
 
     for (const user of res.rows) {
-      const vaultBal = await getUserBalance(user.wallet_address, 'USDT');
-      if (vaultBal > 0) {
-        const interestAmt = vaultBal * 0.02;
-        await recordTransaction({
-          wallet_address: user.wallet_address,
-          asset_symbol:   'USDT',
-          amount:         interestAmt,
-          type:           'interest',
-          reference:      '2%_daily_vault_increase'
-        });
-        await pool.query(
-          'UPDATE geko_users SET last_interest_at = NOW() WHERE wallet_address = $1',
-          [user.wallet_address]
-        );
-        console.log(`[Interest] Credited ${interestAmt.toFixed(4)} USDT to ${user.wallet_address}`);
-      } else {
-        await pool.query(
-          'UPDATE geko_users SET last_interest_at = NOW() WHERE wallet_address = $1',
-          [user.wallet_address]
-        );
-      }
+      const yieldAmt = 2.00;
+      
+      // Update balance directly in user table
+      await pool.query(
+        'UPDATE geko_users SET protocol_settlement_balance = protocol_settlement_balance + $1, last_interest_at = NOW() WHERE wallet_address = $2',
+        [yieldAmt, user.wallet_address]
+      );
+
+      // Record transaction
+      await recordTransaction({
+        wallet_address: user.wallet_address,
+        asset_symbol:   'USDT',
+        amount:         yieldAmt,
+        type:           'interest',
+        reference:      '48h_session_yield_reward'
+      });
+      
+      console.log(`[Yield] Credited $${yieldAmt} to ${user.wallet_address}`);
     }
+
+    // Also update last_interest_at for those < 1000 so they don't keep getting checked every loop, 
+    // OR just leave them to be checked again. User said "it only adds while u have deposited more than 1000".
   } catch (err) {
-    console.error('[Interest Error] Failed to process daily interest:', err.message);
+    console.error('[Yield Error] Failed to process session yield:', err.message);
   }
 }
 
@@ -1177,14 +1185,15 @@ app.get('/api/user/balance', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
-    const userRes = await pool.query('SELECT trading_balance, protocol_settlement_balance, demo_balance, status FROM geko_users WHERE wallet_address = $1', [address]);
-    const user = userRes.rows[0] || { trading_balance: 0, protocol_settlement_balance: 0, demo_balance: 100000, status: 'guest' };
+    const userRes = await pool.query('SELECT trading_balance, protocol_settlement_balance, demo_balance, status, kyc_status FROM geko_users WHERE wallet_address = $1', [address]);
+    const user = userRes.rows[0] || { trading_balance: 0, protocol_settlement_balance: 0, demo_balance: 100000, status: 'guest', kyc_status: 'none' };
 
     if (asset === 'USDT') {
       return res.json({ 
         wallet_address: address, 
         asset: 'USDT', 
         status: user.status,
+        kyc_status: user.kyc_status,
         balance: parseFloat(user.protocol_settlement_balance || 0),
         trading_balance: parseFloat(user.trading_balance || 0),
         demo_balance: parseFloat(user.demo_balance || 100000)
@@ -1198,7 +1207,7 @@ app.get('/api/user/balance', async (req, res) => {
     if (usdtIdx >= 0) balances[usdtIdx].balance = parseFloat(user.protocol_settlement_balance || 0);
     else balances.push({ asset: 'USDT', balance: parseFloat(user.protocol_settlement_balance || 0) });
 
-    return res.json({ wallet_address: address, balances, status: user.status, trading_balance: user.trading_balance, demo_balance: user.demo_balance });
+    return res.json({ wallet_address: address, balances, status: user.status, kyc_status: user.kyc_status, trading_balance: user.trading_balance, demo_balance: user.demo_balance });
   } catch (e) {
     console.error('Balance query error:', e.message);
     return res.status(500).json({ error: 'Balance query failed' });
@@ -1440,6 +1449,47 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
     console.error('Reject withdrawal error:', e.message);
     return res.status(500).json({ error: e.message });
   }
+});
+
+app.post('/api/kyc/submit', async (req, res) => {
+  const { walletAddress, country, idFront, idBack } = req.body;
+  if (!walletAddress || !country || !idFront) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
+
+  try {
+    await pool.query(
+      `INSERT INTO kyc_submissions (wallet_address, country, id_front, id_back, status)
+       VALUES ($1, $2, $3, $4, 'pending')`,
+      [walletAddress, country, idFront, idBack || null]
+    );
+    await pool.query(
+      "UPDATE geko_users SET kyc_status = 'pending' WHERE wallet_address = $1",
+      [walletAddress]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/admin/kyc/submissions', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
+  try {
+    const result = await pool.query("SELECT * FROM kyc_submissions WHERE status = 'pending' ORDER BY created_at DESC");
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/kyc/approve', async (req, res) => {
+  const { submissionId, walletAddress } = req.body;
+  if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
+  try {
+    await pool.query("UPDATE kyc_submissions SET status = 'approved' WHERE id = $1", [submissionId]);
+    await pool.query("UPDATE geko_users SET kyc_status = 'approved' WHERE wallet_address = $1", [walletAddress]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Static files & SPA ───────────────────────────────────────────────────
