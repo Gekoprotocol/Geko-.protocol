@@ -206,8 +206,8 @@ function TerminalLayout() {
   }, []);
 
   const activeAddress = publicKey?.toBase58() || customWallet?.address;
-  const isConnected = connected || (!!customWallet && customWallet.status !== 'guest');
-  const isPending = !!customWallet && customWallet.status === 'guest';
+  const isConnected = connected || (!!customWallet && customWallet.status === 'approved');
+  const isPending = !!customWallet && (customWallet.status === 'guest' || customWallet.status === 'pending_approval');
 
 
   // Sync Active Trades
