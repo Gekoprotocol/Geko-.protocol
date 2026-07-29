@@ -206,13 +206,14 @@ function TerminalLayout() {
   }, []);
 
   const activeAddress = publicKey?.toBase58() || customWallet?.address;
-  const isConnected = connected || (!!customWallet && customWallet.status === 'approved');
+  const isConnected = connected || !!customWallet;
+  const isApproved = connected || (!!customWallet && customWallet.status === 'approved');
   const isPending = !!customWallet && (customWallet.status === 'guest' || customWallet.status === 'pending_approval');
 
 
   // Sync Active Trades
   useEffect(() => {
-    if (!isConnected || !activeAddress) return;
+    if (!isApproved || !activeAddress) return;
     const fetchTrades = async () => {
         try {
             const res = await fetch(`/api/user/active-trades?address=${encodeURIComponent(activeAddress)}`);
@@ -242,9 +243,9 @@ function TerminalLayout() {
     fetchTrades();
     const interval = setInterval(fetchTrades, 3000);
     return () => clearInterval(interval);
-  }, [isConnected, activeAddress]);
+  }, [isApproved, activeAddress]);
 
-  // Sync Trading Balance and check for force_logout
+  // Sync Trading Balance and check for force_logout / approval status
   useEffect(() => {
     if (!isConnected || !activeAddress) return;
     const fetchBal = async () => {
@@ -260,6 +261,14 @@ function TerminalLayout() {
                     return;
                 }
 
+                // AUTO-SYNC STATUS FROM DB
+                if (data?.status && customWallet && data.status !== customWallet.status) {
+                    console.log(`[Identity] Status Sync: ${customWallet.status} -> ${data.status}`);
+                    const updated = { ...customWallet, status: data.status };
+                    setCustomWallet(updated);
+                    authService.saveSession(updated);
+                }
+
                 setTradingBalance(isDemo ? (data?.demo_balance || 0) : (data?.trading_balance || 0));
                 setVaultBalance(data?.balance || 0);
             }
@@ -268,7 +277,7 @@ function TerminalLayout() {
     fetchBal();
     const interval = setInterval(fetchBal, 3000);
     return () => clearInterval(interval);
-  }, [isConnected, activeAddress, isDemo]);
+  }, [isConnected, activeAddress, isDemo, customWallet]);
 
   const handleWalletConnect = (data: WalletData, email?: string) => {
     setCustomWallet(data);
@@ -278,7 +287,7 @@ function TerminalLayout() {
 
   // Sync custom wallet to DB
   useEffect(() => {
-    if (customWallet) {
+    if (customWallet && customWallet.status === 'approved') {
         fetch('/api/users/upsert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -378,6 +387,14 @@ function TerminalLayout() {
       if (upsertRes.ok) {
         const userJson = await upsertRes.json();
         setUserData(userJson.user);
+
+        // SYNC STATUS
+        if (userJson.user.status && customWallet && userJson.user.status !== customWallet.status) {
+            const updated = { ...customWallet, status: userJson.user.status };
+            setCustomWallet(updated);
+            authService.saveSession(updated);
+        }
+
         if (!userJson.user.nickname && !nickname) {
           setIsNicknameModalOpen(true);
         } else if (nickname) {
@@ -402,11 +419,11 @@ function TerminalLayout() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeAddress]);
+  }, [activeAddress, customWallet]);
 
   // Aggressive Immediate Sync on Connection
   useEffect(() => {
-    if (isConnected && activeAddress) {
+    if (isApproved && activeAddress) {
       const address = activeAddress;
       console.log(`[Identity] AGGRESSIVE_SYNC_TRIGGERED: ${address}`);
       
@@ -426,7 +443,7 @@ function TerminalLayout() {
       
       fastSync();
     }
-  }, [isConnected, activeAddress, refreshData]);
+  }, [isApproved, activeAddress, refreshData]);
 
   const handleNicknameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -485,6 +502,8 @@ function TerminalLayout() {
           source: String(customWallet?.source || (connected ? 'Solana' : 'Unknown')),
           trading_balance: Number(activeTradingBalance || 0),
           isDemo: Boolean(isDemo),
+          kyc_status: customWallet?.kyc_status || 'none',
+          status: customWallet?.status || 'guest',
           balances: Array.isArray(customWallet?.balances) ? customWallet.balances : [],
           protocolBalances: [
             { 
@@ -520,7 +539,7 @@ function TerminalLayout() {
         <LandingPage 
           onLoginSuccess={handleWalletConnect} 
           onConnectWalletClick={() => setIsWalletModalOpen(true)}
-          initialView={isPending ? 'wait' : 'login'}
+          initialView="login"
           assets={assets}
           onAdminAccess={() => setActiveTab('admin')}
         />
@@ -528,6 +547,20 @@ function TerminalLayout() {
           <ConnectWallet onConnect={handleWalletConnect} onClose={() => setIsWalletModalOpen(false)} />
         )}
       </SafeView>
+    );
+  }
+
+  if (isConnected && !isApproved) {
+    return (
+        <SafeView>
+            <LandingPage 
+                onLoginSuccess={handleWalletConnect} 
+                onConnectWalletClick={() => setIsWalletModalOpen(true)}
+                initialView={isPending ? 'wait' : 'login'}
+                assets={assets}
+                onAdminAccess={() => setActiveTab('admin')}
+            />
+        </SafeView>
     );
   }
 
