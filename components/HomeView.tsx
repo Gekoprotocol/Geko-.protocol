@@ -18,7 +18,7 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
         {/* Welcome Header */}
         <div className="space-y-2">
             <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">
-                {wallet?.name ? `Hello, ${wallet.name}` : 'Protocol Overview'}
+                {wallet?.name || wallet?.nickname ? `Hello, ${wallet.name || wallet.nickname}` : 'Protocol Overview'}
             </h1>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Terminal Access · Live Node</p>
         </div>
@@ -41,7 +41,7 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
                        ${parseFloat(protocolBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                 </div>
-                <div className="pt-8 flex gap-4">
+                <div className="pt-8 flex flex-wrap gap-4">
                     <button 
                         onClick={() => onNavigate('vault')}
                         className="px-8 py-3 bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20"
@@ -55,8 +55,14 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
                         Quick Trade
                     </button>
                     <button 
-                        onClick={() => onNavigate('trade')}
+                        onClick={() => onNavigate('vault')}
                         className="px-8 py-3 bg-emerald-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20"
+                    >
+                        Deposit
+                    </button>
+                    <button 
+                        onClick={() => onNavigate('trade')}
+                        className="px-8 py-3 bg-indigo-600/10 text-indigo-400 font-black uppercase tracking-widest text-xs rounded-xl border border-indigo-500/20 hover:bg-indigo-600/20 transition-all"
                     >
                         Transfer
                     </button>
