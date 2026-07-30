@@ -205,7 +205,7 @@ function TerminalLayout() {
     return () => unsub();
   }, []);
 
-  const activeAddress = publicKey?.toBase58() || customWallet?.address;
+  const activeAddress = customWallet?.address || publicKey?.toBase58();
   const isConnected = connected || !!customWallet;
   const isApproved = connected || (!!customWallet && customWallet.status === 'approved');
   const isPending = !!customWallet && (customWallet.status === 'guest' || customWallet.status === 'pending_approval');

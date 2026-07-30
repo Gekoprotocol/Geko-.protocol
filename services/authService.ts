@@ -75,11 +75,11 @@ export const authService = {
     return walletData;
   },
 
-  signupRequest: async (email: string, password: string): Promise<any> => {
+  signupRequest: async (email: string, password: string, name?: string): Promise<any> => {
     const response = await fetch('/api/auth/signup-request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password, name })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Signup request failed");
