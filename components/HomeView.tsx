@@ -5,7 +5,7 @@ import { TrendingUp, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
 interface HomeViewProps {
   wallet: WalletData | null;
   assets: AssetInfo[];
-  onNavigate: (tab: string) => void;
+  onNavigate: (tab: string, action?: string) => void;
 }
 
 const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
@@ -16,11 +16,14 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
       <div className="max-w-7xl mx-auto space-y-12 pb-20">
         
         {/* Welcome Header */}
-        <div className="space-y-2">
-            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">
-                {wallet?.name || wallet?.nickname ? `Hello, ${wallet.name || wallet.nickname}` : 'Protocol Overview'}
-            </h1>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Terminal Access · Live Node</p>
+        <div className="space-y-1">
+            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Protocol Overview</h1>
+            {(wallet?.name || wallet?.nickname) && (
+                <h2 className="text-xl font-black text-indigo-400 italic uppercase tracking-tight">
+                    Hello, {wallet.name || wallet.nickname}
+                </h2>
+            )}
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] pt-1">Institutional Terminal Access · Live Node</p>
         </div>
 
         {/* Balance Section */}
@@ -55,13 +58,13 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
                         Quick Trade
                     </button>
                     <button 
-                        onClick={() => onNavigate('vault')}
+                        onClick={() => onNavigate('vault', 'deposit')}
                         className="px-8 py-3 bg-emerald-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20"
                     >
                         Deposit
                     </button>
                     <button 
-                        onClick={() => onNavigate('trade')}
+                        onClick={() => onNavigate('vault', 'transfer')}
                         className="px-8 py-3 bg-indigo-600/10 text-indigo-400 font-black uppercase tracking-widest text-xs rounded-xl border border-indigo-500/20 hover:bg-indigo-600/20 transition-all"
                     >
                         Transfer

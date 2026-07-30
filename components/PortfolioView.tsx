@@ -14,7 +14,9 @@ interface PortfolioViewProps {
   onDisconnect: () => void;
   onRefreshBalances: () => void;
   autoOpenDeposit?: boolean;
+  autoOpenTransfer?: boolean;
   onOpenDepositHandled?: () => void;
+  onOpenTransferHandled?: () => void;
   protocolConfig?: any;
 }
 
@@ -27,7 +29,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     onDisconnect, 
     onRefreshBalances,
     autoOpenDeposit,
+    autoOpenTransfer,
     onOpenDepositHandled,
+    onOpenTransferHandled,
     protocolConfig
 }) => {
   const [activeModal, setActiveModal] = useState<'withdraw' | 'kyc' | 'deposit' | null>(null);
@@ -354,6 +358,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         onOpenDepositHandled?.();
     }
   }, [autoOpenDeposit]);
+
+  useEffect(() => {
+    if (autoOpenTransfer) {
+        setShowTransferModal(true);
+        onOpenTransferHandled?.();
+    }
+  }, [autoOpenTransfer]);
 
   if (!wallet) return null;
 

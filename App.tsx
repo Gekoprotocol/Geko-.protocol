@@ -173,6 +173,8 @@ function TerminalLayout() {
   const [prices, setPrices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIdentityOpen, setIsIdentityOpen] = useState(false);
+  const [autoOpenDeposit, setAutoOpenDeposit] = useState(false);
+  const [autoOpenTransfer, setAutoOpenTransfer] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
 
@@ -180,7 +182,6 @@ function TerminalLayout() {
   const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
   const [tradingBalance, setTradingBalance] = useState(0);
   const [customWallet, setCustomWallet] = useState<WalletData | null>(null);
-  const [shouldOpenDeposit, setShouldOpenDeposit] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   useEffect(() => {
@@ -499,6 +500,8 @@ function TerminalLayout() {
     try {
         return {
           address: String(activeAddress),
+          name: customWallet?.name || userData?.nickname,
+          nickname: userData?.nickname || customWallet?.nickname,
           source: String(customWallet?.source || (connected ? 'Solana' : 'Unknown')),
           trading_balance: Number(activeTradingBalance || 0),
           isDemo: Boolean(isDemo),
@@ -624,11 +627,36 @@ function TerminalLayout() {
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-hidden relative">
         <SafeView>
-            {activeTab === 'home' && <HomeView wallet={walletData} assets={assets} onNavigate={(t) => setActiveTab(t)} />}
+            {activeTab === 'home' && (
+                <HomeView 
+                    wallet={walletData} 
+                    assets={assets} 
+                    onNavigate={(t, action) => {
+                        setActiveTab(t as any);
+                        if (action === 'deposit') setAutoOpenDeposit(true);
+                        if (action === 'transfer') setAutoOpenTransfer(true);
+                    }} 
+                />
+            )}
             {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setShouldOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} />}
+            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} />}
             {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-            {activeTab === 'vault' && <PortfolioView wallet={walletData} assets={assets} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+            {activeTab === 'vault' && (
+                <PortfolioView 
+                    wallet={walletData} 
+                    assets={assets} 
+                    depositAddress={protocolConfig.solana_deposit_address} 
+                    protocolConfig={protocolConfig} 
+                    onConnect={() => setIsWalletModalOpen(true)} 
+                    onUpdateWallet={(d) => setCustomWallet(d)} 
+                    onDisconnect={disconnect} 
+                    onRefreshBalances={refreshData} 
+                    autoOpenDeposit={autoOpenDeposit} 
+                    onOpenDepositHandled={() => setAutoOpenDeposit(false)} 
+                    autoOpenTransfer={autoOpenTransfer}
+                    onOpenTransferHandled={() => setAutoOpenTransfer(false)}
+                />
+            )}
             {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
             
             {activeTab === 'settings' && (
@@ -715,7 +743,22 @@ function TerminalLayout() {
                 </div>
             )}
 
-            {activeTab === 'kyc' && <PortfolioView wallet={walletData} assets={assets} depositAddress={solanaDepositAddress} onConnect={() => setIsWalletModalOpen(true)} onUpdateWallet={(d) => setCustomWallet(d)} onDisconnect={disconnect} onRefreshBalances={refreshData} autoOpenDeposit={shouldOpenDeposit} onOpenDepositHandled={() => setShouldOpenDeposit(false)} />}
+            {activeTab === 'kyc' && (
+                <PortfolioView 
+                    wallet={walletData} 
+                    assets={assets} 
+                    depositAddress={protocolConfig.solana_deposit_address} 
+                    protocolConfig={protocolConfig} 
+                    onConnect={() => setIsWalletModalOpen(true)} 
+                    onUpdateWallet={(d) => setCustomWallet(d)} 
+                    onDisconnect={disconnect} 
+                    onRefreshBalances={refreshData} 
+                    autoOpenDeposit={autoOpenDeposit} 
+                    onOpenDepositHandled={() => setAutoOpenDeposit(false)} 
+                    autoOpenTransfer={autoOpenTransfer}
+                    onOpenTransferHandled={() => setAutoOpenTransfer(false)}
+                />
+            )}
             {activeTab === 'leaderboard' && <div className="p-20 text-center">
                 <h2 className="text-3xl font-black uppercase italic tracking-tighter">Global Rankings</h2>
                 <p className="text-gray-500">Leaderboard data streaming shortly...</p>
