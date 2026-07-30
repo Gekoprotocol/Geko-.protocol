@@ -70,6 +70,7 @@ export interface Transaction {
 
 export interface WalletData {
   address: string;
+  name?: string;
   source?: string;
   chainType?: 'evm' | 'svm' | 'substrate'; 
   email?: string;

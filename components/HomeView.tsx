@@ -17,7 +17,9 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
         
         {/* Welcome Header */}
         <div className="space-y-2">
-            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Protocol Overview</h1>
+            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">
+                {wallet?.name ? `Hello, ${wallet.name}` : 'Protocol Overview'}
+            </h1>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Terminal Access · Live Node</p>
         </div>
 
@@ -51,6 +53,12 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
                         className="px-8 py-3 bg-[#0B0E11] text-gray-300 font-black uppercase tracking-widest text-xs rounded-xl border border-[#2B3139] hover:bg-[#181C25] transition-all"
                     >
                         Quick Trade
+                    </button>
+                    <button 
+                        onClick={() => onNavigate('trade')}
+                        className="px-8 py-3 bg-emerald-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20"
+                    >
+                        Transfer
                     </button>
                 </div>
             </div>

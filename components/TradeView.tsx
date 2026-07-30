@@ -42,6 +42,18 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [duration, setDuration] = useState(60);
   const [leverage, setLeverage] = useState(20);
 
+  // Dynamic Leverage Logic
+  useEffect(() => {
+    const val = parseFloat(amount) || 0;
+    if (val >= 501000) {
+        setLeverage(100);
+    } else if (val >= 101000) {
+        setLeverage(50);
+    } else {
+        setLeverage(20);
+    }
+  }, [amount]);
+
   // Mobile View Toggle ('chart' or 'controls')
   const [mobileView, setMobileView] = useState<'chart' | 'controls'>('chart');
   const touchStart = useRef<number | null>(null);
@@ -319,9 +331,24 @@ const TradeView: React.FC<TradeViewProps> = ({
                     <div className="space-y-3">
                         <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Leverage</span><span className="text-indigo-400">{leverage}x</span></div>
                         <div className="grid grid-cols-3 gap-1">
-                            {[20, 50, 100].map(l => (
-                                <button key={l} onClick={() => setLeverage(l)} className={`py-2 text-[9px] lg:text-[10px] font-black rounded-xl border transition-all ${leverage === l ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2B3139] text-gray-500'}`}>{l}x</button>
-                            ))}
+                            {[20, 50, 100].map(l => {
+                                const val = parseFloat(amount) || 0;
+                                let allowed = false;
+                                if (l === 20 && val >= 100 && val <= 100000) allowed = true;
+                                if (l === 50 && val >= 101000 && val <= 500000) allowed = true;
+                                if (l === 100 && val >= 501000) allowed = true;
+                                
+                                return (
+                                    <button 
+                                        key={l} 
+                                        onClick={() => allowed && setLeverage(l)} 
+                                        disabled={!allowed}
+                                        className={`py-2 text-[9px] lg:text-[10px] font-black rounded-xl border transition-all ${leverage === l ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2B3139] text-gray-500'} ${!allowed ? 'opacity-20 cursor-not-allowed' : 'hover:border-indigo-500/50'}`}
+                                    >
+                                        {l}x
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                     <div className="space-y-3">

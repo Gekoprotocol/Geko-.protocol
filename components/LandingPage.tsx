@@ -30,6 +30,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   }, [initialView]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +47,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       if (view === 'signup') {
         if (signupStep === 'initial') {
             if (password !== confirmPassword) throw new Error('Passwords do not match');
-            const res = await authService.signupRequest(email, password);
+            const res = await authService.signupRequest(email, password, name);
             setSignupStep('verify');
             if (res.alternativeCode) {
                 setMsg(`Verification code sent. For this session, you can use: ${res.alternativeCode}`);
@@ -153,6 +154,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           <div className="space-y-4">
                               {view === 'login' || signupStep === 'initial' ? (
                                   <>
+                                      {view === 'signup' && (
+                                          <div className="space-y-1">
+                                              <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Full Name</label>
+                                              <input 
+                                                  type="text" 
+                                                  required 
+                                                  value={name}
+                                                  onChange={(e) => setName(e.target.value)}
+                                                  placeholder="John Doe"
+                                                  className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                                              />
+                                          </div>
+                                      )}
                                       <div className="space-y-1">
                                           <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Email ID</label>
                                           <input 
