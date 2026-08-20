@@ -675,7 +675,7 @@ app.post('/api/send-email', async (req, res) => {
   
   try {
     const data = await resend.emails.send({
-      from: 'Geko Protocols <noreply@gekoprotocols.com>',
+      from: 'Geko Protocols <onboarding@resend.dev>',
       to: [to],
       subject: subject,
       html: html,
@@ -706,7 +706,7 @@ app.post('/api/auth/signup-request', async (req, res) => {
     if (resend) {
         try {
             await resend.emails.send({
-                from: 'Geko Protocols <noreply@gekoprotocols.com>',
+                from: 'Geko Protocols <onboarding@resend.dev>',
                 to: [userEmail],
                 subject: `Geko Verification Code: ${signupCode}`,
                 html: `<p>Your Geko Protocols verification code is: <strong>${signupCode}</strong></p>`
@@ -806,7 +806,16 @@ app.post('/api/admin/users/approve', async (req, res) => {
   const { userId } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    await pool.query('UPDATE users SET status = \'approved\' WHERE id = $1 OR wallet_address = $1', [userId]);
+    // Convert to string to avoid potential type issues with wallet_address check
+    const idStr = String(userId);
+    const idInt = parseInt(idStr);
+    
+    if (!isNaN(idInt)) {
+        await pool.query("UPDATE users SET status = 'approved' WHERE id = $1 OR wallet_address = $2", [idInt, idStr]);
+    } else {
+        await pool.query("UPDATE users SET status = 'approved' WHERE wallet_address = $1", [idStr]);
+    }
+    
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
