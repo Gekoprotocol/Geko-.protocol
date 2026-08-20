@@ -593,6 +593,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                         <tr>
                             <th className="px-8 py-4">ID</th>
                             <th className="px-8 py-4">Email</th>
+                            <th className="px-8 py-4">Code</th>
                             <th className="px-8 py-4">Status</th>
                             <th className="px-8 py-4 text-right">Actions</th>
                         </tr>
@@ -602,6 +603,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                             <tr key={u.id}>
                                 <td className="px-8 py-6 font-mono text-indigo-400">{u.id}</td>
                                 <td className="px-8 py-6 font-bold">{u.email}</td>
+                                <td className="px-8 py-6 font-mono text-emerald-500">{u.signup_code || '---'}</td>
                                 <td className="px-8 py-6"><span className="bg-amber-900/20 text-amber-500 px-2 py-1 rounded text-[10px] font-black uppercase">Guest</span></td>
                                 <td className="px-8 py-6 text-right space-x-2">
                                     <button onClick={() => handleApproveUser(u.id)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase">Approve</button>

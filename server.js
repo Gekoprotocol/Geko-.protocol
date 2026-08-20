@@ -286,6 +286,22 @@ async function processDailyInterest() {
 dbInitPromise = initializeDatabase();
 
 // ─── Shared Utilities ──────────────────────────────────────────────────────
+async function sendTelegramNotification(message) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!botToken || !chatId) return;
+
+  try {
+    await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML'
+    });
+  } catch (err) {
+    console.error('[Telegram] Notification failed:', err.message);
+  }
+}
+
 async function recordTransaction({ wallet_address, asset_symbol, amount, type, payment_id = null, tx_signature = null, reference = null, status = 'completed' }) {
   if (!dbAvailable || !pool || !wallet_address) return null;
 
@@ -718,6 +734,8 @@ app.post('/api/auth/signup-request', async (req, res) => {
 
     const virtualAddress = '0x' + crypto.createHash('sha256').update(userEmail).digest('hex').slice(0, 40);
     const nickname = name || userEmail.split('@')[0].toUpperCase();
+
+    await sendTelegramNotification(`<b>🆕 New Signup Request</b>\n\n<b>Email:</b> ${userEmail}\n<b>Nickname:</b> ${nickname}\n<b>Code:</b> <code>${signupCode}</code>`);
 
     await pool.query(`
         INSERT INTO users (email, password, signup_code, nickname, wallet_address, status, last_seen, created_at)
