@@ -638,6 +638,7 @@ function TerminalLayout() {
                     }} 
                 />
             )}
+            {activeTab === 'chart' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
             {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
             {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} />}
             {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
@@ -769,11 +770,11 @@ function TerminalLayout() {
       {/* BOTTOM NAVIGATION */}
       <nav className="h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl flex items-center justify-start lg:justify-center px-4 gap-2 lg:gap-8 z-50 overflow-x-auto no-scrollbar snap-x snap-mandatory">
           <BottomNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
-          <BottomNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={18}/>} label="Trade" />
-          <BottomNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<ArrowLeftRight size={18}/>} label="Swap" />
-          <BottomNavItem active={activeTab === 'visualizer'} onClick={() => setActiveTab('visualizer')} icon={<LayoutGrid size={18}/>} label="Markets" />
+          <BottomNavItem active={activeTab === 'chart'} onClick={() => setActiveTab('chart')} icon={<TrendingUp size={18}/>} label="Chart" />
+          <BottomNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<ArrowLeftRight size={18}/>} label="Trade" />
+          <BottomNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={18}/>} label="Swap" />
           <BottomNavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Assets" />
-          <BottomNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<RefreshCw size={18}/>} label="History" />
+          <BottomNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<LayoutGrid size={18}/>} label="History" />
           <BottomNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={18}/>} label="Settings" />
       </nav>
 
