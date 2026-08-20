@@ -13,7 +13,7 @@ interface GraphsViewProps {
 const GraphsView: React.FC<GraphsViewProps> = ({ assets, selectedAsset, marketData, setSelectedSymbol }) => {
   return (
     <div className="h-full flex flex-col p-6 lg:p-10 overflow-y-auto custom-scrollbar bg-[#0B0E11] text-gray-200">
-      <div className="max-w-7xl mx-auto w-full space-y-8 pb-20">
+      <div className="max-w-[1600px] mx-auto w-full space-y-8 pb-20">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 shrink-0">
           <div className="space-y-3">

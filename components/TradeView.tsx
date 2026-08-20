@@ -115,6 +115,7 @@ const TradeView: React.FC<TradeViewProps> = ({
   const handleTransfer = async () => {
     if (!wallet?.address || !transferAmount) return;
     setTransferLoading(true);
+    audioSynth.playPing();
     try {
       const res = await fetch('/api/balance/transfer', {
         method: 'POST',
@@ -128,14 +129,17 @@ const TradeView: React.FC<TradeViewProps> = ({
       const data = await res.json();
       if (res.ok) {
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
+        audioSynth.playSuccess();
         if (onRefreshBalances) onRefreshBalances();
         setShowTransferModal(false);
         setTransferAmount('');
       } else {
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
+        audioSynth.playError();
       }
     } catch (e) {
       setTradeStatus({ msg: 'Network error', ok: false });
+      audioSynth.playError();
     } finally {
       setTransferLoading(false);
       setTimeout(() => setTradeStatus(null), 3000);
@@ -286,7 +290,7 @@ const TradeView: React.FC<TradeViewProps> = ({
 
         {/* CONTROLS SECTION */}
         <div 
-            className={`w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar`}
+            className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar`}
         >
             <div className="lg:hidden h-10 flex items-center justify-center border-b border-white/5 opacity-40 shrink-0">
                 <div className="flex flex-col items-center">
