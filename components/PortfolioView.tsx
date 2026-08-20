@@ -163,6 +163,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     }
 
     setTransferLoading(true);
+    audioSynth.playPing();
     try {
       const res = await fetch('/api/balance/transfer', {
         method: 'POST',
@@ -177,16 +178,20 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       const data = await res.json();
       if (res.ok) {
         fetchProtocolBalance();
+        if (onRefreshBalances) onRefreshBalances();
         setShowTransferModal(false);
         setTransferAmount('');
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
+        audioSynth.playSuccess();
         setTimeout(() => setTradeStatus(null), 3000);
       } else {
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
+        audioSynth.playError();
         setTimeout(() => setTradeStatus(null), 3000);
       }
     } catch (e) {
       setTradeStatus({ msg: 'Network error during transfer', ok: false });
+      audioSynth.playError();
       setTimeout(() => setTradeStatus(null), 3000);
     } finally {
       setTransferLoading(false);
@@ -393,7 +398,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           </div>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-8 pb-20">
+      <div className="max-w-[1600px] mx-auto space-y-8 pb-20">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="space-y-3">
