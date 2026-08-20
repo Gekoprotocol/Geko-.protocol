@@ -248,9 +248,6 @@ const TradeView: React.FC<TradeViewProps> = ({
                     ${(selectedAsset.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
             </div>
-            <button onClick={() => setMobileView(mobileView === 'chart' ? 'controls' : 'chart')} className="lg:hidden p-2 bg-indigo-600/10 border border-indigo-500/30 rounded-xl text-indigo-400 font-black text-[10px] uppercase tracking-tighter">
-                {mobileView === 'chart' ? 'View Controls' : 'View Chart'}
-            </button>
         </div>
         <div className="hidden lg:flex items-center space-x-3 bg-indigo-900/10 px-5 py-2 rounded-xl border border-indigo-500/20 group cursor-default relative">
              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
@@ -259,14 +256,10 @@ const TradeView: React.FC<TradeViewProps> = ({
       </div>
 
       <div className="flex-1 relative overflow-hidden flex flex-col lg:flex-row bg-[#0B0E11]">
-        {/* CHART SECTION */}
-        <div className={`flex-1 relative h-full min-h-0 flex flex-col overflow-y-auto custom-scrollbar ${mobileView === 'controls' ? 'hidden lg:flex' : 'flex'}`}>
-            <div className="w-full h-[45vh] lg:h-[600px] shrink-0 relative bg-[#0B0E11]">
+        {/* CHART SECTION (Desktop Only) */}
+        <div className={`flex-1 relative h-full min-h-0 hidden lg:flex flex-col overflow-y-auto custom-scrollbar`}>
+            <div className="w-full h-[600px] shrink-0 relative bg-[#0B0E11]">
                 <MarketChart symbol={selectedSymbol} showIndicators={showIndicators} activeTrades={localActiveTrades} />
-                <div className="lg:hidden absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center opacity-40">
-                    <span className="text-[8px] font-black uppercase tracking-[0.3em] mb-1">Swipe Down for Controls</span>
-                    <div className="w-12 h-1 bg-gray-600 rounded-full"></div>
-                </div>
             </div>
 
             <div className="p-4 lg:p-6 border-t border-[#2B3139] bg-[#181C25]/50 shrink-0">
@@ -293,8 +286,7 @@ const TradeView: React.FC<TradeViewProps> = ({
 
         {/* CONTROLS SECTION */}
         <div 
-            className={`w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar ${mobileView === 'chart' ? 'hidden lg:flex' : 'flex'}`}
-            style={{ height: mobileView === 'chart' ? 'auto' : '100%' }}
+            className={`w-full lg:w-72 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar`}
         >
             <div className="lg:hidden h-10 flex items-center justify-center border-b border-white/5 opacity-40 shrink-0">
                 <div className="flex flex-col items-center">
