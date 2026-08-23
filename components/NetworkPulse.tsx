@@ -20,50 +20,114 @@ const EVENT_TYPES = {
 
 export const NetworkPulse: React.FC = () => {
   const [events, setEvents] = useState<PulseEvent[]>([]);
+  const [stats, setStats] = useState([
+    { label: 'TPS', value: '2,482', color: 'text-emerald-400', raw: 2482 },
+    { label: 'Relays', value: '142 Active', color: 'text-indigo-400', raw: 142 },
+    { label: 'Clearing', value: '$12.4M', color: 'text-cyan-400', raw: 12.4 },
+    { label: 'Latency', value: '14ms', color: 'text-purple-400', raw: 14 }
+  ]);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Random Data Helpers
+  const randAddr = () => `0x${Math.random().toString(16).slice(2, 6)}...${Math.random().toString(16).slice(2, 6)}`;
+  const randHash = () => Math.random().toString(36).slice(2, 10).toUpperCase();
+  const randVal  = (min: number, max: number) => (Math.random() * (max - min) + min).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   // Generate initial mock events
   useEffect(() => {
-    const initial: PulseEvent[] = [
-      { id: '1', timestamp: new Date().toLocaleTimeString(), type: 'SECURITY', message: 'Protocol Guard: Identity Handshake Verified', status: 'SUCCESS' },
-      { id: '2', timestamp: new Date().toLocaleTimeString(), type: 'LIQUIDITY', message: 'Bridge Relay: Institutional Inbound detected', value: '+450,000 USDT', status: 'SUCCESS' },
-      { id: '3', timestamp: new Date().toLocaleTimeString(), type: 'ORACLE', message: 'Oracle Sync: BTC/USDT price heartbeat', status: 'SUCCESS' },
-      { id: '4', timestamp: new Date().toLocaleTimeString(), type: 'TRADE', message: 'Settlement Engine: Block #829,122 confirmed', status: 'SUCCESS' },
-    ];
+    const initial: PulseEvent[] = Array.from({ length: 10 }).map((_, i) => ({
+      id: i.toString(),
+      timestamp: new Date(Date.now() - i * 5000).toLocaleTimeString(),
+      type: (['TRADE', 'LIQUIDITY', 'SECURITY', 'ORACLE', 'SYSTEM'] as const)[Math.floor(Math.random() * 5)],
+      message: `System Warmup: Link #${randHash()} established`,
+      status: 'SUCCESS'
+    }));
     setEvents(initial);
   }, []);
 
   // Live simulation loop
   useEffect(() => {
-    const messages = [
-      { type: 'SECURITY' as const, msg: 'Firewall Relay: 0x8a... handshake established' },
-      { type: 'LIQUIDITY' as const, msg: 'Liquidity Injection: Provider 0x22... added', val: '+25,000 USDT' },
-      { type: 'ORACLE' as const, msg: 'Price Feed Updated: SOL/USDT' },
-      { type: 'TRADE' as const, msg: 'Atomic Swap executed via Global Relay', val: '12.4 ETH' },
-      { type: 'SYSTEM' as const, msg: 'Network Latency Optimization: 12ms avg' },
-      { type: 'SECURITY' as const, msg: 'Cross-Chain verification: Validated' },
-      { type: 'LIQUIDITY' as const, msg: 'Protocol Clearing: Cycle #442 initiated' },
-    ];
+    const generator = () => {
+      const types = ['TRADE', 'LIQUIDITY', 'SECURITY', 'ORACLE', 'SYSTEM'] as const;
+      const type = types[Math.floor(Math.random() * types.length)];
+      
+      let message = '';
+      let value = '';
+      
+      switch(type) {
+        case 'TRADE':
+          message = `Atomic Swap: ${randAddr()} ↔ Global Relay`;
+          value = `${randVal(0.1, 50)} ${['ETH', 'SOL', 'BTC'][Math.floor(Math.random()*3)]}`;
+          break;
+        case 'LIQUIDITY':
+          const isAdd = Math.random() > 0.3;
+          message = `Liquidity ${isAdd ? 'Injection' : 'Withdrawal'}: Pool ${randHash()}`;
+          value = `${isAdd ? '+' : '-'}${randVal(1000, 500000)} USDT`;
+          break;
+        case 'SECURITY':
+          const secMsgs = [
+            `Firewall Handshake: ${randAddr()} verified`,
+            `Zero-Knowledge Proof: Block #${randVal(800000, 900000).replace(/,/g, '')} validated`,
+            `Encryption Rotation: Layer-${Math.floor(Math.random()*3)+1} sync complete`,
+            `Sentinel Watch: Threat scan ${randHash()} nominal`
+          ];
+          message = secMsgs[Math.floor(Math.random() * secMsgs.length)];
+          break;
+        case 'ORACLE':
+          message = `Oracle Pulse: ${['BTC', 'ETH', 'SOL', 'XRP', 'ADA'][Math.floor(Math.random()*5)]}/USDT price heartbeat`;
+          break;
+        case 'SYSTEM':
+          const sysMsgs = [
+              `Network Latency: ${Math.floor(Math.random()*20)+5}ms avg response`,
+              `Shard Synchronization: Node-${Math.floor(Math.random()*999)} online`,
+              `Protocol Upgrade: Patch v${Math.floor(Math.random()*5)}.${Math.floor(Math.random()*9)} deployed`,
+              `Relay Health: Node ${randAddr()} verified active`
+          ];
+          message = sysMsgs[Math.floor(Math.random() * sysMsgs.length)];
+          break;
+      }
 
-    const interval = setInterval(() => {
-      const pick = messages[Math.floor(Math.random() * messages.length)];
       const newEvent: PulseEvent = {
         id: Date.now().toString(),
         timestamp: new Date().toLocaleTimeString(),
-        type: pick.type,
-        message: pick.msg,
-        value: pick.val,
+        type,
+        message,
+        value: value || undefined,
         status: Math.random() > 0.1 ? 'SUCCESS' : 'PROCESS'
       };
 
       setEvents(prev => [newEvent, ...prev].slice(0, 50));
-    }, 3000);
 
+      // Randomize stats slightly
+      setStats(prev => prev.map(s => {
+          if (s.label === 'TPS') {
+              const newVal = Math.max(1000, Math.min(5000, s.raw + (Math.random() - 0.5) * 200));
+              return { ...s, raw: newVal, value: Math.floor(newVal).toLocaleString() };
+          }
+          if (s.label === 'Latency') {
+              const newVal = Math.max(5, Math.min(50, s.raw + (Math.random() - 0.5) * 5));
+              return { ...s, raw: newVal, value: `${Math.floor(newVal)}ms` };
+          }
+          return s;
+      }));
+    };
+
+    const interval = setInterval(generator, 2500 + Math.random() * 2000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <div className="h-full flex flex-col bg-[#0B0E11] text-gray-200 p-6 lg:p-10 font-mono overflow-hidden">
+      <style>{`
+        @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+          100% { transform: translateY(0px); }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col space-y-8 min-h-0">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 shrink-0">
@@ -79,15 +143,10 @@ export const NetworkPulse: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full md:w-auto">
-             {[
-               { label: 'TPS', value: '2,482', color: 'text-emerald-400' },
-               { label: 'Relays', value: '142 Active', color: 'text-indigo-400' },
-               { label: 'Clearing', value: '$12.4M', color: 'text-cyan-400' },
-               { label: 'Latency', value: '14ms', color: 'text-purple-400' }
-             ].map(stat => (
+             {stats.map(stat => (
                 <div key={stat.label} className="bg-[#181C25] border border-white/5 p-3 rounded-2xl">
                     <div className="text-[8px] text-gray-500 uppercase font-black">{stat.label}</div>
-                    <div className={`text-xs font-bold ${stat.color}`}>{stat.value}</div>
+                    <div className={`text-xs font-bold ${stat.color} tabular-nums`}>{stat.value}</div>
                 </div>
              ))}
           </div>
@@ -95,7 +154,7 @@ export const NetworkPulse: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
             {/* Feed Section */}
-            <div className="lg:col-span-2 bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative group">
+            <div className="lg:col-span-2 bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative group animate-float">
                 <div className="absolute inset-0 pointer-events-none border-[20px] border-white/[0.02] rounded-[40px] z-20"></div>
                 
                 <div className="p-6 border-b border-white/5 bg-[#1E2329] flex justify-between items-center z-10">
@@ -158,7 +217,8 @@ export const NetworkPulse: React.FC = () => {
 
                     <div className="flex-1 bg-[#0B0E11] rounded-[32px] border border-white/5 relative overflow-hidden flex items-center justify-center">
                         <div className="absolute inset-0 opacity-20 bg-grid"></div>
-                        <div className="relative text-center space-y-4">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 via-transparent to-emerald-500/5 animate-pulse"></div>
+                        <div className="relative text-center space-y-4 z-10">
                             <div className="w-24 h-24 border-2 border-indigo-500/20 rounded-full flex items-center justify-center mx-auto animate-pulse">
                                 <div className="w-16 h-16 border-2 border-indigo-500/40 rounded-full flex items-center justify-center">
                                     <div className="w-8 h-8 bg-indigo-500/60 rounded-full blur-md animate-ping"></div>
@@ -166,19 +226,21 @@ export const NetworkPulse: React.FC = () => {
                             </div>
                             <div className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.4em]">Establishing Uplink...</div>
                         </div>
-                        {/* Mock Map markers */}
-                        <div className="absolute top-1/4 left-1/3 w-1 h-1 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>
-                        <div className="absolute top-1/2 left-2/3 w-1 h-1 bg-indigo-500 rounded-full shadow-[0_0_8px_#6366f1]"></div>
-                        <div className="absolute top-2/3 left-1/4 w-1 h-1 bg-amber-500 rounded-full shadow-[0_0_8px_#f59e0b]"></div>
+                        {/* Dynamic Map markers */}
+                        <div className="absolute w-1 h-1 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981] animate-ping" style={{ top: '25%', left: '35%' }}></div>
+                        <div className="absolute w-1 h-1 bg-indigo-500 rounded-full shadow-[0_0_8px_#6366f1] animate-ping" style={{ top: '55%', left: '65%', animationDelay: '1s' }}></div>
+                        <div className="absolute w-1 h-1 bg-amber-500 rounded-full shadow-[0_0_8px_#f59e0b] animate-ping" style={{ top: '75%', left: '25%', animationDelay: '2s' }}></div>
+                        <div className="absolute w-1 h-1 bg-rose-500 rounded-full shadow-[0_0_8px_#f43f5e] animate-ping" style={{ top: '15%', left: '85%', animationDelay: '1.5s' }}></div>
+                        <div className="absolute w-1 h-1 bg-cyan-500 rounded-full shadow-[0_0_8px_#06b6d4] animate-ping" style={{ top: '45%', left: '15%', animationDelay: '0.5s' }}></div>
                     </div>
 
                     <div className="space-y-4">
                         <div className="flex justify-between items-center text-[9px] font-black uppercase">
                             <span className="text-gray-500">Security Index</span>
-                            <span className="text-emerald-500">99.8% Nominal</span>
+                            <span className="text-emerald-500">{(99.8 + (Math.random()*0.1)).toFixed(2)}% Nominal</span>
                         </div>
                         <div className="w-full h-1 bg-[#0B0E11] rounded-full overflow-hidden">
-                            <div className="w-[99.8%] h-full bg-emerald-500"></div>
+                            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${99.8 + (Math.random()*0.1)}%` }}></div>
                         </div>
                     </div>
                 </div>
