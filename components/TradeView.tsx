@@ -115,8 +115,14 @@ const TradeView: React.FC<TradeViewProps> = ({
   const handleTransfer = async () => {
     if (!wallet?.address || !transferAmount) return;
     setTransferLoading(true);
+    setTradeStatus(null);
     audioSynth.playPing();
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
+      console.log(`[TradeTransfer] Initiating ${transferDirection}: ${transferAmount}`);
       const res = await fetch('/api/balance/transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,10 +130,15 @@ const TradeView: React.FC<TradeViewProps> = ({
           walletAddress: wallet.address,
           amount: transferAmount,
           direction: transferDirection
-        })
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
       const data = await res.json();
+
       if (res.ok) {
+        console.log(`[TradeTransfer] Success:`, data);
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
         audioSynth.playSuccess();
         if (onRefreshBalances) onRefreshBalances();
@@ -137,13 +148,20 @@ const TradeView: React.FC<TradeViewProps> = ({
             setTradeStatus(null);
         }, 1500);
       } else {
+        console.warn(`[TradeTransfer] Failed:`, data.error);
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
         audioSynth.playError();
       }
-    } catch (e) {
-      setTradeStatus({ msg: 'Network error', ok: false });
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+          setTradeStatus({ msg: 'Request timed out', ok: false });
+      } else {
+          setTradeStatus({ msg: 'Network error', ok: false });
+      }
       audioSynth.playError();
+      console.error("[TradeTransfer] Error:", e);
     } finally {
+      clearTimeout(timeoutId);
       setTransferLoading(false);
     }
   };

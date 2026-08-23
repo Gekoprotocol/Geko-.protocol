@@ -218,8 +218,13 @@ function TerminalLayout() {
   useEffect(() => {
     if (!isApproved || !activeAddress) return;
     const fetchTrades = async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         try {
-            const res = await fetch(`/api/user/active-trades?address=${encodeURIComponent(activeAddress)}`);
+            const res = await fetch(`/api/user/active-trades?address=${encodeURIComponent(activeAddress)}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
             if (res.ok) {
                 const data = await res.json();
                 const synced: ActiveTrade[] = (Array.isArray(data) ? data : []).map((t: any) => {
@@ -242,6 +247,7 @@ function TerminalLayout() {
                 setActiveTrades(synced);
             }
         } catch (e) { console.warn("Trade sync failed", e); }
+        finally { clearTimeout(timeoutId); }
     };
     fetchTrades();
     const interval = setInterval(fetchTrades, 3000);
@@ -252,8 +258,13 @@ function TerminalLayout() {
   useEffect(() => {
     if (!isConnected || !activeAddress) return;
     const fetchBal = async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         try {
-            const res = await fetch(`/api/user/balance?address=${encodeURIComponent(activeAddress)}&asset=USDT`);
+            const res = await fetch(`/api/user/balance?address=${encodeURIComponent(activeAddress)}&asset=USDT`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
             if (res.ok) {
                 const data = await res.json();
                 
@@ -276,6 +287,7 @@ function TerminalLayout() {
                 setVaultBalance(data?.balance || 0);
             }
         } catch (e) { console.warn("Balance sync failed", e); }
+        finally { clearTimeout(timeoutId); }
     };
     fetchBal();
     const interval = setInterval(fetchBal, 3000);
@@ -379,12 +391,16 @@ function TerminalLayout() {
     if (!activeAddress) return;
     const address = activeAddress;
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       // Upsert User
       const upsertRes = await fetch('/api/users/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, nickname })
+        body: JSON.stringify({ wallet_address: address, nickname }),
+        signal: controller.signal
       });
       
       if (upsertRes.ok) {
@@ -406,7 +422,9 @@ function TerminalLayout() {
       }
 
       // Get Balances
-      const balRes = await fetch(`/api/user/balance?address=${address}&asset=USDT`);
+      const balRes = await fetch(`/api/user/balance?address=${address}&asset=USDT`, {
+          signal: controller.signal
+      });
       if (balRes.ok) {
         const balJson = await balRes.json();
         setVaultBalance(balJson.balance || 0);
@@ -418,8 +436,9 @@ function TerminalLayout() {
         }));
       }
     } catch (err) {
-      console.warn("[Sync] Background sync check failed (normal if offline)");
+      console.warn("[Sync] Background sync check failed");
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
     }
   }, [activeAddress, customWallet]);
