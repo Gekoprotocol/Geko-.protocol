@@ -48,6 +48,7 @@ import {
   Settings,
   RefreshCw,
   LayoutGrid,
+  Activity,
   LogOut,
   ArrowLeftRight,
   Sun,
@@ -64,6 +65,7 @@ import SwapView from './components/SwapView';
 import WalletDashboard from './components/WalletDashboard';
 import GraphsView from './components/GraphsView';
 import { SupportWidget } from './components/SupportWidget';
+import { NetworkPulse } from './components/NetworkPulse';
 import AdminDesk from './components/AdminDesk';
 import TransactionHistory from './components/TransactionHistory';
 import { WalletData, AssetInfo, ActiveTrade } from './types';
@@ -641,6 +643,7 @@ function TerminalLayout() {
             {activeTab === 'chart' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
             {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
             {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} />}
+            {activeTab === 'pulse' && <NetworkPulse />}
             {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
             {activeTab === 'vault' && (
                 <PortfolioView 
@@ -770,6 +773,7 @@ function TerminalLayout() {
       {/* BOTTOM NAVIGATION */}
       <nav className="h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl flex items-center justify-start lg:justify-center px-4 gap-2 lg:gap-8 z-50 overflow-x-auto no-scrollbar snap-x snap-mandatory">
           <BottomNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
+          <BottomNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Activity size={18}/>} label="Pulse" />
           <BottomNavItem active={activeTab === 'chart'} onClick={() => setActiveTab('chart')} icon={<TrendingUp size={18}/>} label="Chart" />
           <BottomNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<ArrowLeftRight size={18}/>} label="Trade" />
           <BottomNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={18}/>} label="Swap" />

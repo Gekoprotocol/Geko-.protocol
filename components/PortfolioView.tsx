@@ -163,6 +163,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     }
 
     setTransferLoading(true);
+    setTradeStatus(null);
     audioSynth.playPing();
     try {
       const res = await fetch('/api/balance/transfer', {
@@ -174,25 +175,27 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           direction: transferDirection
         })
       });
-      if (!res.ok) throw new Error("Transfer failed");
+      
       const data = await res.json();
+      
       if (res.ok) {
         fetchProtocolBalance();
         if (onRefreshBalances) onRefreshBalances();
-        setShowTransferModal(false);
         setTransferAmount('');
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
         audioSynth.playSuccess();
-        setTimeout(() => setTradeStatus(null), 3000);
+        setTimeout(() => {
+            setShowTransferModal(false);
+            setTradeStatus(null);
+        }, 1500);
       } else {
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
         audioSynth.playError();
-        setTimeout(() => setTradeStatus(null), 3000);
       }
-    } catch (e) {
+    } catch (e: any) {
       setTradeStatus({ msg: 'Network error during transfer', ok: false });
       audioSynth.playError();
-      setTimeout(() => setTradeStatus(null), 3000);
+      console.error("Transfer error:", e);
     } finally {
       setTransferLoading(false);
     }
