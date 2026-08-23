@@ -132,8 +132,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const fetchProtocolBalance = async () => {
     if (!wallet) return;
     setBalLoading(true);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
-      const res = await fetch(`/api/user/balance?address=${encodeURIComponent(wallet.address)}`);
+      const res = await fetch(`/api/user/balance?address=${encodeURIComponent(wallet.address)}`, {
+          signal: controller.signal
+      });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error("Failed to fetch protocol balance");
       const data = await res.json();
       if (res.ok) {
@@ -149,6 +156,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     } catch (e) {
       console.error('Protocol balance fetch failed', e);
     } finally {
+      clearTimeout(timeoutId);
       setBalLoading(false);
     }
   };
@@ -165,7 +173,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     setTransferLoading(true);
     setTradeStatus(null);
     audioSynth.playPing();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
     try {
+      console.log(`[Transfer] Initiating ${transferDirection}: ${transferAmount}`);
       const res = await fetch('/api/balance/transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -173,12 +186,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           walletAddress: wallet.address,
           amount: transferAmount,
           direction: transferDirection
-        })
+        }),
+        signal: controller.signal
       });
       
+      clearTimeout(timeoutId);
       const data = await res.json();
       
       if (res.ok) {
+        console.log(`[Transfer] Success:`, data);
         fetchProtocolBalance();
         if (onRefreshBalances) onRefreshBalances();
         setTransferAmount('');
@@ -189,14 +205,20 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             setTradeStatus(null);
         }, 1500);
       } else {
+        console.warn(`[Transfer] Failed:`, data.error);
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
         audioSynth.playError();
       }
     } catch (e: any) {
-      setTradeStatus({ msg: 'Network error during transfer', ok: false });
+      if (e.name === 'AbortError') {
+          setTradeStatus({ msg: 'Request timed out. Please try again.', ok: false });
+      } else {
+          setTradeStatus({ msg: 'Network error during transfer', ok: false });
+      }
       audioSynth.playError();
-      console.error("Transfer error:", e);
+      console.error("[Transfer] Error:", e);
     } finally {
+      clearTimeout(timeoutId);
       setTransferLoading(false);
     }
   };

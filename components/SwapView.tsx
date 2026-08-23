@@ -94,23 +94,38 @@ interface SwapViewProps {
       if (!wallet?.address) return;
       setIsSwapping(true);
       setSwapError(null);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       try {
+          console.log(`[Swap] Initializing swap for ${wallet.address}`);
           const res = await fetch('/api/user/swap', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ walletAddress: wallet.address })
+              body: JSON.stringify({ walletAddress: wallet.address }),
+              signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
           if (res.ok) {
+              console.log(`[Swap] Success`);
               if (onRefreshBalances) onRefreshBalances();
               setShowDeposit(false);
           } else {
               const data = await res.json();
+              console.warn(`[Swap] Failed:`, data.error);
               setSwapError(data.error || 'Initialization failed');
           }
-      } catch (e) {
-          console.error('Swap failed', e);
-          setSwapError('Network error');
+      } catch (e: any) {
+          if (e.name === 'AbortError') {
+              setSwapError('Request timed out. Please try again.');
+          } else {
+              setSwapError('Network error during initialization');
+          }
+          console.error('[Swap] Error:', e);
       } finally {
+          clearTimeout(timeoutId);
           setIsSwapping(false);
       }
   };

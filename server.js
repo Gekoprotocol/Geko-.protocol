@@ -60,9 +60,12 @@ const initializeDatabase = async () => {
     }
 
     console.log('[DB] Connecting to PostgreSQL...');
-    pool = new Pool({
+    pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
+      max: 50, // Increase pool size for more concurrent connections
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
     });
 
     const client = await pool.connect();
