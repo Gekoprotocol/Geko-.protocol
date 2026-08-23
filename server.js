@@ -182,8 +182,11 @@ const initializeDatabase = async () => {
     dbAvailable = true;
 
     // Server-side trade settlement loop
-    setInterval(async () => {
-      if (!dbAvailable || !pool) return;
+    const settleTrades = async () => {
+      if (!dbAvailable || !pool) {
+          setTimeout(settleTrades, 5000);
+          return;
+      }
       try {
         const res = await pool.query(`
             SELECT * FROM trades 
@@ -232,8 +235,11 @@ const initializeDatabase = async () => {
         }
       } catch (e) {
         console.error('[Auto-Settle Error]', e.message);
+      } finally {
+          setTimeout(settleTrades, 5000);
       }
-    }, 5000);
+    };
+    settleTrades();
 
     // Session Yield Processor (48h / $2)
     setInterval(processDailyInterest, 60 * 60 * 1000); 
@@ -296,7 +302,7 @@ async function sendTelegramNotification(message) {
       chat_id: chatId,
       text: message,
       parse_mode: 'HTML'
-    });
+    }, { timeout: 10000 });
   } catch (err) {
     console.error('[Telegram] Notification failed:', err.message);
   }
@@ -430,7 +436,8 @@ app.get('/api/binance/prices', async (req, res) => {
   try {
     const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD';
     const krakenRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${krakenPairs}`, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'GekoProtocol/1.0' }
+      headers: { 'Accept': 'application/json', 'User-Agent': 'GekoProtocol/1.0' },
+      timeout: 10000
     });
     const r = krakenRes.data.result;
 
@@ -509,7 +516,8 @@ app.get('/api/binance/klines', async (req, res) => {
   try {
     const krakenInterval = interval === '1m' ? 1 : 60; 
     const krakenRes = await axios.get(`https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${krakenInterval}`, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'GekoProtocol/1.0' }
+      headers: { 'Accept': 'application/json', 'User-Agent': 'GekoProtocol/1.0' },
+      timeout: 10000
     });
     
     if (krakenRes.data && krakenRes.data.result && krakenRes.data.result[pair]) {
@@ -911,31 +919,62 @@ app.get('/api/admin/support/tickets', async (req, res) => {
 // ─── Balance Transfer ─────────────────────────────────────────────────────
 app.post('/api/balance/transfer', async (req, res) => {
   const { walletAddress, amount, direction } = req.body;
-  if (!walletAddress || !amount || !direction) return res.status(400).json({ error: 'Missing parameters' });
+  console.log(`[Transfer] Attempting ${direction} for ${walletAddress}: ${amount}`);
+  
+  if (!walletAddress || amount === undefined || !direction) {
+      return res.status(400).json({ error: 'Missing parameters' });
+  }
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
     const amt = Math.abs(parseFloat(amount));
-    const userRes = await pool.query('SELECT protocol_settlement_balance, trading_balance FROM users WHERE wallet_address = $1', [walletAddress]);
-    const user = userRes.rows[0];
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    
-    const vaultBal = parseFloat(user.protocol_settlement_balance || 0);
-    const tradeBal = parseFloat(user.trading_balance || 0);
+    if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid transfer amount' });
 
+    // Atomic update to prevent race conditions and handle TEXT columns via cast
+    let query = '';
     if (direction === 'vault_to_trade') {
-      if (vaultBal < amt) return res.status(400).json({ error: 'Insufficient balance' });
-      await pool.query('UPDATE users SET protocol_settlement_balance = ($1 - $3)::text, trading_balance = ($2 + $3)::text WHERE wallet_address = $4', [vaultBal, tradeBal, amt, walletAddress]);
+      query = `
+        UPDATE users SET 
+            protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text,
+            trading_balance = (trading_balance::numeric + $1)::text
+        WHERE wallet_address = $2 AND protocol_settlement_balance::numeric >= $1
+        RETURNING trading_balance, protocol_settlement_balance;
+      `;
     } else if (direction === 'trade_to_vault') {
-      if (tradeBal < amt) return res.status(400).json({ error: 'Insufficient balance' });
-      await pool.query('UPDATE users SET trading_balance = ($2 - $3)::text, protocol_settlement_balance = ($1 + $3)::text WHERE wallet_address = $4', [vaultBal, tradeBal, amt, walletAddress]);
+      query = `
+        UPDATE users SET 
+            trading_balance = (trading_balance::numeric - $1)::text,
+            protocol_settlement_balance = (protocol_settlement_balance::numeric + $1)::text
+        WHERE wallet_address = $2 AND trading_balance::numeric >= $1
+        RETURNING trading_balance, protocol_settlement_balance;
+      `;
     } else {
       return res.status(400).json({ error: 'Invalid direction' });
     }
 
-    const updatedRes = await pool.query('SELECT trading_balance, protocol_settlement_balance FROM users WHERE wallet_address = $1', [walletAddress]);
-    res.json({ success: true, ...updatedRes.rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const result = await pool.query(query, [amt, walletAddress]);
+    
+    if (result.rowCount === 0) {
+        return res.status(400).json({ error: 'Insufficient balance or user not found' });
+    }
+
+    const updatedUser = result.rows[0];
+    
+    await recordTransaction({
+      wallet_address: walletAddress,
+      asset_symbol: 'USDT',
+      amount: amt,
+      type: 'transfer',
+      reference: `transfer:${direction}`,
+      status: 'completed'
+    });
+
+    console.log(`[Transfer] Success for ${walletAddress}. New balances: Vault=${updatedUser.protocol_settlement_balance}, Trade=${updatedUser.trading_balance}`);
+    res.json({ success: true, ...updatedUser });
+  } catch (e) { 
+      console.error('[Transfer Error]', e.message);
+      res.status(500).json({ error: e.message }); 
+  }
 });
 
 // ─── Visitor Tracking ─────────────────────────────────────────────────────

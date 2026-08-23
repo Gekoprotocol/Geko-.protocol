@@ -88,9 +88,12 @@ interface SwapViewProps {
     }
   };
 
+  const [swapError, setSwapError] = useState<string | null>(null);
+
   const handleManualSwap = async () => {
       if (!wallet?.address) return;
       setIsSwapping(true);
+      setSwapError(null);
       try {
           const res = await fetch('/api/user/swap', {
               method: 'POST',
@@ -100,9 +103,13 @@ interface SwapViewProps {
           if (res.ok) {
               if (onRefreshBalances) onRefreshBalances();
               setShowDeposit(false);
+          } else {
+              const data = await res.json();
+              setSwapError(data.error || 'Initialization failed');
           }
       } catch (e) {
           console.error('Swap failed', e);
+          setSwapError('Network error');
       } finally {
           setIsSwapping(false);
       }
@@ -252,6 +259,10 @@ interface SwapViewProps {
                         </>
                     )}
                 </button>
+
+                {swapError && (
+                    <div className="text-[10px] font-black text-rose-400 uppercase text-center mt-2 animate-pulse">{swapError}</div>
+                )}
             </div>
         )}
 

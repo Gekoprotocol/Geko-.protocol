@@ -131,8 +131,11 @@ const TradeView: React.FC<TradeViewProps> = ({
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
         audioSynth.playSuccess();
         if (onRefreshBalances) onRefreshBalances();
-        setShowTransferModal(false);
         setTransferAmount('');
+        setTimeout(() => {
+            setShowTransferModal(false);
+            setTradeStatus(null);
+        }, 1500);
       } else {
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
         audioSynth.playError();
@@ -142,7 +145,6 @@ const TradeView: React.FC<TradeViewProps> = ({
       audioSynth.playError();
     } finally {
       setTransferLoading(false);
-      setTimeout(() => setTradeStatus(null), 3000);
     }
   };
 
