@@ -117,7 +117,7 @@ export const NetworkPulse: React.FC = () => {
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-[#0B0E11] text-gray-200 p-6 lg:p-10 font-mono overflow-hidden">
+    <div className="min-h-full flex flex-col bg-[#0B0E11] text-gray-200 p-6 lg:p-10 font-mono overflow-y-auto custom-scrollbar">
       <style>{`
         @keyframes float {
           0% { transform: translateY(0px); }
@@ -128,7 +128,7 @@ export const NetworkPulse: React.FC = () => {
           animation: float 6s ease-in-out infinite;
         }
       `}</style>
-      <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col space-y-8 min-h-0">
+      <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col space-y-8 pb-20">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 shrink-0">
           <div className="space-y-3">
@@ -152,9 +152,9 @@ export const NetworkPulse: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
             {/* Feed Section */}
-            <div className="lg:col-span-2 bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative group animate-float">
+            <div className="lg:col-span-2 bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative group animate-float h-[600px] lg:h-auto lg:min-h-[700px]">
                 <div className="absolute inset-0 pointer-events-none border-[20px] border-white/[0.02] rounded-[40px] z-20"></div>
                 
                 <div className="p-6 border-b border-white/5 bg-[#1E2329] flex justify-between items-center z-10">
