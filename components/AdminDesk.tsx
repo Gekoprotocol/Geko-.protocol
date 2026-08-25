@@ -686,6 +686,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   <tr>
                     <th className="px-6 py-4">#</th>
                     <th className="px-6 py-4">Wallet / User</th>
+                    <th className="px-6 py-4">Asset</th>
                     <th className="px-6 py-4">Amount</th>
                     <th className="px-6 py-4">Destination</th>
                     <th className="px-6 py-4">User Balance</th>
@@ -707,6 +708,16 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                     const balance     = parseFloat(wr.current_balance || 0);
                     const hasFunds    = balance >= parseFloat(wr.amount);
 
+                    // Asset Badge Styling
+                    const assetStyles: Record<string, string> = {
+                        'BTC':  'bg-amber-500/10 text-amber-500 border-amber-500/20',
+                        'ETH':  'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
+                        'SOL':  'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+                        'USDT': 'bg-teal-500/10 text-teal-500 border-teal-500/20',
+                        'BNB':  'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                    };
+                    const badgeClass = assetStyles[wr.asset] || 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+
                     return (
                       <tr key={wr.id} className={`hover:bg-[#1E2329] transition-colors ${!isPending ? 'opacity-60' : ''}`}>
                         <td className="px-6 py-5">
@@ -718,7 +729,12 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                           <div className="text-[9px] font-mono text-indigo-300 truncate max-w-[130px] mt-1">{wr.wallet_address}</div>
                         </td>
                         <td className="px-6 py-5">
-                          <div className="text-sm font-black text-amber-400">{parseFloat(wr.amount).toLocaleString(undefined, { minimumFractionDigits: 4 })} {wr.asset}</div>
+                          <span className={`px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest ${badgeClass}`}>
+                            {wr.asset}
+                          </span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="text-sm font-black text-amber-400">{parseFloat(wr.amount).toLocaleString(undefined, { minimumFractionDigits: 4 })}</div>
                         </td>
                         <td className="px-6 py-5">
                           <div className="flex items-center space-x-2">
