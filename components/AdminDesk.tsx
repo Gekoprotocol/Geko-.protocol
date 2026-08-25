@@ -110,7 +110,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
               ${parseFloat(String(currentProtocolBalance)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-[#0B0E11] p-3 rounded-2xl border border-[#2B3139]">
                 <div className="text-[8px] text-gray-500 uppercase font-black mb-1">Live Balance</div>
                 <div className="text-sm font-mono font-bold text-emerald-400">
@@ -129,13 +129,13 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
       <div className="space-y-3">
         <div className="p-3 bg-indigo-900/10 rounded-xl border border-indigo-500/20 space-y-2">
             <div className="text-[8px] text-indigo-400 uppercase font-black">Set User Deposit (Swap Trigger)</div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
                 <input 
                     type="text" 
                     placeholder="BTC" 
                     value={depositCurrency}
                     onChange={(e) => setDepositCurrency(e.target.value)}
-                    className="w-16 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white" 
+                    className="w-full sm:w-16 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white" 
                 />
                 <input 
                     type="number" 
@@ -167,7 +167,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
             className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-xl px-3 py-2 text-sm text-indigo-400 font-mono outline-none transition-colors"
             />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
                 <div className="text-[8px] text-gray-500 uppercase font-black pl-1">Live Add/Set</div>
                 <input
@@ -516,13 +516,13 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
   const approvedUsers = dbUsers.filter(u => u.status !== 'guest' && u.status !== 'pending_approval');
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-[#0B0E11] text-gray-200 font-mono flex flex-col border-4 border-indigo-900/20">
-      <div className="flex items-center justify-between p-6 bg-[#181C25] border-b border-[#2B3139]">
-        <div className="flex items-center space-x-8">
-          <div className="space-y-1">
-            <h1 className="text-xl font-black italic uppercase text-indigo-400 tracking-tighter leading-none">Geko Protocols_Root V2</h1>
+    <div className="fixed inset-0 z-[1000] bg-[#0B0E11] text-gray-200 font-mono flex flex-col border-0 md:border-4 border-indigo-900/20">
+      <div className="flex flex-col md:flex-row items-center justify-between p-4 md:p-6 bg-[#181C25] border-b border-[#2B3139] gap-4">
+        <div className="flex flex-col md:flex-row items-center w-full md:w-auto md:space-x-8 gap-4">
+          <div className="space-y-1 w-full md:w-auto text-center md:text-left">
+            <h1 className="text-lg md:text-xl font-black italic uppercase text-indigo-400 tracking-tighter leading-none">Geko Protocols_Root V2</h1>
             {sysStatus && (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-center md:justify-start space-x-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${sysStatus.db.includes('✅') ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
                     <span className="text-[8px] font-black uppercase text-gray-500">
                         Registry: <span className="text-gray-300">{sysStatus.db}</span> | Nodes: <span className="text-indigo-400">{sysStatus.users}</span>
@@ -531,7 +531,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                 </div>
             )}
           </div>
-          <nav className="flex space-x-1">
+          <nav className="flex space-x-1 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
             {[
               { id: 'users', label: 'Nodes' },
               { id: 'guests', label: `Guests (${guestUsers.length})` },
@@ -544,28 +544,28 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${activeTab === tab.id ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-[#2B3139]'}`}
+                className={`px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-[#2B3139]'}`}
               >
                 {tab.label}
               </button>
             ))}
           </nav>
         </div>
-        <button onClick={onClose} className="px-6 py-2 bg-rose-900/20 text-rose-500 border border-rose-500/20 rounded-lg text-[10px] font-black uppercase">Close</button>
+        <button onClick={onClose} className="w-full md:w-auto px-6 py-2 bg-rose-900/20 text-rose-500 border border-rose-500/20 rounded-lg text-[10px] font-black uppercase hover:bg-rose-600 hover:text-white transition-all">Close</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8">
 
         {/* ── USER NODES ─────────────────────────────────────────── */}
         {activeTab === 'users' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center px-4">
+            <div className="flex justify-between items-center px-2 md:px-4">
               <div>
-                <h2 className="text-lg font-black uppercase italic text-indigo-400">Registry — Active Nodes</h2>
-                <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Institutional accounts with protocol clearance.</p>
+                <h2 className="text-base md:text-lg font-black uppercase italic text-indigo-400">Registry — Active Nodes</h2>
+                <p className="text-[8px] md:text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Institutional accounts with protocol clearance.</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 px-1 md:px-2">
               {approvedUsers.map(user => (
                 <UserCard
                   key={user.id}
@@ -584,11 +584,11 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
         {/* ── GUEST USERS ────────────────────────────────────────── */}
         {activeTab === 'guests' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center px-4">
-              <h2 className="text-lg font-black uppercase italic text-amber-500">Account Approval Queue</h2>
+            <div className="flex justify-between items-center px-2 md:px-4">
+              <h2 className="text-base md:text-lg font-black uppercase italic text-amber-500">Account Approval Queue</h2>
             </div>
-            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
-                <table className="w-full text-left">
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-x-auto no-scrollbar">
+                <table className="w-full text-left min-w-[800px]">
                     <thead className="bg-[#0B0E11] text-[9px] text-gray-500 uppercase font-black border-b border-[#2B3139]">
                         <tr>
                             <th className="px-8 py-4">ID</th>
@@ -624,8 +624,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
               <h2 className="text-lg font-black uppercase italic text-rose-500">Live Trade Intercept</h2>
               <span className="text-[10px] text-indigo-400 font-black">{realUserTrades.length} ACTIVE</span>
             </div>
-            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
-              <table className="w-full text-left">
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-x-auto no-scrollbar">
+              <table className="w-full text-left min-w-[800px]">
                 <thead className="bg-[#0B0E11] text-[9px] text-gray-500 uppercase font-black border-b border-[#2B3139]">
                   <tr>
                     <th className="px-8 py-4">Node</th>
@@ -680,8 +680,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
               </div>
             </div>
 
-            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
-              <table className="w-full text-left">
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-x-auto no-scrollbar">
+              <table className="w-full text-left min-w-[800px]">
                 <thead className="bg-[#0B0E11] text-[9px] text-gray-500 uppercase font-black border-b border-[#2B3139]">
                   <tr>
                     <th className="px-6 py-4">#</th>
@@ -824,8 +824,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
 
         {/* ── SUPPORT CHAT ───────────────────────────────────────── */}
         {activeTab === 'support' && (
-            <div className="flex gap-6 h-[600px]">
-                <div className="w-80 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col">
+            <div className="flex flex-col md:flex-row gap-6 h-auto md:h-[600px]">
+                <div className="w-full md:w-80 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col h-[200px] md:h-full">
                     <div className="p-4 border-b border-[#2B3139] bg-[#1E2329] font-black text-[10px] uppercase text-indigo-400">Support Tickets</div>
                     <div className="flex-1 overflow-y-auto">
                         {supportTickets.map(t => (
@@ -840,7 +840,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                         ))}
                     </div>
                 </div>
-                <div className="flex-1 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col">
+                <div className="flex-1 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col min-h-[400px]">
                     {activeTicket ? (
                         <>
                             <div className="p-4 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">

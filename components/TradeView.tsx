@@ -199,19 +199,31 @@ const TradeView: React.FC<TradeViewProps> = ({
         onTouchEnd={handleTouchEnd}
     >
       {/* HUD Header */}
-      <div className="h-16 border-b border-[#2B3139] bg-[#181C25] flex items-center px-6 shrink-0 z-30 justify-between">
-        <div className="flex items-center space-x-4 lg:space-x-8">
+      <div className="h-16 border-b border-[#2B3139] bg-[#181C25] flex items-center px-4 md:px-6 shrink-0 z-30 justify-between">
+        <div className="flex items-center space-x-2 md:space-x-8">
             <button onClick={() => setIsAssetSelectorOpen(true)} className="flex flex-col text-left group hover:bg-[#2B3139] p-2 rounded-xl transition-all border border-transparent hover:border-indigo-500/30">
-                <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center">Pair <svg className="w-3 h-3 ml-1 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg></span>
-                <span className="text-gray-100 font-black text-sm lg:text-lg italic tracking-tighter">{selectedSymbol}/USDT</span>
+                <span className="text-[9px] md:text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center">Pair <svg className="w-3 h-3 ml-1 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg></span>
+                <span className="text-gray-100 font-black text-xs md:text-lg italic tracking-tighter">{selectedSymbol}/USDT</span>
             </button>
             <div className="flex flex-col">
-                <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Price</span>
-                <span className={`text-sm lg:text-lg font-black tabular-nums ${selectedAsset.price > 0 ? (selectedAsset.change24h >= 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-gray-600'}`}>
+                <span className="text-[9px] md:text-[10px] text-gray-500 font-black uppercase tracking-widest">Price</span>
+                <span className={`text-xs md:text-lg font-black tabular-nums ${selectedAsset.price > 0 ? (selectedAsset.change24h >= 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-gray-600'}`}>
                     ${(selectedAsset.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
             </div>
         </div>
+
+        <div className="lg:hidden flex bg-[#0B0E11] rounded-xl p-1 border border-[#2B3139]">
+            <button 
+                onClick={() => setMobileView('chart')} 
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${mobileView === 'chart' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+            >Chart</button>
+            <button 
+                onClick={() => setMobileView('controls')} 
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${mobileView === 'controls' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+            >Trade</button>
+        </div>
+
         <div className="hidden lg:flex items-center space-x-3 bg-indigo-900/10 px-5 py-2 rounded-xl border border-indigo-500/20 group cursor-default relative">
              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Secured Node</span>
@@ -219,9 +231,9 @@ const TradeView: React.FC<TradeViewProps> = ({
       </div>
 
       <div className="flex-1 relative overflow-hidden flex flex-col lg:flex-row bg-[#0B0E11]">
-        {/* CHART SECTION (Desktop Only) */}
-        <div className={`flex-1 relative h-full min-h-0 hidden lg:flex flex-col overflow-y-auto custom-scrollbar`}>
-            <div className="w-full h-[600px] shrink-0 relative bg-[#0B0E11]">
+        {/* CHART SECTION */}
+        <div className={`flex-1 relative h-full min-h-0 ${mobileView === 'chart' ? 'flex' : 'hidden'} lg:flex flex-col overflow-y-auto custom-scrollbar`}>
+            <div className="w-full h-[400px] md:h-[600px] shrink-0 relative bg-[#0B0E11]">
                 <MarketChart symbol={selectedSymbol} showIndicators={showIndicators} activeTrades={localActiveTrades} />
             </div>
 
@@ -249,16 +261,16 @@ const TradeView: React.FC<TradeViewProps> = ({
 
         {/* CONTROLS SECTION */}
         <div 
-            className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar`}
+            className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar`}
         >
             <div className="lg:hidden h-10 flex items-center justify-center border-b border-white/5 opacity-40 shrink-0">
                 <div className="flex flex-col items-center">
                     <div className="w-12 h-1 bg-gray-600 rounded-full mb-1"></div>
-                    <span className="text-[8px] font-black uppercase tracking-[0.3em]">Scroll for Trading Terminal</span>
+                    <span className="text-[8px] font-black uppercase tracking-[0.3em]">{mobileView === 'controls' ? 'Trading Terminal' : 'Swipe for Chart'}</span>
                 </div>
             </div>
             
-            <div className="p-4 lg:p-5 pb-64 lg:pb-12 space-y-4 lg:space-y-6 flex-1 flex flex-col min-h-[120%] lg:min-h-0">
+            <div className="p-4 lg:p-5 pb-32 lg:pb-12 space-y-4 lg:space-y-6 flex-1 flex flex-col min-h-0">
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="flex justify-between items-center mb-1">
                         <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Balance (DEMO)' : 'Balance'}</div>
@@ -320,6 +332,37 @@ const TradeView: React.FC<TradeViewProps> = ({
                     <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
                         <button onClick={() => executeTrade('up')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-900/30 text-emerald-900'}`}>BUY ↑</button>
                         <button onClick={() => executeTrade('down')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-rose-600 hover:bg-rose-500' : 'bg-rose-900/30 text-rose-900'}`}>SELL ↓</button>
+                    </div>
+                </div>
+
+                {/* Mobile Activity Stream */}
+                <div className="lg:hidden space-y-4 pt-6 border-t border-white/5">
+                    <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 block">Your Positions</span>
+                    <div className="space-y-3">
+                        {localActiveTrades.length === 0 && localSettledTrades.length === 0 && (
+                            <div className="text-[9px] text-gray-600 font-black uppercase text-center py-8 border border-white/5 rounded-2xl">No Active Trades</div>
+                        )}
+                        {localActiveTrades.map(t => (
+                            <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-2xl border border-[#2B3139]">
+                                <div className="flex items-center space-x-3">
+                                    <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
+                                    <div className="flex flex-col">
+                                        <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'Buy' : 'Sell'}</span>
+                                        <span className="text-[8px] text-gray-500 font-mono">${t.amount}</span>
+                                    </div>
+                                </div>
+                                <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
+                            </div>
+                        ))}
+                        {localSettledTrades.map(t => (
+                            <div key={t.id} className={`flex items-center justify-between px-4 py-3 rounded-2xl border ${t.status === 'won' ? 'bg-emerald-900/5 border-emerald-500/20 text-emerald-400' : 'bg-rose-900/5 border-rose-500/20 text-rose-400'}`}>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black uppercase">{t.symbol}</span>
+                                    <span className="text-[8px] opacity-60 uppercase font-black">{t.status}</span>
+                                </div>
+                                <span className="text-[10px] font-black tabular-nums">{t.pnl && t.pnl > 0 ? '+' : ''}{t.pnl?.toFixed(2)}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
