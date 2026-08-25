@@ -56,6 +56,7 @@ const TradeView: React.FC<TradeViewProps> = ({
 
   // Mobile View Toggle ('chart' or 'controls')
   const [mobileView, setMobileView] = useState<'chart' | 'controls'>('chart');
+  const [isChartFullscreen, setIsChartFullscreen] = useState(false);
   const touchStart = useRef<number | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -233,8 +234,20 @@ const TradeView: React.FC<TradeViewProps> = ({
       <div className="flex-1 relative overflow-hidden flex flex-col lg:flex-row bg-[#0B0E11]">
         {/* CHART SECTION */}
         <div className={`flex-1 relative h-full min-h-0 ${mobileView === 'chart' ? 'flex' : 'hidden'} lg:flex flex-col overflow-y-auto custom-scrollbar`}>
-            <div className="w-full h-[400px] md:h-[600px] shrink-0 relative bg-[#0B0E11]">
+            <div className={`w-full shrink-0 relative bg-[#0B0E11] transition-all duration-300 ${isChartFullscreen ? 'fixed inset-0 z-[500] h-screen' : 'h-[400px] md:h-[600px]'}`}>
                 <MarketChart symbol={selectedSymbol} showIndicators={showIndicators} activeTrades={localActiveTrades} />
+                
+                {/* Fullscreen Toggle Button */}
+                <button 
+                    onClick={() => setIsChartFullscreen(!isChartFullscreen)}
+                    className="absolute top-4 right-4 z-[510] p-2 bg-[#181C25]/80 border border-[#2B3139] rounded-xl text-indigo-400 hover:text-white transition-all shadow-2xl backdrop-blur-md"
+                >
+                    {isChartFullscreen ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9L4 4m0 0l5-5m-5 5h16M15 15l5 5m0 0l-5 5m5-5H4" /></svg>
+                    ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" /></svg>
+                    )}
+                </button>
             </div>
 
             <div className="p-4 lg:p-6 border-t border-[#2B3139] bg-[#181C25]/50 shrink-0">
