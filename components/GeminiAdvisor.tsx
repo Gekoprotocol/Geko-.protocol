@@ -1,15 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { analyzeMarket } from '../services/geminiService';
-import { AnalysisResult, MarketData } from '../types';
+import { AnalysisResult, MarketData, WalletData } from '../types';
 
 interface GeminiAdvisorProps {
   symbol: string;
   data: MarketData[];
   onExecuteSignal?: (direction: 'up' | 'down', amount: string) => void;
+  wallet?: (WalletData & { email?: string }) | null;
 }
 
-const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ symbol, data, onExecuteSignal }) => {
+const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ symbol, data, onExecuteSignal, wallet }) => {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,6 +21,19 @@ const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ symbol, data, onExecuteSi
       const dataStr = data.slice(-15).map(d => `${d.time}: ${d.close}`).join(', ');
       const result = await analyzeMarket(symbol, dataStr);
       setAnalysis(result);
+
+      // Log AI Analysis to Admin Support Chat
+      if (wallet?.address && result) {
+        await fetch('/api/support/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                address: wallet.address,
+                message: `[AI_ADVISOR] Analysis for ${symbol}: ${result.sentiment} (${result.score}% confidence). Thesis: ${result.summary}`,
+                sender: 'ai'
+            })
+        }).catch(err => console.warn('AI Log failed', err));
+      }
     } catch (error) {
       console.error(error);
     } finally {
