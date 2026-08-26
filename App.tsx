@@ -52,7 +52,9 @@ import {
   LogOut,
   ArrowLeftRight,
   Sun,
-  Moon
+  Moon,
+  Menu,
+  X
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
@@ -179,6 +181,7 @@ function TerminalLayout() {
   const [autoOpenTransfer, setAutoOpenTransfer] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [isDemo, setIsDemo] = useState(false);
   const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
@@ -611,6 +614,12 @@ function TerminalLayout() {
       {/* TOP BAR */}
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 glass shrink-0 z-40">
         <div className="flex items-center gap-2 lg:gap-3">
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="lg:hidden p-2 mr-2 hover:bg-white/5 rounded-lg transition-all text-gray-400 hover:text-white"
+          >
+            <Menu size={20} />
+          </button>
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
             <span className="text-white font-black text-[10px] italic">GK</span>
           </div>
@@ -644,6 +653,63 @@ function TerminalLayout() {
             <WalletMultiButton className="!bg-indigo-600 !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-indigo-500 transition-all border-none" />
         </div>
       </header>
+
+      {/* SIDEBAR OVERLAY */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR */}
+      <aside className={`fixed top-0 left-0 h-full w-72 z-[70] bg-[#181C25] border-r border-white/5 transform transition-transform duration-300 ease-in-out lg:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex flex-col h-full p-6">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-black text-[10px] italic">GK</span>
+              </div>
+              <span className="font-black text-lg uppercase italic text-white">GEKO</span>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
+            <SidebarNavItem active={activeTab === 'home'} onClick={() => { setActiveTab('home'); setIsSidebarOpen(false); }} icon={<LayoutDashboard size={18}/>} label="Home" />
+            <SidebarNavItem active={activeTab === 'pulse'} onClick={() => { setActiveTab('pulse'); setIsSidebarOpen(false); }} icon={<Activity size={18}/>} label="Pulse" />
+            <SidebarNavItem active={activeTab === 'chart'} onClick={() => { setActiveTab('chart'); setIsSidebarOpen(false); }} icon={<TrendingUp size={18}/>} label="Chart" />
+            <SidebarNavItem active={activeTab === 'trade'} onClick={() => { setActiveTab('trade'); setIsSidebarOpen(false); }} icon={<ArrowLeftRight size={18}/>} label="Trade" />
+            <SidebarNavItem active={activeTab === 'swap'} onClick={() => { setActiveTab('swap'); setIsSidebarOpen(false); }} icon={<RefreshCw size={18}/>} label="Swap" />
+            <SidebarNavItem active={activeTab === 'vault'} onClick={() => { setActiveTab('vault'); setIsSidebarOpen(false); }} icon={<Wallet size={18}/>} label="Assets" />
+            <SidebarNavItem active={activeTab === 'history'} onClick={() => { setActiveTab('history'); setIsSidebarOpen(false); }} icon={<LayoutGrid size={18}/>} label="History" />
+            <SidebarNavItem active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }} icon={<Settings size={18}/>} label="Settings" />
+          </nav>
+
+          <div className="mt-auto pt-6 border-t border-white/5 space-y-4">
+            <button 
+                onClick={() => {
+                    authService.logout(walletData?.email);
+                    window.location.href = '/';
+                }}
+                className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl text-rose-500 hover:bg-rose-500/10 transition-all group"
+            >
+                <LogOut size={18} />
+                <span className="text-xs uppercase font-black tracking-widest">Back to Login</span>
+            </button>
+            
+            <div className="flex items-center gap-3 px-2 opacity-50">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="text-[8px] font-mono text-gray-400 truncate">{activeAddress}</span>
+            </div>
+          </div>
+        </div>
+      </aside>
 
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-hidden relative">
@@ -789,8 +855,8 @@ function TerminalLayout() {
         </SafeView>
       </main>
 
-      {/* BOTTOM NAVIGATION */}
-      <nav className="h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl flex items-center justify-start lg:justify-center px-4 gap-2 lg:gap-8 z-50 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+      {/* BOTTOM NAVIGATION (Desktop only) */}
+      <nav className="hidden lg:flex h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl items-center justify-center px-4 gap-8 z-50">
           <BottomNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
           <BottomNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Activity size={18}/>} label="Pulse" />
           <BottomNavItem active={activeTab === 'chart'} onClick={() => setActiveTab('chart')} icon={<TrendingUp size={18}/>} label="Chart" />
@@ -861,16 +927,16 @@ function BottomNavItem({ active, icon, label, onClick }: any) {
   return (
     <button 
       onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-1 px-3 lg:px-6 py-2 rounded-2xl transition-all duration-300 group ${active ? 'text-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}
+      className={`flex flex-col items-center justify-center gap-1 px-6 py-2 rounded-2xl transition-all duration-300 group ${active ? 'text-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}
     >
       <div className={`${active ? 'text-indigo-500' : 'text-gray-600 group-hover:text-indigo-400'} transition-colors`}>{icon}</div>
-      <span className="text-[8px] lg:text-[10px] uppercase font-black tracking-widest">{label}</span>
+      <span className="text-[10px] uppercase font-black tracking-widest">{label}</span>
       {active && <div className="w-1 h-1 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]"></div>}
     </button>
   );
 }
 
-function NavItem({ active, icon, label, onClick }: any) {
+function SidebarNavItem({ active, icon, label, onClick }: any) {
   return (
     <button 
       onClick={onClick}

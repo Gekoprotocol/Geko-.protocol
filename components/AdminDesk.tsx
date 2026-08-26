@@ -234,6 +234,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
   const [activeTicket, setActiveTicket] = useState<any>(null);
   const [adminReply, setAdminReply] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Load current config and health on mount
   useEffect(() => {
@@ -280,7 +281,16 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
   const fetchSupport = async () => {
     try {
       const res = await fetch('/api/admin/support/tickets');
-      if (res.ok) setSupportTickets(await res.json());
+      if (res.ok) {
+        const tickets = await res.json();
+        setSupportTickets(tickets);
+        
+        // Update active ticket messages if one is selected
+        if (activeTicket) {
+            const updated = tickets.find((t: any) => t.id === activeTicket.id);
+            if (updated) setActiveTicket(updated);
+        }
+      }
     } catch (e) { console.error('Failed to fetch support tickets', e); }
   };
 
@@ -449,6 +459,12 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
       fetchSupport();
     } catch (e) { console.error('Reply failed', e); }
   };
+
+  useEffect(() => {
+    if (activeTicket) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeTicket?.messages]);
 
   const handleApproveWithdrawal = async (requestId: number) => {
     setApprovingId(requestId);
@@ -865,11 +881,16 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                             <div className="flex-1 p-6 overflow-y-auto space-y-4">
                                 {activeTicket.messages.map((m: any, i: number) => (
                                     <div key={i} className={`flex ${m.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[80%] p-4 rounded-2xl text-xs ${m.sender === 'admin' ? 'bg-indigo-600 text-white' : 'bg-[#0B0E11] border border-[#2B3139] text-gray-300'}`}>
+                                        <div className={`max-w-[80%] p-4 rounded-2xl text-xs ${
+                                            m.sender === 'admin' ? 'bg-indigo-600 text-white' : 
+                                            m.sender === 'ai' ? 'bg-amber-900/20 border border-amber-500/20 text-amber-400 italic' :
+                                            'bg-[#0B0E11] border border-[#2B3139] text-gray-300'
+                                        }`}>
                                             {m.text}
                                         </div>
                                     </div>
                                 ))}
+                                <div ref={chatEndRef} />
                             </div>
                             <div className="p-4 border-t border-[#2B3139] bg-[#1E2329] flex gap-3">
                                 <input 

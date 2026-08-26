@@ -273,9 +273,32 @@ const TradeView: React.FC<TradeViewProps> = ({
         </div>
 
         {/* CONTROLS SECTION */}
-        <div 
-            className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar`}
+        <div className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl relative overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar`}
         >
+            {/* AI Advisor Overlay */}
+            {showAI && (
+                <div className="absolute inset-0 z-50 bg-[#181C25] animate-in slide-in-from-right duration-300">
+                    <div className="flex flex-col h-full">
+                        <div className="p-4 border-b border-[#2B3139] flex justify-between items-center shrink-0">
+                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Protocol Advisor</span>
+                            <button onClick={() => setShowAI(false)} className="text-gray-500 hover:text-white"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <GeminiAdvisor 
+                                symbol={selectedSymbol} 
+                                data={marketData} 
+                                onExecuteSignal={(dir, amt) => {
+                                    setAmount(amt);
+                                    executeTrade(dir);
+                                    setShowAI(false);
+                                }}
+                                wallet={wallet}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="lg:hidden h-10 flex items-center justify-center border-b border-white/5 opacity-40 shrink-0">
                 <div className="flex flex-col items-center">
                     <div className="w-12 h-1 bg-gray-600 rounded-full mb-1"></div>
