@@ -49,22 +49,39 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !activeAddress) return;
+    await sendMessage(input);
+  };
 
-    const msgText = input;
-    setInput('');
-
+  const sendMessage = async (text: string, sender: 'user' | 'ai' = 'user') => {
     try {
       await fetch('/api/support/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           address: activeAddress, 
-          message: msgText, 
-          sender: 'user' 
+          message: text, 
+          sender 
         })
       });
       fetchMessages();
     } catch (e) { console.error('Failed to send message', e); }
+  };
+
+  const FAQS = [
+    { q: "How do I deposit funds?", a: "Navigate to the 'Vault' tab, select 'Receive', and copy the institutional deposit address for USDT or SOL." },
+    { q: "How do I start trading?", a: "Go to the 'Trade' tab, select an asset, choose your leverage and amount, then click 'Execute Trade'." },
+    { q: "Is KYC mandatory?", a: "Yes. For institutional security, identity verification (KYC) is required for all withdrawals and higher-tier operations." },
+    { q: "How long do trades take?", a: "Each trade has a fixed duration. Once the countdown expires, the trade settles automatically against live market data." },
+    { q: "What is Protocol Settlement?", a: "This is your main Vault balance. You can transfer funds between this and your Trading Balance as needed." },
+    { q: "How do I withdraw?", a: "Ensure your KYC is approved, then go to 'Vault' > 'Withdraw', enter your destination address and amount." }
+  ];
+
+  const handleFaqClick = async (faq: { q: string, a: string }) => {
+    setInput('');
+    // 1. Send the user's question
+    await sendMessage(faq.q, 'user');
+    // 2. Immediate AI response
+    setTimeout(() => sendMessage(faq.a, 'ai'), 500);
   };
 
   return (
@@ -78,7 +95,7 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
           <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full border-2 border-[#0B0E11] animate-pulse"></div>
         </button>
       ) : (
-        <div className="w-80 h-[450px] bg-[#181C25] border border-[#2B3139] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4">
+        <div className="w-80 h-[500px] bg-[#181C25] border border-[#2B3139] rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4">
           <div className="p-4 bg-[#1E2329] border-b border-[#2B3139] flex items-center justify-between">
              <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black italic text-xs shadow-lg">G</div>
@@ -96,6 +113,25 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[#0B0E11]/30">
+            {/* FAQ SECTION */}
+            <div className="pb-4 border-b border-[#2B3139]/50">
+                <div className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <div className="w-1 h-1 bg-indigo-500 rounded-full"></div>
+                    Institutional Knowledge Base
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                    {FAQS.map((faq, i) => (
+                        <button 
+                            key={i} 
+                            onClick={() => handleFaqClick(faq)}
+                            className="text-left p-2.5 bg-[#1E2329] hover:bg-[#2B3139] border border-[#2B3139] rounded-xl text-[9px] font-bold text-gray-300 transition-all hover:translate-x-1"
+                        >
+                            {faq.q}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             {messages.length === 0 && (
                 <div className="p-3 bg-[#1E2329] text-gray-400 text-[10px] rounded-2xl border border-[#2B3139] text-center italic">
                     Institutional Support Node Active. How can I assist with your terminal session today?
