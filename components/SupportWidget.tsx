@@ -100,16 +100,21 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
                     Institutional Support Node Active. How can I assist with your terminal session today?
                 </div>
             )}
-            {messages.map((msg, i) => (
-                <div key={i} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                    <div className={`max-w-[85%] p-3 rounded-2xl text-[10px] font-bold leading-relaxed ${
-                        msg.sender === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-[#1E2329] text-gray-300 rounded-tl-none border border-[#2B3139]'
-                    }`}>
-                        {msg.text}
+            {messages.map((msg, i) => {
+                if (!msg) return null;
+                return (
+                    <div key={i} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                        <div className={`max-w-[85%] p-3 rounded-2xl text-[10px] font-bold leading-relaxed ${
+                            msg.sender === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-[#1E2329] text-gray-300 rounded-tl-none border border-[#2B3139]'
+                        }`}>
+                            {msg.text}
+                        </div>
+                        <span className="text-[7px] text-gray-600 mt-1 uppercase font-bold">
+                            {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'PROTOCOL_STAMP'}
+                        </span>
                     </div>
-                    <span className="text-[7px] text-gray-600 mt-1 uppercase font-bold">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-            ))}
+                );
+            })}
             <div ref={endRef} />
           </div>
 
