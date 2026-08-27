@@ -890,7 +890,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                     {activeTicket ? (
                         <>
                             <div className="p-4 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
-                                <span className="text-[10px] font-black uppercase text-indigo-400">Chat with {activeTicket.wallet_address.slice(0, 16)}...</span>
+                                <span className="text-[10px] font-black uppercase text-indigo-400">Chat with {(activeTicket.wallet_address || '').slice(0, 16)}...</span>
                             </div>
                             <div className="flex-1 p-6 overflow-y-auto space-y-4">
                                 {(activeTicket.messages || []).map((m: any, i: number) => (

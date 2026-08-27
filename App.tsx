@@ -869,7 +869,9 @@ function TerminalLayout() {
           <BottomNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={18}/>} label="Settings" />
       </nav>
 
-      <SupportWidget wallet={walletData} />
+      <SafeView>
+        <SupportWidget wallet={walletData} />
+      </SafeView>
 
       {isIdentityOpen && walletData && (
           <WalletDashboard wallet={walletData} onClose={() => setIsIdentityOpen(false)} onDisconnect={disconnect} />
