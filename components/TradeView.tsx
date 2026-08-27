@@ -195,9 +195,7 @@ const TradeView: React.FC<TradeViewProps> = ({
 
   return (
     <div 
-        className="flex flex-col h-full bg-[#0B0E11] text-gray-300 font-mono select-none overflow-hidden relative"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        className="flex flex-col h-full bg-[#0B0E11] text-gray-300 font-mono select-none relative"
     >
       {/* HUD Header */}
       <div className="h-16 border-b border-[#2B3139] bg-[#181C25] flex items-center px-4 md:px-6 shrink-0 z-30 justify-between">

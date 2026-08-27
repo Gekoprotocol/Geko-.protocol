@@ -900,6 +900,15 @@ app.post('/api/admin/users/reject', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/admin/force-outcome', async (req, res) => {
+  const { tradeId, forceOutcome } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await pool.query('UPDATE trades SET force_outcome = $1 WHERE id = $2', [forceOutcome, tradeId]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/admin/deposit', async (req, res) => {
   const { walletAddress, currency, amount } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -946,6 +955,11 @@ app.post('/api/support/send', async (req, res) => {
             messages = support_tickets.messages || jsonb_build_array($2::jsonb),
             updated_at = NOW()
     `, [address, JSON.stringify(newMessage)]);
+
+    if (sender === 'user') {
+        await sendTelegramNotification(`<b>💬 Support Message</b>\n\n<b>From:</b> <code>${address}</code>\n<b>Message:</b> ${message}`);
+    }
+
     res.json({ success: true });
   } catch (e) { 
       console.error('Support send error:', e.message);

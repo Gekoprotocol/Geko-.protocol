@@ -612,7 +612,7 @@ function TerminalLayout() {
     <div className={`h-screen h-[100dvh] w-screen flex flex-col overflow-hidden ${isDarkMode ? 'bg-[#0B0E11] text-[#EAECEF]' : 'bg-gray-50 text-gray-900'} font-sans`}>
       
       {/* TOP BAR */}
-      <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 glass shrink-0 z-40">
+      <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 glass shrink-0 z-50 sticky top-0">
         <div className="flex items-center gap-2 lg:gap-3">
           <button 
             onClick={() => setIsSidebarOpen(true)}
@@ -650,7 +650,9 @@ function TerminalLayout() {
               })}
             </div>
             <div className="w-px h-6 bg-white/10" />
-            <WalletMultiButton className="!bg-indigo-600 !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-indigo-500 transition-all border-none" />
+            <div className="flex items-center justify-center bg-indigo-600 rounded-xl px-1">
+                <WalletMultiButton className="!bg-transparent !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-white/5 transition-all border-none shadow-none" />
+            </div>
         </div>
       </header>
 

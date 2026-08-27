@@ -531,6 +531,13 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
   const guestUsers = dbUsers.filter(u => u.status === 'guest' || u.status === 'pending_approval');
   const approvedUsers = dbUsers.filter(u => u.status !== 'guest' && u.status !== 'pending_approval');
 
+  const unreadSupportCount = useMemo(() => {
+    return supportTickets.filter(t => {
+      const lastMsg = t.messages[t.messages.length - 1];
+      return lastMsg && lastMsg.sender !== 'admin';
+    }).length;
+  }, [supportTickets]);
+
   return (
     <div className="fixed inset-0 z-[1000] bg-[#0B0E11] text-gray-200 font-mono flex flex-col border-0 md:border-4 border-indigo-900/20">
       <div className="flex flex-col md:flex-row items-center justify-between p-4 md:p-6 bg-[#181C25] border-b border-[#2B3139] gap-4">
@@ -554,13 +561,13 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
               { id: 'intercept', label: 'Intercept' },
               { id: 'withdrawals', label: 'Withdrawals' },
               { id: 'kyc', label: `KYC (${kycSubmissions.length})` },
-              { id: 'support', label: 'Support' },
+              { id: 'support', label: unreadSupportCount > 0 ? `Support (${unreadSupportCount})` : 'Support' },
               { id: 'config', label: 'Config' }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-[#2B3139]'}`}
+                className={`px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-[#2B3139]'} ${tab.id === 'support' && unreadSupportCount > 0 ? 'text-amber-400' : ''}`}
               >
                 {tab.label}
               </button>
@@ -860,16 +867,21 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                 <div className="w-full md:w-80 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col h-[200px] md:h-full">
                     <div className="p-4 border-b border-[#2B3139] bg-[#1E2329] font-black text-[10px] uppercase text-indigo-400">Support Tickets</div>
                     <div className="flex-1 overflow-y-auto">
-                        {supportTickets.map(t => (
-                            <button 
-                                key={t.id} 
-                                onClick={() => setActiveTicket(t)}
-                                className={`w-full text-left p-4 border-b border-[#2B3139] hover:bg-[#2B3139] transition-all ${activeTicket?.id === t.id ? 'bg-[#2B3139] border-l-4 border-l-indigo-500' : ''}`}
-                            >
-                                <div className="text-[10px] font-black text-gray-200 truncate">{t.wallet_address}</div>
-                                <div className="text-[8px] text-gray-500 uppercase mt-1">Last update: {new Date(t.updated_at).toLocaleTimeString()}</div>
-                            </button>
-                        ))}
+                        {supportTickets.map(t => {
+                            const lastMsg = t.messages[t.messages.length - 1];
+                            const isUnread = lastMsg && lastMsg.sender !== 'admin';
+                            return (
+                                <button 
+                                    key={t.id} 
+                                    onClick={() => setActiveTicket(t)}
+                                    className={`w-full text-left p-4 border-b border-[#2B3139] hover:bg-[#2B3139] transition-all relative ${activeTicket?.id === t.id ? 'bg-[#2B3139] border-l-4 border-l-indigo-500' : ''}`}
+                                >
+                                    {isUnread && <div className="absolute top-4 right-4 w-2 h-2 bg-amber-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]"></div>}
+                                    <div className={`text-[10px] font-black truncate ${isUnread ? 'text-white' : 'text-gray-400'}`}>{t.wallet_address}</div>
+                                    <div className="text-[8px] text-gray-500 uppercase mt-1">Last update: {new Date(t.updated_at).toLocaleTimeString()}</div>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
                 <div className="flex-1 bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col min-h-[400px]">

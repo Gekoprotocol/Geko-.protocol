@@ -9,12 +9,21 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
-  const endRef = useRef<HTMLDivElement>(null);
+  const [visitorId] = useState(() => {
+    let vid = localStorage.getItem('geko_support_visitor_id');
+    if (!vid) {
+        vid = 'VISITOR_' + Math.random().toString(36).substring(2, 10).toUpperCase();
+        localStorage.setItem('geko_support_visitor_id', vid);
+    }
+    return vid;
+  });
+
+  const activeAddress = wallet?.address || visitorId;
 
   const fetchMessages = async () => {
-    if (!wallet?.address) return;
+    if (!activeAddress) return;
     try {
-      const res = await fetch(`/api/support/messages?address=${wallet.address}`);
+      const res = await fetch(`/api/support/messages?address=${activeAddress}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -23,12 +32,10 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
   };
 
   useEffect(() => {
-    if (wallet?.address) {
-        fetchMessages();
-        const interval = setInterval(fetchMessages, 3000);
-        return () => clearInterval(interval);
-    }
-  }, [wallet?.address]);
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [activeAddress]);
 
   useEffect(() => {
     if (isOpen) endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -36,7 +43,7 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !wallet?.address) return;
+    if (!input.trim() || !activeAddress) return;
 
     const msgText = input;
     setInput('');
@@ -46,7 +53,7 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          address: wallet.address, 
+          address: activeAddress, 
           message: msgText, 
           sender: 'user' 
         })
