@@ -52,7 +52,12 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
     await sendMessage(input);
   };
 
-  const sendMessage = async (text: string, sender: 'user' | 'ai' = 'user') => {
+  const sendMessage = async (text: string, sender: 'user' | 'ai' | 'admin' = 'user') => {
+    // Optimistic Update
+    const newMsg = { text, sender, timestamp: new Date().toISOString() };
+    setMessages(prev => [...prev, newMsg]);
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+
     try {
       await fetch('/api/support/send', {
         method: 'POST',
@@ -63,7 +68,7 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
           sender 
         })
       });
-      fetchMessages();
+      // fetchMessages(); // No need to re-fetch immediately since we update optimistically
     } catch (e) { console.error('Failed to send message', e); }
   };
 
@@ -76,12 +81,13 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
     { q: "How do I withdraw?", a: "Ensure your KYC is approved, then go to 'Vault' > 'Withdraw', enter your destination address and amount." }
   ];
 
-  const handleFaqClick = async (faq: { q: string, a: string }) => {
+  const handleFaqClick = (faq: { q: string, a: string }) => {
+    if (!activeAddress) return;
     setInput('');
     // 1. Send the user's question
-    await sendMessage(faq.q, 'user');
+    sendMessage(faq.q, 'user');
     // 2. Immediate AI response
-    setTimeout(() => sendMessage(faq.a, 'ai'), 500);
+    setTimeout(() => sendMessage(faq.a, 'ai'), 600);
   };
 
   return (
