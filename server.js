@@ -641,16 +641,39 @@ app.post('/api/admin/users/update', async (req, res) => {
 
 app.post('/api/admin/users/delete', async (req, res) => {
   const { id } = req.body;
-  if (dbAvailable && pool) {
-    try {
-      await pool.query('DELETE FROM users WHERE id = $1 OR wallet_address = $1', [id]);
-      return res.json({ success: true });
-    } catch (e) {
-      console.error('[Admin] USER_DELETE_ERROR:', e.message);
-      return res.status(500).json({ error: e.message });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    // 1. Identify the wallet address first for thorough deletion across all linked tables
+    const userRes = await pool.query('SELECT wallet_address, email FROM users WHERE id = $1 OR wallet_address = $1', [id]);
+    const user = userRes.rows[0];
+
+    if (user) {
+      const { wallet_address, email } = user;
+      console.log(`[Admin] PERMANENT_WIPE initiated for User: ${wallet_address} (${email})`);
+
+      // 2. Delete from all associated tables in parallel
+      await Promise.all([
+        pool.query('DELETE FROM trades WHERE wallet_address = $1', [wallet_address]),
+        pool.query('DELETE FROM transactions WHERE wallet_address = $1', [wallet_address]),
+        pool.query('DELETE FROM withdrawal_requests WHERE wallet_address = $1', [wallet_address]),
+        pool.query('DELETE FROM support_tickets WHERE wallet_address = $1', [wallet_address]),
+        pool.query('DELETE FROM kyc_submissions WHERE wallet_address = $1', [wallet_address]),
+        // Finally, remove the user record itself
+        pool.query('DELETE FROM users WHERE wallet_address = $1', [wallet_address])
+      ]);
+
+      console.log(`[Admin] PERMANENT_WIPE complete for ${wallet_address}`);
+    } else {
+        // Fallback for case where only ID might be known
+        await pool.query('DELETE FROM users WHERE id = $1', [id]);
     }
+
+    res.json({ success: true, message: 'User and all associated data permanently erased.' });
+  } catch (e) {
+    console.error('[Admin] DEEP_DELETE_ERROR:', e.message);
+    res.status(500).json({ error: e.message });
   }
-  res.status(503).json({ error: 'Database unavailable' });
 });
 
 // Register / upsert a user (called on wallet connect)
