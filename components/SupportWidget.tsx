@@ -9,6 +9,7 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
+  const endRef = useRef<HTMLDivElement>(null);
   const [visitorId] = useState(() => {
     try {
         let vid = localStorage.getItem('geko_support_visitor_id');
