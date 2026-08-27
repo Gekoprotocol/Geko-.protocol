@@ -1064,6 +1064,14 @@ app.get('/api/admin/visitors', async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/admin/active-trades', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const r = await pool.query('SELECT * FROM trades WHERE status = \'pending\' ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Transactions ──────────────────────────────────────────────────────────
 app.get('/api/user/transactions', async (req, res) => {
   const { address, limit } = req.query;

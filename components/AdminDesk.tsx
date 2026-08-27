@@ -533,7 +533,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
 
   const unreadSupportCount = useMemo(() => {
     return supportTickets.filter(t => {
-      const lastMsg = t.messages[t.messages.length - 1];
+      const msgs = t.messages || [];
+      const lastMsg = msgs[msgs.length - 1];
       return lastMsg && lastMsg.sender !== 'admin';
     }).length;
   }, [supportTickets]);
@@ -868,7 +869,8 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                     <div className="p-4 border-b border-[#2B3139] bg-[#1E2329] font-black text-[10px] uppercase text-indigo-400">Support Tickets</div>
                     <div className="flex-1 overflow-y-auto">
                         {supportTickets.map(t => {
-                            const lastMsg = t.messages[t.messages.length - 1];
+                            const msgs = t.messages || [];
+                            const lastMsg = msgs[msgs.length - 1];
                             const isUnread = lastMsg && lastMsg.sender !== 'admin';
                             return (
                                 <button 

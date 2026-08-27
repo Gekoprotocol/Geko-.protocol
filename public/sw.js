@@ -1,4 +1,4 @@
-const CACHE_NAME = 'geko-v2'; // Bumped version
+const CACHE_NAME = 'geko-v2.1'; // Bumped version for update force
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
