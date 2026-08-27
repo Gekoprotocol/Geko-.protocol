@@ -41,18 +41,18 @@
         });
       }
 
-      // Detect if app fails to load after 8 seconds
+      // Detect if app fails to load after 15 seconds
       window.addEventListener('load', () => {
         setTimeout(() => {
           const root = document.getElementById('root');
           if (root && root.innerHTML === '') {
-            console.error('App failed to load after 8 seconds. Showing fallback UI.');
+            console.error('App failed to load after 15 seconds. Showing fallback UI.');
             const loader = document.getElementById('fallback-loader');
             const error = document.getElementById('fallback-error');
             if (loader) loader.style.display = 'none';
             if (error) error.style.display = 'flex';
           }
-        }, 8000);
+        }, 15000);
       });
     </script>
 

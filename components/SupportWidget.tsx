@@ -10,12 +10,16 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [visitorId] = useState(() => {
-    let vid = localStorage.getItem('geko_support_visitor_id');
-    if (!vid) {
-        vid = 'VISITOR_' + Math.random().toString(36).substring(2, 10).toUpperCase();
-        localStorage.setItem('geko_support_visitor_id', vid);
+    try {
+        let vid = localStorage.getItem('geko_support_visitor_id');
+        if (!vid) {
+            vid = 'VISITOR_' + Math.random().toString(36).substring(2, 10).toUpperCase();
+            localStorage.setItem('geko_support_visitor_id', vid);
+        }
+        return vid;
+    } catch (e) {
+        return 'VISITOR_SESSION_' + Math.random().toString(36).substring(2, 10).toUpperCase();
     }
-    return vid;
   });
 
   const activeAddress = wallet?.address || visitorId;
@@ -26,7 +30,7 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
       const res = await fetch(`/api/support/messages?address=${activeAddress}`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data);
+        setMessages(Array.isArray(data) ? data : []);
       }
     } catch (e) { console.error('Failed to fetch messages', e); }
   };
