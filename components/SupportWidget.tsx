@@ -31,7 +31,16 @@ export const SupportWidget: React.FC<SupportWidgetProps> = ({ wallet }) => {
       const res = await fetch(`/api/support/messages?address=${activeAddress}`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(Array.isArray(data) ? data : []);
+        const serverMsgs = Array.isArray(data) ? data : [];
+        
+        setMessages(prev => {
+            // Only update if server has NEW messages or if we are empty
+            // This prevents background polling from 'erasing' optimistic messages
+            if (serverMsgs.length >= prev.length) {
+                return serverMsgs;
+            }
+            return prev;
+        });
       }
     } catch (e) { console.error('Failed to fetch messages', e); }
   };
