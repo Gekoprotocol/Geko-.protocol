@@ -56,8 +56,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             }
         } else {
             await authService.signupConfirm(email, verificationCode);
-            setMsg('Signup successful! Please wait for admin approval.');
-            setView('wait');
+            setMsg('Signup successful! Please login to continue.');
+            setView('login');
         }
       } else {
         const walletData = await authService.login(email, password);
