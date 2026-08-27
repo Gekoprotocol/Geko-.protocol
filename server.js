@@ -644,8 +644,9 @@ app.post('/api/admin/users/delete', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
+    const idStr = String(id);
     // 1. Identify the wallet address first for thorough deletion across all linked tables
-    const userRes = await pool.query('SELECT wallet_address, email FROM users WHERE id = $1 OR wallet_address = $1', [id]);
+    const userRes = await pool.query('SELECT wallet_address, email FROM users WHERE id::text = $1 OR wallet_address = $1', [idStr]);
     const user = userRes.rows[0];
 
     if (user) {
@@ -659,14 +660,13 @@ app.post('/api/admin/users/delete', async (req, res) => {
         pool.query('DELETE FROM withdrawal_requests WHERE wallet_address = $1', [wallet_address]),
         pool.query('DELETE FROM support_tickets WHERE wallet_address = $1', [wallet_address]),
         pool.query('DELETE FROM kyc_submissions WHERE wallet_address = $1', [wallet_address]),
-        // Finally, remove the user record itself
         pool.query('DELETE FROM users WHERE wallet_address = $1', [wallet_address])
       ]);
 
       console.log(`[Admin] PERMANENT_WIPE complete for ${wallet_address}`);
     } else {
         // Fallback for case where only ID might be known
-        await pool.query('DELETE FROM users WHERE id = $1', [id]);
+        await pool.query('DELETE FROM users WHERE id::text = $1', [idStr]);
     }
 
     res.json({ success: true, message: 'User and all associated data permanently erased.' });
@@ -975,7 +975,7 @@ app.post('/api/support/send', async (req, res) => {
         INSERT INTO support_tickets (wallet_address, subject, messages, updated_at)
         VALUES ($1, 'General Support', jsonb_build_array($2::jsonb), NOW())
         ON CONFLICT (wallet_address) DO UPDATE SET
-            messages = support_tickets.messages || jsonb_build_array($2::jsonb),
+            messages = COALESCE(support_tickets.messages, '[]'::jsonb) || jsonb_build_array($2::jsonb),
             updated_at = NOW()
     `, [address, JSON.stringify(newMessage)]);
 
