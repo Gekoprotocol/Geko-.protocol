@@ -41,6 +41,7 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [amount, setAmount]     = useState('100');
   const [duration, setDuration] = useState(60);
   const [leverage, setLeverage] = useState(20);
+  const [selectedDirection, setSelectedDirection] = useState<'up' | 'down' | null>(null);
 
   // Dynamic Leverage Logic
   useEffect(() => {
@@ -113,7 +114,10 @@ const TradeView: React.FC<TradeViewProps> = ({
   const leverageFactor = leverage / 10;
   const potentialProfit = parsedAmount * (1 + (PAYOUT_RATE * leverageFactor));
 
-  const executeTrade = async (direction: 'up' | 'down') => {
+  const executeTrade = async () => {
+    const direction = selectedDirection;
+    if (!direction) return;
+
     if (tradingBalance < 1) {
       setTradeStatus({ msg: 'Insufficient balance. Please fund your trading account in the Assets page.', ok: false });
       return;
@@ -135,6 +139,7 @@ const TradeView: React.FC<TradeViewProps> = ({
     };
 
     setLocalActiveTrades(prev => [...prev, newTrade]);
+    setSelectedDirection(null); // Reset selection
 
     if (wallet?.address) {
       try {
@@ -373,10 +378,28 @@ const TradeView: React.FC<TradeViewProps> = ({
 
                 <div className="flex flex-col space-y-2 lg:space-y-3 pt-4">
                     {tradeStatus && <div className={`text-[9px] font-black uppercase text-center py-2 rounded-xl border ${tradeStatus.ok ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-400' : 'bg-rose-900/30 border-rose-500/30 text-rose-400'}`}>{tradeStatus.msg}</div>}
-                    <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
-                        <button onClick={() => executeTrade('up')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-900/30 text-emerald-900'}`}>BUY LONG ↑</button>
-                        <button onClick={() => executeTrade('down')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-rose-600 hover:bg-rose-500' : 'bg-rose-900/30 text-rose-900'}`}>BUY SHORT ↓</button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button 
+                            onClick={() => setSelectedDirection('up')} 
+                            className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${selectedDirection === 'up' ? 'bg-emerald-500 ring-2 ring-emerald-400 ring-offset-2 ring-offset-[#181C25]' : 'bg-emerald-900/30 text-emerald-500 border border-emerald-500/20'}`}
+                        >
+                            Buy Long ↑
+                        </button>
+                        <button 
+                            onClick={() => setSelectedDirection('down')} 
+                            className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${selectedDirection === 'down' ? 'bg-rose-500 ring-2 ring-rose-400 ring-offset-2 ring-offset-[#181C25]' : 'bg-rose-900/30 text-rose-500 border border-rose-500/20'}`}
+                        >
+                            Buy Short ↓
+                        </button>
                     </div>
+                    
+                    <button 
+                        onClick={executeTrade} 
+                        disabled={!canTrade || !selectedDirection} 
+                        className={`w-full py-4 mt-2 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[12px] lg:text-sm tracking-[0.3em] shadow-2xl transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 hover:bg-indigo-500 animate-pulse' : 'bg-gray-800 text-gray-600 cursor-not-allowed border border-gray-700'}`}
+                    >
+                        Start Trade
+                    </button>
                 </div>
 
                 {/* Mobile Activity Stream */}

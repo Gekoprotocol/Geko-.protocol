@@ -95,12 +95,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
             <p className="text-xs font-mono text-rose-400 mb-4">Exception: {this.state.error?.message || "Unknown error"}</p>
             <pre className="text-[10px] font-mono text-gray-600 overflow-auto max-h-40">{this.state.error?.stack}</pre>
           </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-8 py-3 bg-indigo-600 text-white font-black uppercase rounded-xl hover:bg-indigo-500 transition-all shadow-xl"
-          >
-            Re-Initialize Terminal
-          </button>
+          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Please refresh the page to try again</p>
         </div>
       );
     }

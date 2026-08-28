@@ -73,7 +73,8 @@ interface SwapViewProps {
             body: JSON.stringify({
                 walletAddress: wallet?.address,
                 currency: fromAsset?.symbol,
-                amount: equivalentUsdt // Send the USDT value
+                amount: equivalentUsdt, // The target amount
+                targetCurrency: toAsset?.symbol
             })
         });
 
