@@ -49,15 +49,14 @@ interface SwapViewProps {
     }
   }, [assets]);
 
-  const equivalentUsdt = useMemo(() => {
+  const equivalentTarget = useMemo(() => {
     if (!amount || !fromAsset || !toAsset) return '0.00';
     
-    // Hard-coded safety for USDT if the price feed is slightly off
-    const fromPrice = fromAsset.symbol === 'USDT' ? 1.00 : fromAsset.price;
-    const toPrice = toAsset.symbol === 'USDT' ? 1.00 : toAsset.price;
+    const fromPrice = fromAsset.price;
+    const toPrice = toAsset.price;
 
     if (toPrice === 0) return '0.00';
-    return (parseFloat(amount) * (fromPrice / toPrice)).toFixed(2);
+    return (parseFloat(amount) * (fromPrice / toPrice)).toFixed(toAsset.symbol === 'BTC' || toAsset.symbol === 'ETH' ? 6 : 2);
   }, [amount, fromAsset, toAsset]);
 
   const handleAction = async () => {
@@ -73,8 +72,9 @@ interface SwapViewProps {
             body: JSON.stringify({
                 walletAddress: wallet?.address,
                 currency: fromAsset?.symbol,
-                amount: equivalentUsdt, // The target amount
-                targetCurrency: toAsset?.symbol
+                amount: equivalentTarget, // The target amount
+                targetCurrency: toAsset?.symbol,
+                sourceAmount: amount // The input amount
             })
         });
 
@@ -208,13 +208,13 @@ interface SwapViewProps {
                         </div>
                         <div>
                             <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Protocol Node Address</div>
-                            <div className="text-2xl font-black text-white italic">Add {selectedChain} Liquidity</div>
+                            <div className="text-2xl font-black text-white italic">Confirm {fromAsset?.symbol} → {toAsset?.symbol}</div>
                             <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Institutional swap waiting for settlement</div>
                         </div>
                     </div>
                     <div className="flex flex-col items-end space-y-2">
                         <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Receive Equivalent</div>
-                        <div className="text-3xl font-black text-emerald-500 font-mono">${equivalentUsdt} USDT</div>
+                        <div className="text-3xl font-black text-emerald-500 font-mono">{equivalentTarget} {toAsset?.symbol}</div>
                     </div>
                 </div>
 
@@ -329,12 +329,16 @@ interface SwapViewProps {
                 </div>
                 <div className="flex items-center space-x-3 lg:space-x-4">
                   <div className="flex-1 text-3xl lg:text-4xl font-bold text-gray-100 font-mono truncate">
-                    {equivalentUsdt}
+                    {equivalentTarget}
                   </div>
-                  <div className="flex items-center space-x-2 bg-[#0B0E11] px-3 lg:px-5 py-2 lg:py-3 rounded-2xl border border-[#2B3139] shrink-0">
-                    <div className="w-6 h-6 bg-emerald-600 rounded-lg flex items-center justify-center font-bold text-[10px] text-white shrink-0">U</div>
-                    <span className="font-black text-sm text-gray-200">USDT</span>
-                  </div>
+                  <button 
+                    onClick={() => openSelector('to')}
+                    className="flex items-center space-x-2 bg-[#0B0E11] hover:bg-[#181C25] px-3 lg:px-5 py-2 lg:py-3 rounded-2xl border border-[#2B3139] transition-all shrink-0"
+                  >
+                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[10px] text-white shrink-0 ${toAsset?.symbol === 'USDT' ? 'bg-emerald-600' : 'bg-indigo-600'}`}>{toAsset?.symbol[0] || 'U'}</div>
+                    <span className="font-black text-sm text-gray-200">{toAsset?.symbol || 'USDT'}</span>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
                 </div>
               </div>
 
