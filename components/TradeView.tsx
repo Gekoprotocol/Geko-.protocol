@@ -59,6 +59,13 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [isChartFullscreen, setIsChartFullscreen] = useState(false);
   const touchStart = useRef<number | null>(null);
 
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStart.current = e.targetTouches[0].clientY;
   };
@@ -250,16 +257,19 @@ const TradeView: React.FC<TradeViewProps> = ({
 
             <div className="p-4 lg:p-6 border-t border-[#2B3139] bg-[#181C25]/50 shrink-0">
                 <span className="text-[9px] lg:text-[10px] font-black text-indigo-500 uppercase tracking-widest px-2 block mb-4">Activity Stream</span>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {localActiveTrades.map(t => (
-                        <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-[20px] border border-[#2B3139]">
-                            <div className="flex items-center space-x-3">
-                                <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
-                                <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'Long' : 'Short'} ${t.amount}</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                    {localActiveTrades.map(t => {
+                        const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
+                        return (
+                            <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-[20px] border border-[#2B3139]">
+                                <div className="flex items-center space-x-3">
+                                    <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
+                                    <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'Buy Long' : 'Buy Short'} ${t.amount} · {timeLeft}s</span>
+                                </div>
+                                <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
                             </div>
-                            <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
-                        </div>
-                    ))}
+                        );
+                    })}
                     {localSettledTrades.map(t => (
                         <div key={t.id} className={`flex items-center justify-between px-4 py-3 rounded-[20px] border ${t.status === 'won' ? 'bg-emerald-900/5 border-emerald-500/20 text-emerald-400' : 'bg-rose-900/5 border-rose-500/20 text-rose-400'}`}>
                             <span className="text-[10px] font-black uppercase">{t.symbol} Result</span>
@@ -364,30 +374,33 @@ const TradeView: React.FC<TradeViewProps> = ({
                 <div className="flex flex-col space-y-2 lg:space-y-3 pt-4">
                     {tradeStatus && <div className={`text-[9px] font-black uppercase text-center py-2 rounded-xl border ${tradeStatus.ok ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-400' : 'bg-rose-900/30 border-rose-500/30 text-rose-400'}`}>{tradeStatus.msg}</div>}
                     <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
-                        <button onClick={() => executeTrade('up')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-900/30 text-emerald-900'}`}>BUY ↑</button>
-                        <button onClick={() => executeTrade('down')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-rose-600 hover:bg-rose-500' : 'bg-rose-900/30 text-rose-900'}`}>SELL ↓</button>
+                        <button onClick={() => executeTrade('up')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-900/30 text-emerald-900'}`}>BUY LONG ↑</button>
+                        <button onClick={() => executeTrade('down')} disabled={!canTrade} className={`py-3 lg:py-4 text-white rounded-[16px] lg:rounded-[20px] font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl transition-all active:scale-95 ${canTrade ? 'bg-rose-600 hover:bg-rose-500' : 'bg-rose-900/30 text-rose-900'}`}>BUY SHORT ↓</button>
                     </div>
                 </div>
 
                 {/* Mobile Activity Stream */}
                 <div className="lg:hidden space-y-4 pt-6 border-t border-white/5">
                     <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 block">Your Positions</span>
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar overscroll-contain touch-pan-y pr-1">
                         {localActiveTrades.length === 0 && localSettledTrades.length === 0 && (
                             <div className="text-[9px] text-gray-600 font-black uppercase text-center py-8 border border-white/5 rounded-2xl">No Active Trades</div>
                         )}
-                        {localActiveTrades.map(t => (
-                            <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-2xl border border-[#2B3139]">
-                                <div className="flex items-center space-x-3">
-                                    <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
-                                    <div className="flex flex-col">
-                                        <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'Buy' : 'Sell'}</span>
-                                        <span className="text-[8px] text-gray-500 font-mono">${t.amount}</span>
+                        {localActiveTrades.map(t => {
+                            const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
+                            return (
+                                <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-2xl border border-[#2B3139]">
+                                    <div className="flex items-center space-x-3">
+                                        <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
+                                        <div className="flex flex-col">
+                                            <span className={`text-[10px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'Buy Long' : 'Buy Short'}</span>
+                                            <span className="text-[8px] text-gray-500 font-mono">${t.amount} · {timeLeft}s</span>
+                                        </div>
                                     </div>
+                                    <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
                                 </div>
-                                <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {localSettledTrades.map(t => (
                             <div key={t.id} className={`flex items-center justify-between px-4 py-3 rounded-2xl border ${t.status === 'won' ? 'bg-emerald-900/5 border-emerald-500/20 text-emerald-400' : 'bg-rose-900/5 border-rose-500/20 text-rose-400'}`}>
                                 <div className="flex flex-col">
