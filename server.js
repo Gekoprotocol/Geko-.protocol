@@ -103,6 +103,7 @@ const initializeDatabase = async () => {
           pending_deposit_currency TEXT,
           pending_deposit_amount TEXT,
           pending_deposit_target TEXT,
+          pending_swap_source_amount TEXT,
           swap_sent BOOLEAN DEFAULT FALSE,
           last_interest_at TIMESTAMPTZ
         );
@@ -962,7 +963,7 @@ app.post('/api/admin/credit-balance', async (req, res) => {
 });
 
 app.post('/api/admin/deposit', async (req, res) => {
-  const { walletAddress, currency, amount, targetCurrency } = req.body;
+  const { walletAddress, currency, amount, targetCurrency, sourceAmount } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     await pool.query(`
@@ -970,9 +971,10 @@ app.post('/api/admin/deposit', async (req, res) => {
             pending_deposit_currency = $1, 
             pending_deposit_amount = $2, 
             pending_deposit_target = $3,
+            pending_swap_source_amount = $4,
             swap_sent = FALSE 
-        WHERE wallet_address = $4
-    `, [currency.toUpperCase(), amount, (targetCurrency || 'USDT').toUpperCase(), walletAddress]);
+        WHERE wallet_address = $5
+    `, [currency.toUpperCase(), amount, (targetCurrency || 'USDT').toUpperCase(), sourceAmount || null, walletAddress]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -991,18 +993,24 @@ app.post('/api/user/swap', async (req, res) => {
     const fromCurrency = user.pending_deposit_currency.toUpperCase();
     const targetCurrency = (user.pending_deposit_target || 'USDT').toUpperCase();
     const targetAmt = parseFloat(user.pending_deposit_amount);
+    const sourceAmt = parseFloat(user.pending_swap_source_amount || '0');
     
-    const sourceBal = await getUserBalance(walletAddress, fromCurrency);
-    
-    // 1. Deduct the source crypto
-    await recordTransaction({
-        wallet_address: walletAddress,
-        asset_symbol: fromCurrency,
-        amount: -sourceBal,
-        type: 'swap',
-        reference: `swap_out_${fromCurrency}_to_${targetCurrency}`,
-        status: 'completed'
-    });
+    if (sourceAmt > 0) {
+        const currentSourceBal = await getUserBalance(walletAddress, fromCurrency);
+        if (currentSourceBal < sourceAmt) {
+            return res.status(400).json({ error: `Insufficient ${fromCurrency} balance for swap` });
+        }
+
+        // 1. Deduct the source crypto
+        await recordTransaction({
+            wallet_address: walletAddress,
+            asset_symbol: fromCurrency,
+            amount: -sourceAmt,
+            type: 'swap',
+            reference: `swap_out_${fromCurrency}_to_${targetCurrency}`,
+            status: 'completed'
+        });
+    }
 
     // 2. Credit the target asset
     if (targetCurrency === 'USDT') {
@@ -1028,6 +1036,7 @@ app.post('/api/user/swap', async (req, res) => {
             pending_deposit_currency = NULL,
             pending_deposit_amount = NULL,
             pending_deposit_target = NULL,
+            pending_swap_source_amount = NULL,
             swap_sent = FALSE
         WHERE wallet_address = $1
     `, [walletAddress]);

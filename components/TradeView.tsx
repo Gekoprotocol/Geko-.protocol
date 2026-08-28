@@ -89,6 +89,7 @@ const TradeView: React.FC<TradeViewProps> = ({
 
   const [localActiveTrades, setLocalActiveTrades] = useState<ActiveTrade[]>(activeTrades || []);
   const [localSettledTrades, setLocalSettledTrades] = useState<ActiveTrade[]>([]);
+  const [settlementNotification, setSettlementNotification] = useState<{ status: 'won' | 'lost', amount: string } | null>(null);
 
   useEffect(() => {
     if (activeTrades) {
@@ -192,6 +193,13 @@ const TradeView: React.FC<TradeViewProps> = ({
           }).catch(() => {});
         }
 
+        // Show Global Notification
+        setSettlementNotification({ 
+            status: isWin ? 'won' : 'lost', 
+            amount: isWin ? pnl.toFixed(2) : trade.amount 
+        });
+        setTimeout(() => setSettlementNotification(null), 6000);
+
         const settledTrade: ActiveTrade = {
           ...trade,
           status: isWin ? 'won' : 'lost',
@@ -209,6 +217,35 @@ const TradeView: React.FC<TradeViewProps> = ({
     <div 
         className="flex flex-col h-full bg-[#0B0E11] text-gray-300 font-mono select-none relative"
     >
+      {/* Global Settlement Notification */}
+      {settlementNotification && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md animate-in slide-in-from-top-10 duration-500">
+              <div className={`px-6 py-4 rounded-[24px] border-2 shadow-2xl backdrop-blur-xl flex items-center justify-between ${settlementNotification.status === 'won' ? 'bg-emerald-900/40 border-emerald-500/50 shadow-emerald-500/20' : 'bg-rose-900/40 border-rose-500/50 shadow-rose-500/20'}`}>
+                  <div className="flex items-center space-x-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${settlementNotification.status === 'won' ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-rose-500 border-rose-400 text-white'}`}>
+                          {settlementNotification.status === 'won' ? (
+                              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          ) : (
+                              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                          )}
+                      </div>
+                      <div>
+                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-0.5">Execution Result</div>
+                          <div className={`text-xl font-black italic uppercase tracking-tight ${settlementNotification.status === 'won' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              Trade {settlementNotification.status === 'won' ? 'Won' : 'Lost'}
+                          </div>
+                      </div>
+                  </div>
+                  <div className="text-right">
+                      <div className="text-[10px] text-gray-400 font-black uppercase mb-0.5">{settlementNotification.status === 'won' ? 'Profit' : 'Loss'}</div>
+                      <div className={`text-2xl font-mono font-bold ${settlementNotification.status === 'won' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {settlementNotification.status === 'won' ? '+' : '-'}${settlementNotification.amount}
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* HUD Header */}
       <div className="h-16 border-b border-[#2B3139] bg-[#181C25] flex items-center px-4 md:px-6 shrink-0 z-30 justify-between">
         <div className="flex items-center space-x-2 md:space-x-8">
