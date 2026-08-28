@@ -8,11 +8,12 @@ interface UserCardProps {
   onSave: (user: any, balance: any) => void;
   onDelete: (userId: number) => void;
   onLogoutUser: (userId: number) => void;
+  onCreditBalance: (walletAddress: string, currency: string, amount: string) => Promise<void>;
   savingId: string | null;
   savedId: string | null;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, savingId, savedId }) => {
+const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onCreditBalance, savingId, savedId }) => {
   const currentBalance = user.trading_balance ?? '0.00';
   const currentDemoBalance = user.demo_balance ?? '100000.00';
   const currentProtocolBalance = user.protocol_settlement_balance ?? '0.00';
@@ -24,15 +25,20 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   
   const [depositCurrency, setDepositCurrency] = useState(user.pending_deposit_currency || 'BTC');
   const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
+  const [isCrediting, setIsCrediting] = useState(false);
   
   const protocolInputRef = useRef<HTMLInputElement>(null);
 
-  const hasPendingSwap = parseFloat(depositAmount) > 0;
-  
-  const handleApplyPending = () => {
-      setLocalProtocolBal(String(parseFloat(localProtocolBal) + parseFloat(depositAmount)));
-      setLocalSwapSent(false);
-      setDepositAmount('0');
+  const handleApplyPending = async () => {
+      if (!parseFloat(depositAmount)) return;
+      setIsCrediting(true);
+      try {
+          await onCreditBalance(user.wallet_address, depositCurrency, depositAmount);
+          setLocalSwapSent(false);
+          setDepositAmount('0');
+      } finally {
+          setIsCrediting(false);
+      }
   };
   useEffect(() => {
     setLocalBal(String(currentBalance));
@@ -128,36 +134,39 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
 
       <div className="space-y-3">
         <div className="p-3 bg-indigo-900/10 rounded-xl border border-indigo-500/20 space-y-2">
-            <div className="text-[8px] text-indigo-400 uppercase font-black">Set User Deposit (Swap Trigger)</div>
+            <div className="text-[8px] text-indigo-400 uppercase font-black">Credit Protocol Balance (BTC, ETH, SOL, etc.)</div>
             <div className="flex flex-col sm:flex-row gap-2">
-                <input 
-                    type="text" 
-                    placeholder="BTC" 
+                <select 
                     value={depositCurrency}
                     onChange={(e) => setDepositCurrency(e.target.value)}
-                    className="w-full sm:w-16 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white" 
-                />
+                    className="w-full sm:w-24 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white outline-none focus:border-indigo-500"
+                >
+                    <option value="BTC">BTC</option>
+                    <option value="ETH">ETH</option>
+                    <option value="SOL">SOL</option>
+                    <option value="USDT">USDT</option>
+                    <option value="BNB">BNB</option>
+                </select>
                 <input 
                     type="number" 
                     placeholder="Amount" 
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
-                    className="flex-1 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white" 
+                    className="flex-1 bg-[#0B0E11] border border-[#2B3139] rounded-lg px-2 py-1 text-[10px] font-mono text-white outline-none focus:border-indigo-500" 
                 />
             </div>
+            <button 
+                onClick={handleApplyPending}
+                disabled={isCrediting || !parseFloat(depositAmount)}
+                className="w-full py-1.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded text-[8px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
+            >
+                {isCrediting ? 'Processing...' : `Add ${depositAmount} ${depositCurrency} to Protocol`}
+            </button>
         </div>
 
         <div className="space-y-1">
             <div className="flex justify-between items-center pl-1">
-                <div className="text-[8px] text-gray-500 uppercase font-black">Modify Protocol Settlement</div>
-                {hasPendingSwap && (
-                    <button 
-                        onClick={handleApplyPending}
-                        className="text-[8px] bg-emerald-600/20 text-emerald-500 px-2 py-0.5 rounded border border-emerald-500/20 hover:bg-emerald-600/40 transition-all font-black"
-                    >
-                        + Apply Pending {depositAmount} {depositCurrency}
-                    </button>
-                )}
+                <div className="text-[8px] text-gray-500 uppercase font-black">Modify USDT Protocol Settlement</div>
             </div>
             <input
             ref={protocolInputRef}
@@ -443,6 +452,19 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
     } catch (e) { console.error('Logout failed', e); }
   };
 
+  const handleCreditBalance = async (walletAddress: string, currency: string, amount: string) => {
+    try {
+      const res = await fetch('/api/admin/credit-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress, currency, amount })
+      });
+      if (res.ok) {
+        fetchDbUsers();
+      }
+    } catch (e) { console.error('Credit failed', e); }
+  };
+
   const handleSupportReply = async () => {
     if (!activeTicket || !adminReply) return;
     try {
@@ -597,6 +619,7 @@ const AdminDesk: React.FC<AdminDeskProps> = ({ onClose, managedWallet, activeTra
                   onSave={handleSaveBalance}
                   onDelete={handleDeleteUser}
                   onLogoutUser={handleLogoutUser}
+                  onCreditBalance={handleCreditBalance}
                   savingId={savingId}
                   savedId={savedId}
                 />

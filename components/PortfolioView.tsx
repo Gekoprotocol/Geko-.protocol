@@ -270,13 +270,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   }, [vaultUsdtBalance]);
 
   useEffect(() => {
-    if (!wallet || vaultUsdtBalance < 1000) {
-        setSimulatedYield(0);
-        return;
-    }
-    // $2 every 48 hours = 2 / 172800 per second
-    const yieldPerSecond = 2 / 172800;
-    const interval = setInterval(() => {
+  if (!wallet || vaultUsdtBalance < 1000) {
+      setSimulatedYield(0);
+      return;
+  }
+  // $3 every 48 hours = 3 / 172800 per second
+  const yieldPerSecond = 3 / 172800;
+  const interval = setInterval(() => {
         const now = Date.now();
         const deltaSeconds = (now - lastUpdateTime.current) / 1000;
         if (deltaSeconds > 0) {

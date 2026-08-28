@@ -35,25 +35,13 @@
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then(reg => {
             console.log('SW Registered', reg);
+            // Check for updates on every load to support manual refresh updates
+            reg.update();
           }).catch(err => {
             console.log('SW Registration failed', err);
           });
         });
       }
-
-      // Detect if app fails to load after 15 seconds
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          const root = document.getElementById('root');
-          if (root && root.innerHTML === '') {
-            console.error('App failed to load after 15 seconds. Showing fallback UI.');
-            const loader = document.getElementById('fallback-loader');
-            const error = document.getElementById('fallback-error');
-            if (loader) loader.style.display = 'none';
-            if (error) error.style.display = 'flex';
-          }
-        }, 15000);
-      });
     </script>
 
     <script type="module">
@@ -200,13 +188,6 @@
     <div id="fallback-loader" style="position:fixed; inset:0; background:#0B0E11; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999;">
         <div style="width:40px; height:40px; border:3px solid #6366f1; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite;"></div>
         <div style="margin-top:20px; color:#4F5662; font-family:monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.2em;">Initializing Protocol...</div>
-    </div>
-
-    <div id="fallback-error" style="position:fixed; inset:0; background:#0B0E11; display:none; flex-direction:column; align-items:center; justify-content:center; z-index:9998; padding:20px; text-align:center;">
-        <div style="color:#f43f5e; font-weight:900; font-size:24px; margin-bottom:10px;">TERMINAL OFFLINE</div>
-        <div style="color:#94a3b8; font-size:12px; max-width:300px; line-height:1.6; margin-bottom:20px;">The terminal failed to initialize. This may be due to a slow connection or an incompatible browser.</div>
-        <button onclick="window.location.reload()" style="padding:12px 24px; background:#6366f1; color:white; border:none; border-radius:12px; font-weight:900; cursor:pointer;">RETRY CONNECTION</button>
-        <button onclick="navigator.serviceWorker.getRegistrations().then(regs => { for(let r of regs) r.unregister(); window.location.reload(); })" style="margin-top:20px; color:#475569; font-size:10px; background:none; border:none; text-decoration:underline; cursor:pointer;">CLEAR TERMINAL CACHE</button>
     </div>
 
     <style>
