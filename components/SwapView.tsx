@@ -59,74 +59,62 @@ interface SwapViewProps {
     return (parseFloat(amount) * (fromPrice / toPrice)).toFixed(toAsset.symbol === 'BTC' || toAsset.symbol === 'ETH' ? 6 : 2);
   }, [amount, fromAsset, toAsset]);
 
-  const handleAction = async () => {
+  const handleAction = () => {
     if (!isConnected) { onConnect(); return; }
     if (!amount || parseFloat(amount) <= 0) return;
-
-    setIsSwapping(true);
-    try {
-        // Set pending deposit in DB so admin sees it
-        const res = await fetch('/api/admin/deposit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                walletAddress: wallet?.address,
-                currency: fromAsset?.symbol,
-                amount: equivalentTarget, // The target amount
-                targetCurrency: toAsset?.symbol,
-                sourceAmount: amount // The input amount
-            })
-        });
-
-        if (res.ok) {
-            setShowDeposit(true);
-            if (onRefreshBalances) onRefreshBalances();
-        }
-    } catch (e) {
-        console.error('Swap action failed', e);
-    } finally {
-        setIsSwapping(false);
+    
+    // Check if sufficient in protocol balance first
+    const fromSymbol = fromAsset?.symbol || '';
+    const protocolFrom = protocolBalances.find(b => b.asset === fromSymbol)?.balance || 0;
+    
+    if (protocolFrom < parseFloat(amount)) {
+        setSwapError(`Insufficient ${fromSymbol} in protocol balance. You have ${protocolFrom.toFixed(6)} but need ${amount}.`);
+        return;
     }
+
+    setSwapError(null);
+    setShowDeposit(true); // Now used as "Confirm Step"
   };
 
-  const [swapError, setSwapError] = useState<string | null>(null);
-
   const handleManualSwap = async () => {
-      if (!wallet?.address) return;
+      if (!wallet?.address || !fromAsset || !toAsset) return;
       setIsSwapping(true);
       setSwapError(null);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
       try {
-          console.log(`[Swap] Initializing swap for ${wallet.address}`);
+          // 1. First, tell admin what we are doing (record pending swap)
+          const depositRes = await fetch('/api/admin/deposit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  walletAddress: wallet.address,
+                  currency: fromAsset.symbol,
+                  amount: equivalentTarget,
+                  targetCurrency: toAsset.symbol,
+                  sourceAmount: amount
+              })
+          });
+
+          if (!depositRes.ok) throw new Error("Failed to initialize swap request");
+
+          // 2. Immediately execute the swap
           const res = await fetch('/api/user/swap', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ walletAddress: wallet.address }),
-              signal: controller.signal
+              body: JSON.stringify({ walletAddress: wallet.address })
           });
           
-          clearTimeout(timeoutId);
           if (res.ok) {
-              console.log(`[Swap] Success`);
               if (onRefreshBalances) onRefreshBalances();
               setShowDeposit(false);
+              setAmount('');
           } else {
               const data = await res.json();
-              console.warn(`[Swap] Failed:`, data.error);
-              setSwapError(data.error || 'Initialization failed');
+              setSwapError(data.error || 'Swap execution failed');
           }
       } catch (e: any) {
-          if (e.name === 'AbortError') {
-              setSwapError('Request timed out. Please try again.');
-          } else {
-              setSwapError('Network error during initialization');
-          }
-          console.error('[Swap] Error:', e);
+          setSwapError(e.message || 'Network error during swap');
       } finally {
-          clearTimeout(timeoutId);
           setIsSwapping(false);
       }
   };
@@ -200,85 +188,66 @@ interface SwapViewProps {
         )}
 
         {showDeposit && (
-            <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-[40px] p-10 space-y-8 animate-in slide-in-from-top-4">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center space-x-6">
-                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg text-2xl">
-                            {selectedChain[0]}
+            <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-[40px] p-6 sm:p-10 space-y-6 sm:space-y-8 animate-in slide-in-from-top-4">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
+                    <div className="flex items-center space-x-4 sm:space-x-6">
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg text-xl sm:text-2xl">
+                            {toAsset?.symbol[0]}
                         </div>
                         <div>
-                            <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Protocol Node Address</div>
-                            <div className="text-2xl font-black text-white italic">Confirm {fromAsset?.symbol} → {toAsset?.symbol}</div>
-                            <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Institutional swap waiting for settlement</div>
+                            <div className="text-[8px] sm:text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Internal Protocol Swap</div>
+                            <div className="text-xl sm:text-2xl font-black text-white italic">Confirm {fromAsset?.symbol} → {toAsset?.symbol}</div>
                         </div>
                     </div>
-                    <div className="flex flex-col items-end space-y-2">
-                        <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Receive Equivalent</div>
-                        <div className="text-3xl font-black text-emerald-500 font-mono">{equivalentTarget} {toAsset?.symbol}</div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-4 gap-2">
-                            {['SOL', 'BTC', 'ETH', 'USDT'].map(c => (
-                                <button 
-                                    key={c}
-                                    onClick={() => setSelectedChain(c as any)}
-                                    className={`py-2 rounded-xl text-[10px] font-black border transition-all ${selectedChain === c ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#0B0E11] border-[#2B3139] text-gray-500'}`}
-                                >
-                                    {c}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Copy {selectedChain} Address</label>
-                            <div className="flex items-center space-x-2 bg-[#0B0E11] p-5 rounded-2xl border border-[#2B3139] group">
-                                <span className="flex-1 text-xs font-mono font-bold text-indigo-400 break-all">{activeDepositAddress || 'NOT_CONFIGURED'}</span>
-                                {activeDepositAddress && (
-                                    <button onClick={() => { navigator.clipboard.writeText(activeDepositAddress); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="text-gray-500 hover:text-white">
-                                        {copied ? <span className="text-[10px] font-black text-emerald-500 uppercase">✓</span> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <div className="p-5 bg-indigo-900/20 rounded-2xl border border-indigo-500/20">
-                            <p className="text-[10px] text-indigo-400 font-bold leading-relaxed uppercase tracking-wider">
-                                SEND {selectedChain} TO THIS ADDRESS. SYSTEM SYNCHRONIZATION OCCURS AFTER 3 NETWORK CONFIRMATIONS.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col items-center space-y-4">
-                        <div className="p-4 bg-white rounded-3xl shadow-2xl">
-                            {activeDepositAddress ? (
-                                <QRCodeSVG value={activeDepositAddress} size={180} level="H" />
-                            ) : (
-                                <div className="w-[180px] h-[180px] flex items-center justify-center text-gray-400 text-[10px] font-black uppercase text-center p-4">Address Not Configured</div>
-                            )}
-                        </div>
-                        <span className="text-[8px] text-gray-500 font-black uppercase tracking-[0.3em]">Institutional QR Link</span>
+                    <div className="flex flex-col items-center sm:items-end space-y-1 sm:space-y-2">
+                        <div className="text-[8px] sm:text-[10px] text-gray-500 font-black uppercase tracking-widest">Receive Equivalent</div>
+                        <div className="text-2xl sm:text-3xl font-black text-emerald-500 font-mono">{equivalentTarget} {toAsset?.symbol}</div>
                     </div>
                 </div>
 
-                <button 
-                    onClick={handleManualSwap}
-                    disabled={isSwapping}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-6 rounded-3xl font-black uppercase italic tracking-[0.2em] shadow-xl transition-all flex items-center justify-center space-x-3"
-                >
-                    {isSwapping ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                        <>
-                            <span>I Have Sent {amount} {fromAsset?.symbol}</span>
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                        </>
-                    )}
-                </button>
+                <div className="p-4 sm:p-6 bg-[#0B0E11] rounded-3xl border border-[#2B3139] space-y-4">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                        <span className="text-gray-500">From Protocol</span>
+                        <span className="text-gray-300">{amount} {fromAsset?.symbol}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                        <span className="text-gray-500">To Protocol</span>
+                        <span className="text-emerald-500">{equivalentTarget} {toAsset?.symbol}</span>
+                    </div>
+                    <div className="pt-2 border-t border-white/5 flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                        <span className="text-gray-500">Execution Mode</span>
+                        <span className="text-indigo-400 italic">INSTANT SETTLEMENT</span>
+                    </div>
+                </div>
 
                 {swapError && (
-                    <div className="text-[10px] font-black text-rose-400 uppercase text-center mt-2 animate-pulse">{swapError}</div>
+                    <div className="p-4 bg-rose-900/20 border border-rose-500/30 rounded-2xl text-[9px] sm:text-[10px] text-rose-400 font-black uppercase text-center animate-pulse">
+                        {swapError}
+                    </div>
                 )}
+
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <button 
+                        onClick={() => setShowDeposit(false)}
+                        className="flex-1 py-4 sm:py-6 bg-[#181C25] text-gray-400 font-black uppercase italic tracking-widest rounded-3xl hover:text-white transition-all order-2 sm:order-1"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={handleManualSwap}
+                        disabled={isSwapping}
+                        className="flex-[2] py-4 sm:py-6 bg-indigo-600 text-white font-black uppercase italic tracking-widest rounded-3xl shadow-xl hover:bg-indigo-500 transition-all flex items-center justify-center space-x-3 order-1 sm:order-2"
+                    >
+                        {isSwapping ? (
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <>
+                                <span>Confirm Instant Swap</span>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
         )}
 

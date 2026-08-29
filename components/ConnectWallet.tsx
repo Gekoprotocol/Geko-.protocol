@@ -110,85 +110,85 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-[#181C25] border border-[#2B3139] rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-md bg-[#181C25] border border-[#2B3139] rounded-[32px] sm:rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
 
         {/* Header */}
-        <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center shrink-0">
+        <div className="p-5 sm:p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center shrink-0">
           <div>
-            <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">
+            <h2 className="text-lg sm:text-xl font-black text-white italic uppercase tracking-tighter">
               {mode === 'identity' ? 'Identity Verification' : 'Uplink Selection'}
             </h2>
-            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">
+            <p className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">
               {mode === 'identity' ? 'Establish Secure Credentials' : 'Select Terminal Node'}
             </p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-2">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="p-6 space-y-3">
+            <div className="p-4 sm:p-6 space-y-3">
               {error && (
-                <div className="p-4 bg-rose-900/20 border border-rose-500/30 rounded-2xl text-[10px] text-rose-400 font-black uppercase text-center tracking-widest animate-in fade-in zoom-in duration-300">
+                <div className="p-3 sm:p-4 bg-rose-900/20 border border-rose-500/30 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] text-rose-400 font-black uppercase text-center tracking-widest animate-in fade-in zoom-in duration-300">
                   {error}
                 </div>
               )}
 
               {mode === 'identity' ? (
-                <form onSubmit={handleIdentityContinue} className="space-y-4 animate-in slide-in-from-right-4 duration-500">
-                   <div className="space-y-4">
+                <form onSubmit={handleIdentityContinue} className="space-y-3 sm:space-y-4 animate-in slide-in-from-right-4 duration-500">
+                   <div className="space-y-3 sm:space-y-4">
                       <div className="space-y-1">
-                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Protocol Email</label>
+                          <label className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Protocol Email</label>
                           <input 
                               type="email" 
                               required 
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
                               placeholder="operator@geko.institutional"
-                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
                           />
                       </div>
                       <div className="space-y-1">
-                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Access Key</label>
+                          <label className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Access Key</label>
                           <input 
                               type="password" 
                               required 
                               value={password}
                               onChange={(e) => setPassword(e.target.value)}
                               placeholder="••••••••"
-                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
                           />
                       </div>
                       <div className="space-y-1">
-                          <label className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Access Key</label>
+                          <label className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Access Key</label>
                           <input 
                               type="password" 
                               required 
                               value={confirmPassword}
                               onChange={(e) => setConfirmPassword(e.target.value)}
                               placeholder="••••••••"
-                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
+                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
                           />
                       </div>
                    </div>
                    <button 
                       type="submit"
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.2em] py-5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center space-x-3 mt-6"
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.2em] py-4 sm:py-5 rounded-xl sm:rounded-2xl shadow-xl transition-all text-[10px] sm:text-xs flex items-center justify-center space-x-3 mt-4 sm:mt-6"
                    >
                       <span>Continue to Uplink</span>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                    </button>
                 </form>
               ) : (
-                <div className="space-y-3 animate-in slide-in-from-right-4 duration-500">
+                <div className="space-y-2 sm:space-y-3 animate-in slide-in-from-right-4 duration-500">
                   <button 
                     onClick={() => setMode('identity')}
-                    className="flex items-center space-x-2 text-[9px] text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors mb-2"
+                    className="flex items-center space-x-2 text-[8px] sm:text-[9px] text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors mb-2"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     <span>Back to Identity</span>
@@ -198,24 +198,24 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
                       key={w.id}
                       disabled={!!connecting}
                       onClick={() => handleWalletConnect(w)}
-                      className="w-full flex items-center justify-between p-4 bg-[#1E2329] border border-[#2B3139] rounded-3xl hover:border-indigo-500/50 transition-all group disabled:opacity-50"
+                      className="w-full flex items-center justify-between p-3 sm:p-4 bg-[#1E2329] border border-[#2B3139] rounded-2xl sm:rounded-3xl hover:border-indigo-500/50 transition-all group disabled:opacity-50"
                     >
-                      <div className="flex items-center space-x-4">
-                        <div className={`p-2.5 rounded-2xl bg-[#0B0E11] ${w.color}`}>
+                      <div className="flex items-center space-x-3 sm:space-x-4">
+                        <div className={`p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-[#0B0E11] ${w.color}`}>
                           {w.svg}
                         </div>
                         <div className="text-left">
-                          <span className="font-black text-gray-200 uppercase text-sm block">{w.name}</span>
-                          <span className="text-[8px] text-gray-600 font-black uppercase">{w.type === 'svm' ? 'Solana' : 'EVM'}</span>
+                          <span className="font-black text-gray-200 uppercase text-xs sm:text-sm block">{w.name}</span>
+                          <span className="text-[7px] sm:text-[8px] text-gray-600 font-black uppercase">{w.type === 'svm' ? 'Solana' : 'EVM'}</span>
                         </div>
                         {isDetected(w.id) && (
-                          <span className="text-[8px] bg-emerald-900/30 text-emerald-500 px-1.5 py-0.5 rounded uppercase font-black tracking-widest">
+                          <span className="text-[7px] sm:text-[8px] bg-emerald-900/30 text-emerald-500 px-1.5 py-0.5 rounded uppercase font-black tracking-widest">
                             Detected
                           </span>
                         )}
                       </div>
                       {connecting === w.id ? (
-                        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                       ) : (
                         <svg className="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
