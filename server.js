@@ -1273,9 +1273,10 @@ app.get('/api/user/balance', async (req, res) => {
         balances, 
         status: user.status, 
         kyc_status: user.kyc_status, 
-        trading_balance: user.trading_balance, 
-        demo_balance: user.demo_balance,
-        user: user // Return the full object for deep sync
+        trading_balance: parseFloat(user.trading_balance || 0), 
+        demo_balance: parseFloat(user.demo_balance || 100000),
+        balance: usdtBal, // Main USDT protocol balance
+        user: user 
     });
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });

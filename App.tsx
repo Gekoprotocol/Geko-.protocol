@@ -284,6 +284,9 @@ function TerminalLayout() {
 
                 setTradingBalance(isDemo ? (data?.demo_balance || 0) : (data?.trading_balance || 0));
                 setVaultBalance(data?.balance || 0);
+                if (data?.balances) {
+                    setProtocolBalances(data.balances);
+                }
             }
         } catch (e) { console.warn("Balance sync failed", e); }
         finally { clearTimeout(timeoutId); }
