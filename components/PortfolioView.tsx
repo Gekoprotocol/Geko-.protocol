@@ -402,21 +402,21 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     <div className="h-full overflow-y-auto p-6 lg:p-10 bg-[#0B0E11] relative custom-scrollbar text-gray-200">
       
       {isCopiedPopupOpen && (
-          <div className="fixed top-24 right-10 z-[1000] animate-in slide-in-from-right-10 duration-500">
-              <div className="bg-[#181C25] border-2 border-indigo-500/50 p-6 rounded-[32px] shadow-2xl flex items-center space-x-4 backdrop-blur-xl">
-                  <div className="w-12 h-12 bg-indigo-600/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
-                      <svg className="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0012 3c1.22 0 2.383.218 3.46.616m.835 1.918A10.001 10.003 0 0121.25 10.5M12 11V3m0 8c0 2.5 1.5 4.5 3 4.5s3-2 3-4.5-1.5-4.5-3-4.5-3 2-3 4.5z" /></svg>
+          <div className="fixed top-20 sm:top-24 right-4 sm:right-10 z-[1000] w-[calc(100%-2rem)] sm:w-auto animate-in slide-in-from-right-10 duration-500">
+              <div className="bg-[#181C25] border-2 border-indigo-500/50 p-4 sm:p-6 rounded-[24px] sm:rounded-[32px] shadow-2xl flex items-center space-x-3 sm:space-x-4 backdrop-blur-xl">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600/20 rounded-xl sm:rounded-2xl flex items-center justify-center border border-indigo-500/30 shrink-0">
+                      <svg className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0012 3c1.22 0 2.383.218 3.46.616m.835 1.918A10.001 10.003 0 0121.25 10.5M12 11V3m0 8c0 2.5 1.5 4.5 3 4.5s3-2 3-4.5-1.5-4.5-3-4.5-3 2-3 4.5z" /></svg>
                   </div>
-                  <div>
-                      <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Active Identity Link</div>
-                      <div className="flex items-center space-x-3">
-                          <span className="text-sm font-mono font-bold text-gray-100">{wallet.address.slice(0, 12)}...{wallet.address.slice(-8)}</span>
-                          <button onClick={() => { navigator.clipboard.writeText(wallet.address); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="text-indigo-400 hover:text-indigo-300">
+                  <div className="min-w-0 flex-1">
+                      <div className="text-[8px] sm:text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Active Identity Link</div>
+                      <div className="flex items-center space-x-2 sm:space-x-3">
+                          <span className="text-xs sm:text-sm font-mono font-bold text-gray-100 truncate">{wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}</span>
+                          <button onClick={() => { navigator.clipboard.writeText(wallet.address); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="text-indigo-400 hover:text-indigo-300 shrink-0">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                           </button>
                       </div>
                   </div>
-                  <button onClick={() => setIsCopiedPopupOpen(false)} className="text-gray-600 hover:text-white">
+                  <button onClick={() => setIsCopiedPopupOpen(false)} className="text-gray-600 hover:text-white shrink-0">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
               </div>
@@ -477,7 +477,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                       {`VERIFIED ${vipTier.name}`}
                    </div>
                 </div>
-                <div className="text-4xl md:text-5xl lg:text-6xl font-mono font-bold text-gray-100 tracking-tighter truncate">
+                <div className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-mono font-bold text-gray-100 tracking-tighter break-all">
                    ${vaultUsdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
                 <div className="flex gap-8 mt-10 pt-10 border-t border-[#2B3139]">
@@ -570,18 +570,18 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                 };
                 const colorClass = ASSET_COLORS[b.asset] || 'text-indigo-400 border-indigo-500/20 bg-indigo-900/10';
                 return (
-                  <div key={b.asset} className={`rounded-3xl p-5 border ${colorClass} flex flex-col space-y-2`}>
+                  <div key={b.asset} className={`rounded-3xl p-4 sm:p-5 border ${colorClass} flex flex-col space-y-2 overflow-hidden`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-black uppercase tracking-widest opacity-70">{b.asset}</span>
-                      <span className="text-[8px] font-bold text-gray-600">{b.tx_count} tx</span>
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest opacity-70">{b.asset}</span>
+                      <span className="text-[7px] sm:text-[8px] font-bold text-gray-600">{b.tx_count} tx</span>
                     </div>
-                    <div className="font-mono font-black text-2xl">
+                    <div className="font-mono font-black text-lg sm:text-2xl break-all">
                       {b.balance >= 0.001
                         ? b.balance.toLocaleString(undefined, { minimumFractionDigits: b.asset === 'USDT' ? 2 : 4, maximumFractionDigits: b.asset === 'USDT' ? 2 : 6 })
                         : b.balance.toFixed(8)}
                     </div>
-                    <div className={`text-[8px] font-black uppercase tracking-widest flex items-center space-x-1 ${b.balance > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${b.balance > 0 ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`} />
+                    <div className={`text-[7px] sm:text-[8px] font-black uppercase tracking-widest flex items-center space-x-1 ${b.balance > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      <div className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${b.balance > 0 ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`} />
                       <span>{b.balance > 0 ? 'Funded' : 'Zero balance'}</span>
                     </div>
                   </div>
