@@ -18,6 +18,7 @@ interface PortfolioViewProps {
   onOpenDepositHandled?: () => void;
   onOpenTransferHandled?: () => void;
   protocolConfig?: any;
+  protocolBalances?: any[];
 }
 
 export const PortfolioView: React.FC<PortfolioViewProps> = ({ 
@@ -32,7 +33,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     autoOpenTransfer,
     onOpenDepositHandled,
     onOpenTransferHandled,
-    protocolConfig
+    protocolConfig,
+    protocolBalances = []
 }) => {
   const [activeModal, setActiveModal] = useState<'withdraw' | 'kyc' | 'deposit' | null>(null);
   const [step, setStep] = useState<'form' | 'broadcasting' | 'confirming' | 'success'>('form');
@@ -42,7 +44,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [withdrawAsset, setWithdrawAsset] = useState('USDT');
   const [withdrawDestination, setWithdrawDestination] = useState('');
   
-  const [protocolBalances, setProtocolBalances] = useState<{ asset: string; balance: number; tx_count: number }[]>([]);
   const [tradingBalance, setTradingBalance] = useState(0);
   const [demoBalance, setDemoBalance] = useState(100000);
   const [balLoading, setBalLoading] = useState(false);

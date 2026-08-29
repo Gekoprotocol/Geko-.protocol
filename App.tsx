@@ -169,6 +169,7 @@ function TerminalLayout() {
   
   const [userData, setUserData] = useState<any>(null);
   const [vaultBalance, setVaultBalance] = useState(0);
+  const [protocolBalances, setProtocolBalances] = useState<any[]>([]);
   const [prices, setPrices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIdentityOpen, setIsIdentityOpen] = useState(false);
@@ -385,8 +386,16 @@ function TerminalLayout() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 20000); // 20s safety
+    return () => clearTimeout(timer);
+  }, []);
+
   const refreshData = useCallback(async (nickname?: string) => {
-    if (!activeAddress) return;
+    if (!activeAddress) {
+      setIsLoading(false);
+      return;
+    }
     const address = activeAddress;
     
     const controller = new AbortController();
@@ -426,6 +435,7 @@ function TerminalLayout() {
       if (balRes.ok) {
         const balJson = await balRes.json();
         setVaultBalance(balJson.balance || 0);
+        setProtocolBalances(balJson.balances || []);
         setUserData((prev: any) => ({
           ...prev,
           trading_balance: balJson.trading_balance,
@@ -724,7 +734,7 @@ function TerminalLayout() {
             )}
             {activeTab === 'chart' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
             {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} />}
+            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} protocolBalances={protocolBalances} />}
             {activeTab === 'pulse' && <NetworkPulse />}
             {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
             {activeTab === 'vault' && (
@@ -741,6 +751,7 @@ function TerminalLayout() {
                     onOpenDepositHandled={() => setAutoOpenDeposit(false)} 
                     autoOpenTransfer={autoOpenTransfer}
                     onOpenTransferHandled={() => setAutoOpenTransfer(false)}
+                    protocolBalances={protocolBalances}
                 />
             )}
             {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
@@ -843,6 +854,7 @@ function TerminalLayout() {
                     onOpenDepositHandled={() => setAutoOpenDeposit(false)} 
                     autoOpenTransfer={autoOpenTransfer}
                     onOpenTransferHandled={() => setAutoOpenTransfer(false)}
+                    protocolBalances={protocolBalances}
                 />
             )}
             {activeTab === 'leaderboard' && <div className="p-20 text-center">

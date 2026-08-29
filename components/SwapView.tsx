@@ -13,9 +13,22 @@ interface SwapViewProps {
   onRefreshBalances?: () => void;
   depositAddress?: string;
   protocolConfig?: any;
-  }
+  protocolBalances?: { asset: string, balance: number }[];
+}
 
-  const SwapView: React.FC<SwapViewProps> = ({ assets, isConnected, wallet, onConnect, onSignUp, onConfirm, onSwap, onDeposit, onRefreshBalances, depositAddress, protocolConfig }) => {
+const SwapView: React.FC<SwapViewProps> = ({ 
+  assets, 
+  isConnected, 
+  wallet, 
+  onConnect, 
+  onSignUp, 
+  onSwap, 
+  onDeposit, 
+  onRefreshBalances, 
+  depositAddress, 
+  protocolConfig,
+  protocolBalances = []
+}) => {
   const [fromAsset, setFromAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol !== 'USDT') || assets[0] || null);
   const [toAsset, setToAsset] = useState<AssetInfo | null>(assets.find(a => a.symbol === 'USDT') || assets[1] || null);
   const [amount, setAmount] = useState('');
