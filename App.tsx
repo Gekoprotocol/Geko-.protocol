@@ -432,7 +432,7 @@ function TerminalLayout() {
       }
 
       // Get Balances
-      const balRes = await fetch(`/api/user/balance?address=${address}&asset=USDT`, {
+      const balRes = await fetch(`/api/user/balance?address=${encodeURIComponent(address)}&asset=USDT`, {
           signal: controller.signal
       });
       if (balRes.ok) {
@@ -450,7 +450,7 @@ function TerminalLayout() {
       console.warn("[Sync] Background sync check failed");
     } finally {
       clearTimeout(timeoutId);
-      setIsLoading(false);
+      setIsLoading(false); // Definitively stop loading
     }
   }, [activeAddress, customWallet]);
 
