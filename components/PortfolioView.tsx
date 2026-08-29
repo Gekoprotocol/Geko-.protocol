@@ -130,38 +130,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     return solanaDepositAddress;
   }, [selectedChain, solanaDepositAddress, btcDepositAddress, ethDepositAddress, usdtDepositAddress]);
 
-  const fetchProtocolBalance = async () => {
-    if (!wallet) return;
-    setBalLoading(true);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      const res = await fetch(`/api/user/balance?address=${encodeURIComponent(wallet.address)}`, {
-          signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) throw new Error("Failed to fetch protocol balance");
-      const data = await res.json();
-      if (res.ok) {
-        if (data.balances) setProtocolBalances(data.balances);
-        setTradingBalance(data.trading_balance || 0);
-        setDemoBalance(data.demo_balance || 100000);
-        
-        // SYNC KYC STATUS
-        if (data.kyc_status && data.kyc_status !== wallet.kyc_status) {
-            onUpdateWallet({ ...wallet, kyc_status: data.kyc_status });
-        }
-      }
-    } catch (e) {
-      console.error('Protocol balance fetch failed', e);
-    } finally {
-      clearTimeout(timeoutId);
-      setBalLoading(false);
-    }
-  };
-
   const handleTransfer = async () => {
     if (!wallet?.address || !transferAmount) return;
 
@@ -175,11 +143,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     setTradeStatus(null);
     audioSynth.playPing();
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
     try {
-      console.log(`[Transfer] Initiating ${transferDirection}: ${transferAmount}`);
       const res = await fetch('/api/balance/transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -187,16 +151,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           walletAddress: wallet.address,
           amount: transferAmount,
           direction: transferDirection
-        }),
-        signal: controller.signal
+        })
       });
       
-      clearTimeout(timeoutId);
       const data = await res.json();
       
       if (res.ok) {
-        console.log(`[Transfer] Success:`, data);
-        fetchProtocolBalance();
         if (onRefreshBalances) onRefreshBalances();
         setTransferAmount('');
         setTradeStatus({ msg: 'Transfer Successful', ok: true });
@@ -206,57 +166,21 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             setTradeStatus(null);
         }, 1500);
       } else {
-        console.warn(`[Transfer] Failed:`, data.error);
         setTradeStatus({ msg: data.error || 'Transfer failed', ok: false });
         audioSynth.playError();
       }
     } catch (e: any) {
-      if (e.name === 'AbortError') {
-          setTradeStatus({ msg: 'Request timed out. Please try again.', ok: false });
-      } else {
-          setTradeStatus({ msg: 'Network error during transfer', ok: false });
-      }
+      setTradeStatus({ msg: 'Network error during transfer', ok: false });
       audioSynth.playError();
-      console.error("[Transfer] Error:", e);
     } finally {
-      clearTimeout(timeoutId);
       setTransferLoading(false);
     }
   };
 
-  const fetchDbTransactions = async () => {
-    if (!wallet) return;
-    setTxLoading(true);
-    try {
-      const res = await fetch(`/api/user/transactions?address=${encodeURIComponent(wallet.address)}&limit=30`);
-      if (!res.ok) throw new Error("Failed to fetch transactions");
-      const data = await res.json();
-      if (res.ok && data.transactions) setDbTransactions(data.transactions);
-    } catch (e) {
-      console.error('Transaction history fetch failed', e);
-    } finally {
-      setTxLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (!wallet?.address) return;
-    fetchProtocolBalance();
-    fetchDbTransactions();
-    const interval = setInterval(() => {
-      fetchProtocolBalance();
-      fetchDbTransactions();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [wallet?.address]);
-
-    const [simulatedYield, setSimulatedYield] = useState(0);
-    const lastUpdateTime = useRef(Date.now());
-    
-    useEffect(() => {
-      const int = setInterval(() => setGasPrice(prev => Math.max(12, prev + (Math.random() * 4 - 2))), 5000);
-      return () => clearInterval(int);
-    }, []);
+    const int = setInterval(() => setGasPrice(prev => Math.max(12, prev + (Math.random() * 4 - 2))), 5000);
+    return () => clearInterval(int);
+  }, []);
 
     const vaultUsdtBalance = useMemo(() => {
     const usdt = protocolBalances.find(b => b.asset === 'USDT');
