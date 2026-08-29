@@ -40,7 +40,7 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
                 </div>
                 <div className="space-y-2">
                     <div className="text-xs text-indigo-400 font-black uppercase tracking-widest">Settlement Balance</div>
-                    <div className="text-5xl md:text-6xl lg:text-7xl font-mono font-bold text-gray-100 tracking-tighter truncate">
+                    <div className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-mono font-bold text-gray-100 tracking-tighter break-all">
                        ${parseFloat(protocolBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                 </div>
