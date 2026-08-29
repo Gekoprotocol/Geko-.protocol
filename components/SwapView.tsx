@@ -121,6 +121,7 @@ const SwapView: React.FC<SwapViewProps> = ({
               if (onRefreshBalances) onRefreshBalances();
               setShowDeposit(false);
               setAmount('');
+              alert("Protocol Swap Confirmed! Your balances have been updated.");
           } else {
               const data = await res.json();
               setSwapError(data.error || 'Swap execution failed');
@@ -325,9 +326,14 @@ const SwapView: React.FC<SwapViewProps> = ({
               </div>
 
               <div className="p-6 space-y-4">
+                {swapError && (
+                    <div className="p-4 bg-rose-900/20 border border-rose-500/30 rounded-2xl text-[10px] text-rose-400 font-black uppercase text-center animate-pulse">
+                        {swapError}
+                    </div>
+                )}
                 <button 
                     onClick={handleAction} 
-                    disabled={isSwapping || !amount || parseFloat(amount) <= 0}
+                    disabled={isSwapping || (isConnected && (!amount || parseFloat(amount) <= 0))}
                     className={`w-full py-6 rounded-[28px] font-black text-lg transition-all shadow-xl uppercase italic tracking-widest ${isConnected ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-[#2B3139] hover:bg-[#363C45] text-gray-400'}`}
                 >
                   {isSwapping ? (
