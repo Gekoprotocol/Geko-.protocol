@@ -194,9 +194,10 @@ const TradeView: React.FC<TradeViewProps> = ({
         }
 
         // Show Global Notification
+        const netPnl = isWin ? (pnl - parseFloat(trade.amount)) : parseFloat(trade.amount);
         setSettlementNotification({ 
             status: isWin ? 'won' : 'lost', 
-            amount: isWin ? pnl.toFixed(2) : trade.amount 
+            amount: netPnl.toFixed(2)
         });
         setTimeout(() => setSettlementNotification(null), 6000);
 

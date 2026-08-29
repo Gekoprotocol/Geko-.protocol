@@ -184,6 +184,24 @@ const initializeDatabase = async () => {
         );
       `);
 
+      // Migration: Add missing columns if they don't exist
+      try {
+        await pool.query(`
+          DO $$ 
+          BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='pending_deposit_target') THEN
+              ALTER TABLE users ADD COLUMN pending_deposit_target TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='pending_swap_source_amount') THEN
+              ALTER TABLE users ADD COLUMN pending_swap_source_amount TEXT;
+            END IF;
+          END $$;
+        `);
+        console.log('[DB] Migrations applied successfully.');
+      } catch (migrationErr) {
+        console.warn('[DB Warning] Migration failed (might already be applied):', migrationErr.message);
+      }
+
       // Seed default config
       await pool.query(`
         INSERT INTO config (key, value) VALUES 
@@ -981,12 +999,24 @@ app.post('/api/admin/deposit', async (req, res) => {
 
 app.post('/api/user/swap', async (req, res) => {
   const { walletAddress } = req.body;
+  console.log(`[Swap] EXECUTION_START for ${walletAddress}`);
+  
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const userRes = await pool.query('SELECT * FROM users WHERE wallet_address = $1', [walletAddress]);
     const user = userRes.rows[0];
     
-    if (!user || !user.pending_deposit_currency || !user.pending_deposit_amount) {
+    if (!user) {
+        console.warn(`[Swap] User not found: ${walletAddress}`);
+        return res.status(404).json({ error: 'User record not found' });
+    }
+
+    if (!user.pending_deposit_currency || !user.pending_deposit_amount) {
+        console.warn(`[Swap] No pending request for ${walletAddress}. State:`, { 
+            curr: user.pending_deposit_currency, 
+            amt: user.pending_deposit_amount,
+            tgt: user.pending_deposit_target
+        });
         return res.status(400).json({ error: 'No pending swap request found' });
     }
 
@@ -995,14 +1025,19 @@ app.post('/api/user/swap', async (req, res) => {
     const targetAmt = parseFloat(user.pending_deposit_amount);
     const sourceAmt = parseFloat(user.pending_swap_source_amount || '0');
     
+    console.log(`[Swap] Processing: ${sourceAmt} ${fromCurrency} -> ${targetAmt} ${targetCurrency}`);
+
     if (sourceAmt > 0) {
         const currentSourceBal = await getUserBalance(walletAddress, fromCurrency);
+        console.log(`[Swap] Current ${fromCurrency} balance: ${currentSourceBal}`);
+        
         if (currentSourceBal < sourceAmt) {
-            return res.status(400).json({ error: `Insufficient ${fromCurrency} balance for swap` });
+            console.warn(`[Swap] Insufficient balance for ${walletAddress}: Has ${currentSourceBal}, needs ${sourceAmt}`);
+            return res.status(400).json({ error: `Insufficient ${fromCurrency} balance for swap. You have ${currentSourceBal.toFixed(6)} but need ${sourceAmt.toFixed(6)}.` });
         }
 
         // 1. Deduct the source crypto
-        await recordTransaction({
+        const deductTx = await recordTransaction({
             wallet_address: walletAddress,
             asset_symbol: fromCurrency,
             amount: -sourceAmt,
@@ -1010,18 +1045,21 @@ app.post('/api/user/swap', async (req, res) => {
             reference: `swap_out_${fromCurrency}_to_${targetCurrency}`,
             status: 'completed'
         });
+        console.log(`[Swap] Source deduction recorded. Tx ID: ${deductTx?.id}`);
     }
 
     // 2. Credit the target asset
     if (targetCurrency === 'USDT') {
-      await pool.query(`
+      const usdtRes = await pool.query(`
           UPDATE users SET 
               protocol_settlement_balance = (protocol_settlement_balance::numeric + $1)::text 
           WHERE wallet_address = $2
+          RETURNING protocol_settlement_balance
       `, [targetAmt, walletAddress]);
+      console.log(`[Swap] USDT Settlement Balance updated: ${usdtRes.rows[0]?.protocol_settlement_balance}`);
     }
 
-    await recordTransaction({
+    const creditTx = await recordTransaction({
         wallet_address: walletAddress,
         asset_symbol: targetCurrency,
         amount: targetAmt,
@@ -1029,6 +1067,7 @@ app.post('/api/user/swap', async (req, res) => {
         reference: `swap_in_${targetCurrency}_from_${fromCurrency}`,
         status: 'completed'
     });
+    console.log(`[Swap] Target credit recorded. Tx ID: ${creditTx?.id}`);
 
     // Reset pending fields
     await pool.query(`
@@ -1041,9 +1080,10 @@ app.post('/api/user/swap', async (req, res) => {
         WHERE wallet_address = $1
     `, [walletAddress]);
 
+    console.log(`[Swap] EXECUTION_SUCCESS for ${walletAddress}`);
     res.json({ success: true });
   } catch (e) { 
-      console.error('[Swap Error]', e.message);
+      console.error('[Swap Error] CRITICAL_FAILURE:', e.message);
       res.status(500).json({ error: e.message }); 
   }
 });
@@ -1229,8 +1269,13 @@ app.get('/api/user/balance', async (req, res) => {
     else balances.push({ asset: 'USDT', balance: usdtBal });
 
     return res.json({ 
-        wallet_address: address, balances, status: user.status, kyc_status: user.kyc_status, 
-        trading_balance: user.trading_balance, demo_balance: user.demo_balance 
+        wallet_address: address, 
+        balances, 
+        status: user.status, 
+        kyc_status: user.kyc_status, 
+        trading_balance: user.trading_balance, 
+        demo_balance: user.demo_balance,
+        user: user // Return the full object for deep sync
     });
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
