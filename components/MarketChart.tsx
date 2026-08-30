@@ -41,8 +41,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = fals
     <div className="w-full h-full relative bg-[#0B0E11] overflow-hidden">
       {!loaded && (
         <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 z-10 bg-[#0B0E11]">
-          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Initializing {symbol}/USDT Analytics...</span>
+          <div className="text-4xl font-black animate-web3 uppercase tracking-tighter">Web3</div>
         </div>
       )}
       <iframe

@@ -1,14 +1,11 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { universalWallet } from '../services/universalWallet';
 import { WalletData } from '../types';
-
-export type ConnectMode = 'identity' | 'wallets';
+import { X, Search, Shield, ChevronRight } from 'lucide-react';
 
 interface ConnectWalletProps {
   onConnect: (address: WalletData, email?: string) => void;
   onClose: () => void;
-  initialMode?: ConnectMode;
 }
 
 interface WalletOption {
@@ -16,81 +13,29 @@ interface WalletOption {
   id: string;
   color: string;
   type: 'evm' | 'svm';
-  svg: React.ReactNode;
+  icon: string;
 }
 
-export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose, initialMode = 'identity' }) => {
-  const [mode, setMode] = useState<ConnectMode>(initialMode);
+export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose }) => {
   const [connecting, setConnecting] = useState<string | null>(null);
-  const [error, setError]       = useState('');
-
-  // Identity State
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  const handleIdentityContinue = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    if (!email.includes('@')) {
-      setError('Valid institutional email required');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Access key must be at least 6 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Access keys do not match');
-      return;
-    }
-
-    setMode('wallets');
-  };
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
   const wallets: WalletOption[] = [
-    {
-      name: 'MetaMask', id: 'metamask', type: 'evm', color: 'text-orange-400',
-      svg: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M21.315 3L13.294 9.13l1.48-3.51L21.315 3zM2.685 3l7.962 6.186-1.41-3.576L2.685 3zM18.36 16.27l-2.14 3.277 4.582 1.262 1.316-4.471-3.758-.068zm-14.977.068l1.307 4.471 4.573-1.262-2.131-3.277-3.749.068zM8.9 10.937l-1.275 1.926 4.539.207-.153-4.883L8.9 10.937zm6.2 0l-3.143-2.8-.108 4.933 4.53-.207L15.1 10.937z"/></svg>
-    },
-    {
-      name: 'Phantom', id: 'phantom', type: 'svm', color: 'text-purple-400',
-      svg: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.5 7.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm-9 0a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm9.75 4.5c-.69 2.1-2.52 3.5-5.25 3.5s-4.56-1.4-5.25-3.5h10.5z"/></svg>
-    },
-    {
-      name: 'Coinbase', id: 'coinbase', type: 'evm', color: 'text-blue-400',
-      svg: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4a6 6 0 110 12A6 6 0 0112 6zm-1.5 3v6h3V9h-3z"/></svg>
-    },
-    {
-      name: 'Trust Wallet', id: 'trust', type: 'evm', color: 'text-sky-400',
-      svg: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 5.5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5.5L12 2z"/></svg>
-    },
-    {
-      name: 'OKX Wallet', id: 'okx', type: 'evm', color: 'text-gray-300',
-      svg: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/><rect x="16" y="9" width="6" height="6" rx="1"/></svg>
-    },
-    {
-      name: 'Exodus', id: 'exodus', type: 'evm', color: 'text-violet-400',
-      svg: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l10 6v8l-10 6L2 16V8l10-6zm0 3.236L4 9.764v4.472l8 4.528 8-4.528V9.764L12 5.236z"/></svg>
-    },
-    {
-      name: 'Binance Web3', id: 'binance', type: 'evm', color: 'text-yellow-400',
-      svg: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.5 2.5L12 7 9.5 4.5 12 2zm5 5l2.5 2.5-2.5 2.5-2.5-2.5L17 7zM7 7l2.5 2.5L7 12 4.5 9.5 7 7zm5 5l2.5 2.5L12 17l-2.5-2.5L12 12zm5 5l-2.5 2.5L12 22l-2.5-2.5L12 17l2.5 2.5L17 17z"/></svg>
-    },
+    { name: 'Phantom', id: 'phantom', type: 'svm', color: 'text-purple-400', icon: 'P' },
+    { name: 'Solflare', id: 'solflare', type: 'svm', color: 'text-orange-400', icon: 'S' },
+    { name: 'MetaMask', id: 'metamask', type: 'evm', color: 'text-orange-500', icon: 'M' },
+    { name: 'Coinbase', id: 'coinbase', type: 'evm', color: 'text-blue-500', icon: 'C' },
+    { name: 'Trust Wallet', id: 'trust', type: 'evm', color: 'text-sky-500', icon: 'T' },
+    { name: 'OKX Wallet', id: 'okx', type: 'evm', color: 'text-white', icon: 'O' },
+    { name: 'Exodus', id: 'exodus', type: 'evm', color: 'text-indigo-400', icon: 'E' },
+    { name: 'Backpack', id: 'backpack', type: 'svm', color: 'text-red-400', icon: 'B' },
+    { name: 'Magic Eden', id: 'magiceden', type: 'svm', color: 'text-pink-400', icon: 'ME' },
   ];
 
-  const isDetected = (id: string) => {
-    const w: any = window;
-    if (id === 'metamask') return !!w.ethereum?.isMetaMask;
-    if (id === 'phantom')  return !!(w.phantom?.solana || w.solana?.isPhantom);
-    if (id === 'trust')    return !!w.trustwallet;
-    if (id === 'binance')  return !!(w.BinanceChain || w.binance?.ethereum || w.ethereum?.isBinance);
-    if (id === 'okx')      return !!w.okxwallet;
-    if (id === 'coinbase') return !!w.coinbaseWalletExtension;
-    if (id === 'exodus')   return !!w.exodus?.ethereum;
-    return false;
-  };
+  const filteredWallets = useMemo(() => 
+    wallets.filter(w => w.name.toLowerCase().includes(search.toLowerCase())),
+  [search]);
 
   const handleWalletConnect = async (wallet: WalletOption) => {
     setConnecting(wallet.id);
@@ -102,7 +47,7 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
       } else {
         data = await universalWallet.connectSolana();
       }
-      onConnect(data, email);
+      onConnect(data);
     } catch (e: any) {
       setError(e.message || 'Connection failed');
       setConnecting(null);
@@ -110,132 +55,79 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-[#181C25] border border-[#2B3139] rounded-[32px] sm:rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
-
+      
+      <div className="relative w-full max-w-md bg-[#181C25] border border-white/5 rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+        
         {/* Header */}
-        <div className="p-5 sm:p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center shrink-0">
-          <div>
-            <h2 className="text-lg sm:text-xl font-black text-white italic uppercase tracking-tighter">
-              {mode === 'identity' ? 'Identity Verification' : 'Uplink Selection'}
-            </h2>
-            <p className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">
-              {mode === 'identity' ? 'Establish Secure Credentials' : 'Select Terminal Node'}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-2">
-            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+        <div className="p-8 border-b border-white/5 flex items-center justify-between">
+            <div className="space-y-1">
+                <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Connect Wallet</h2>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Select your Web3 Provider</p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-500 hover:text-white">
+                <X size={24} />
+            </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="p-4 sm:p-6 space-y-3">
-              {error && (
-                <div className="p-3 sm:p-4 bg-rose-900/20 border border-rose-500/30 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] text-rose-400 font-black uppercase text-center tracking-widest animate-in fade-in zoom-in duration-300">
-                  {error}
-                </div>
-              )}
-
-              {mode === 'identity' ? (
-                <form onSubmit={handleIdentityContinue} className="space-y-3 sm:space-y-4 animate-in slide-in-from-right-4 duration-500">
-                   <div className="space-y-3 sm:space-y-4">
-                      <div className="space-y-1">
-                          <label className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Protocol Email</label>
-                          <input 
-                              type="email" 
-                              required 
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
-                              placeholder="operator@geko.institutional"
-                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                          />
-                      </div>
-                      <div className="space-y-1">
-                          <label className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Access Key</label>
-                          <input 
-                              type="password" 
-                              required 
-                              value={password}
-                              onChange={(e) => setPassword(e.target.value)}
-                              placeholder="••••••••"
-                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                          />
-                      </div>
-                      <div className="space-y-1">
-                          <label className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm Access Key</label>
-                          <input 
-                              type="password" 
-                              required 
-                              value={confirmPassword}
-                              onChange={(e) => setConfirmPassword(e.target.value)}
-                              placeholder="••••••••"
-                              className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all"
-                          />
-                      </div>
-                   </div>
-                   <button 
-                      type="submit"
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.2em] py-4 sm:py-5 rounded-xl sm:rounded-2xl shadow-xl transition-all text-[10px] sm:text-xs flex items-center justify-center space-x-3 mt-4 sm:mt-6"
-                   >
-                      <span>Continue to Uplink</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-                   </button>
-                </form>
-              ) : (
-                <div className="space-y-2 sm:space-y-3 animate-in slide-in-from-right-4 duration-500">
-                  <button 
-                    onClick={() => setMode('identity')}
-                    className="flex items-center space-x-2 text-[8px] sm:text-[9px] text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors mb-2"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                    <span>Back to Identity</span>
-                  </button>
-                  {wallets.map(w => (
-                    <button
-                      key={w.id}
-                      disabled={!!connecting}
-                      onClick={() => handleWalletConnect(w)}
-                      className="w-full flex items-center justify-between p-3 sm:p-4 bg-[#1E2329] border border-[#2B3139] rounded-2xl sm:rounded-3xl hover:border-indigo-500/50 transition-all group disabled:opacity-50"
-                    >
-                      <div className="flex items-center space-x-3 sm:space-x-4">
-                        <div className={`p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-[#0B0E11] ${w.color}`}>
-                          {w.svg}
-                        </div>
-                        <div className="text-left">
-                          <span className="font-black text-gray-200 uppercase text-xs sm:text-sm block">{w.name}</span>
-                          <span className="text-[7px] sm:text-[8px] text-gray-600 font-black uppercase">{w.type === 'svm' ? 'Solana' : 'EVM'}</span>
-                        </div>
-                        {isDetected(w.id) && (
-                          <span className="text-[7px] sm:text-[8px] bg-emerald-900/30 text-emerald-500 px-1.5 py-0.5 rounded uppercase font-black tracking-widest">
-                            Detected
-                          </span>
-                        )}
-                      </div>
-                      {connecting === w.id ? (
-                        <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <svg className="w-4 h-4 text-gray-600 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+        {/* Search */}
+        <div className="p-6 pb-2">
+            <div className="relative group">
+                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-indigo-500 transition-colors" />
+                <input 
+                    type="text" 
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search for a wallet..." 
+                    className="w-full bg-[#0B0E11] border border-white/5 focus:border-indigo-500 rounded-2xl p-4 pl-12 text-sm font-bold text-white outline-none transition-all shadow-inner"
+                />
             </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-[#0B0E11] border-t border-[#2B3139] text-center shrink-0">
-          <div className="flex items-center justify-center space-x-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Encrypted · Mainnet · Non-Custodial</span>
-          </div>
+        {/* Wallet List */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-2 space-y-2">
+            {error && <div className="p-4 bg-rose-950/20 border border-rose-500/20 rounded-2xl text-[10px] font-black uppercase text-rose-500 text-center tracking-widest mb-4">{error}</div>}
+            
+            {filteredWallets.length > 0 ? (
+                filteredWallets.map(w => (
+                    <button
+                        key={w.id}
+                        disabled={!!connecting}
+                        onClick={() => handleWalletConnect(w)}
+                        className="w-full flex items-center justify-between p-4 bg-[#0B0E11]/50 border border-white/5 rounded-[24px] hover:bg-[#2B3139] hover:border-indigo-500/30 transition-all group"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl bg-[#181C25] border border-white/5 flex items-center justify-center font-black italic text-lg ${w.color} group-hover:scale-105 transition-transform`}>
+                                {w.icon}
+                            </div>
+                            <div className="text-left">
+                                <div className="text-sm font-bold text-white uppercase tracking-tight">{w.name}</div>
+                                <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{w.type === 'svm' ? 'Solana' : 'EVM'}</div>
+                            </div>
+                        </div>
+                        {connecting === w.id ? (
+                            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <ChevronRight size={18} className="text-gray-600 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                        )}
+                    </button>
+                ))
+            ) : (
+                <div className="text-center py-10 space-y-2">
+                    <p className="text-sm font-bold text-gray-500 italic">No wallets found</p>
+                    <p className="text-[8px] text-gray-600 uppercase font-black tracking-widest">Try searching for another name</p>
+                </div>
+            )}
         </div>
 
+        {/* Footer */}
+        <div className="p-6 bg-[#0B0E11]/50 border-t border-white/5 text-center">
+            <div className="flex items-center justify-center space-x-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Secured by Geko Protocol</span>
+            </div>
+        </div>
       </div>
     </div>
   );

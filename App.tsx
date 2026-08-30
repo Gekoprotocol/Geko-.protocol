@@ -602,8 +602,7 @@ function TerminalLayout() {
   if (isConnected && !walletData) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] space-y-4 text-center">
-        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Synchronizing Identity...</div>
+        <div className="text-6xl font-black animate-web3 uppercase tracking-tighter">Web3</div>
         <div className="pt-8">
             <button 
               onClick={() => { authService.logout(); window.location.href = '/'; }}
@@ -879,6 +878,15 @@ function TerminalLayout() {
           <BottomNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={18}/>} label="Settings" />
       </nav>
 
+      {/* MOBILE BOTTOM NAVIGATION */}
+      <nav className="fixed bottom-0 left-0 right-0 lg:hidden h-20 bg-[#181C25]/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-2 z-[100] pb-safe">
+          <MobileNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Wallet size={20}/>} label="Wallet" />
+          <MobileNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={20}/>} label="Swap" />
+          <MobileNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Activity size={20}/>} label="Browser" />
+          <MobileNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<LayoutGrid size={20}/>} label="Activity" />
+          <MobileNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={20}/>} label="Settings" />
+      </nav>
+
       <SafeView>
         <SupportWidget wallet={walletData} />
       </SafeView>
@@ -961,6 +969,18 @@ function SidebarNavItem({ active, icon, label, onClick }: any) {
       {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_white]"></div>}
     </button>
   );
+}
+
+function MobileNavItem({ active, icon, label, onClick }: any) {
+    return (
+      <button 
+        onClick={onClick}
+        className={`flex flex-col items-center justify-center gap-1 transition-all duration-300 ${active ? 'text-white' : 'text-gray-500 hover:text-gray-400'}`}
+      >
+        <div className={`transition-colors ${active ? 'text-[#10B981]' : ''}`}>{icon}</div>
+        <span className="text-[8px] uppercase font-bold tracking-widest">{label}</span>
+      </button>
+    );
 }
 
 function BalanceWidget({ label, value, color }: any) {

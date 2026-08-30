@@ -360,7 +360,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             <div className="p-4 lg:p-5 pb-32 lg:pb-12 space-y-4 lg:space-y-6 flex-1 flex flex-col min-h-0">
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="flex justify-between items-center mb-1">
-                        <div className="text-[8px] text-gray-500 font-black uppercase tracking-widest">{wallet?.isDemo ? 'Balance (DEMO)' : 'Balance'}</div>
+                        <div className="text-[8px] text-[#10B981] font-black uppercase tracking-widest">{wallet?.isDemo ? 'Trading Account (DEMO)' : 'Trading Account'}</div>
                     </div>
                     <div className={`text-lg lg:text-xl font-black tabular-nums ${!hasSufficient ? 'text-rose-500' : 'text-gray-100'}`}>
                         ${(tradingBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
