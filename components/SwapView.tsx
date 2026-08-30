@@ -37,6 +37,7 @@ const SwapView: React.FC<SwapViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSwapping, setIsSwapping] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [swapError, setSwapError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [selectedChain, setSelectedChain] = useState<'SOL' | 'BTC' | 'ETH' | 'USDT'>('SOL');
 
