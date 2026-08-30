@@ -443,7 +443,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                 {/* Mobile Activity Stream */}
                 <div className="lg:hidden space-y-4 pt-6 border-t border-white/5">
                     <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 block">Your Positions</span>
-                    <div className="space-y-3 h-[450px] overflow-y-auto scrollbar-hide overscroll-contain touch-pan-y pr-1 pb-10">
+                    <div className="space-y-3 max-h-[60vh] overflow-y-auto scrollbar-hide overscroll-contain touch-pan-y pr-1 pb-10">
                         {localActiveTrades.length === 0 && localSettledTrades.length === 0 && (
                             <div className="text-[9px] text-gray-600 font-black uppercase text-center py-8 border border-white/5 rounded-2xl">No Active Trades</div>
                         )}
