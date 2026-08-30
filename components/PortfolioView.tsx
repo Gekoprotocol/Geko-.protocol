@@ -54,7 +54,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
-  const [transferDirection, setTransferDirection] = useState<'vault_to_trade' | 'trade_to_vault'>('vault_to_trade');
+  const [transferDirection, setTransferDirection] = useState<'spot_to_trading' | 'trading_to_spot'>('spot_to_trading');
   const [transferLoading, setTransferLoading] = useState(false);
   const [tradeStatus, setTradeStatus] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -398,9 +398,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
              </div>
              <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
-                   <div className="text-xs text-gray-500 font-bold uppercase tracking-[0.3em]">Protocol Settlement Balance</div>
-                   <div className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border border-current ${vipTier.color} ${vipTier.bg}`}>
-                      {`VERIFIED ${vipTier.name}`}
+                   <div className="text-xs text-gray-500 font-bold uppercase tracking-[0.3em]">Trading Account</div>
+                   <div className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border border-[#10B981]/30 bg-[#10B981]/10 text-[#10B981]`}>
+                      {`VERIFIED NODE`}
                    </div>
                 </div>
                 <div className="text-xl sm:text-4xl md:text-5xl lg:text-6xl font-mono font-bold text-gray-100 tracking-tighter break-all">
@@ -445,8 +445,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         <div className="bg-[#181C25] rounded-[40px] border border-[#2B3139] overflow-hidden shadow-xl">
           <div className="p-8 border-b border-[#2B3139] bg-[#1E2329] flex justify-between items-center">
             <div>
-              <h3 className="text-lg font-black text-gray-100 uppercase italic tracking-widest">Protocol Balance</h3>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">On-chain deposits · Live from ledger</p>
+              <h3 className="text-lg font-black text-gray-100 uppercase italic tracking-widest">Spot Account</h3>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">On-chain deposits</p>
             </div>
             <button
               onClick={() => { onRefreshBalances(); audioSynth.playPing(); }}

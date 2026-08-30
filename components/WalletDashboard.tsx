@@ -62,7 +62,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({ wallet, onClose, onDi
                </svg>
              </div>
              <div>
-                <h2 className="text-lg font-bold text-gray-100 leading-tight">Protocol Identity</h2>
+                <h2 className="text-lg font-bold text-gray-100 leading-tight">Web3 Identity</h2>
                 <div className="text-[10px] text-indigo-400 font-mono tracking-wider">ID: {wallet.address.slice(0,6)}...</div>
              </div>
           </div>
@@ -108,7 +108,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({ wallet, onClose, onDi
                     <div className="text-xs text-indigo-400 font-bold uppercase tracking-widest mb-2 mt-4">Total Net Worth</div>
                     <div className="text-4xl font-mono font-bold text-gray-100 mb-2">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                     <div className="flex justify-center gap-2 text-[10px] font-mono text-gray-500">
-                        <span>Vault: ${(protocolValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                        <span>Spot: ${(protocolValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                         <span>•</span>
                         <span>Wallet: ${(externalValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
@@ -152,10 +152,10 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({ wallet, onClose, onDi
                     </div>
                 </div>
 
-                {/* SECTION 1: PROTOCOL VAULT (Internal) */}
+                {/* SECTION 1: SPOT ACCOUNT (Internal) */}
                 <section className="space-y-4">
                     <div className="flex justify-between items-center px-1">
-                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest">Protocol Vault</h3>
+                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest">Spot Account</h3>
                         <div className="flex items-center space-x-1">
                             <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
                             <span className="text-[9px] text-indigo-400 font-bold uppercase">Secured</span>
