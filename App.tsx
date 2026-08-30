@@ -431,8 +431,8 @@ function TerminalLayout() {
         }
       }
 
-      // Get Balances
-      const balRes = await fetch(`/api/user/balance?address=${encodeURIComponent(address)}&asset=USDT`, {
+      // Get Balances (request all assets)
+      const balRes = await fetch(`/api/user/balance?address=${encodeURIComponent(address)}`, {
           signal: controller.signal
       });
       if (balRes.ok) {
@@ -659,7 +659,7 @@ function TerminalLayout() {
             </div>
             <div className="w-px h-6 bg-white/10" />
             <div className="flex items-center justify-center bg-indigo-600 rounded-xl px-1">
-                <WalletMultiButton className="!bg-transparent !text-white !h-10 !text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-white/5 transition-all border-none shadow-none" />
+                <WalletMultiButton className="!bg-transparent !text-white !h-10 !text-[8px] sm:!text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-white/5 transition-all border-none shadow-none !whitespace-nowrap" />
             </div>
         </div>
       </header>

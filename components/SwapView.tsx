@@ -36,7 +36,7 @@ const SwapView: React.FC<SwapViewProps> = ({
   const [selectorSide, setSelectorSide] = useState<'from' | 'to'>('from');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSwapping, setIsSwapping] = useState(false);
-  const [showDeposit, setShowDeposit] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedChain, setSelectedChain] = useState<'SOL' | 'BTC' | 'ETH' | 'USDT'>('SOL');
 
@@ -86,7 +86,12 @@ const SwapView: React.FC<SwapViewProps> = ({
     }
 
     setSwapError(null);
-    setShowDeposit(true); // Now used as "Confirm Step"
+    if (!needsConfirmation) {
+        setNeedsConfirmation(true);
+        setTimeout(() => setNeedsConfirmation(false), 5000);
+    } else {
+        handleManualSwap();
+    }
   };
 
   const handleManualSwap = async () => {
@@ -119,15 +124,17 @@ const SwapView: React.FC<SwapViewProps> = ({
           
           if (res.ok) {
               if (onRefreshBalances) onRefreshBalances();
-              setShowDeposit(false);
+              setNeedsConfirmation(false);
               setAmount('');
               alert("Protocol Swap Confirmed! Your balances have been updated.");
           } else {
               const data = await res.json();
               setSwapError(data.error || 'Swap execution failed');
+              setNeedsConfirmation(false);
           }
       } catch (e: any) {
           setSwapError(e.message || 'Network error during swap');
+          setNeedsConfirmation(false);
       } finally {
           setIsSwapping(false);
       }
@@ -201,70 +208,6 @@ const SwapView: React.FC<SwapViewProps> = ({
           </div>
         )}
 
-        {showDeposit && (
-            <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-[40px] p-6 sm:p-10 space-y-6 sm:space-y-8 animate-in slide-in-from-top-4">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
-                    <div className="flex items-center space-x-4 sm:space-x-6">
-                        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg text-xl sm:text-2xl">
-                            {toAsset?.symbol[0]}
-                        </div>
-                        <div>
-                            <div className="text-[8px] sm:text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">Internal Protocol Swap</div>
-                            <div className="text-xl sm:text-2xl font-black text-white italic">Confirm {fromAsset?.symbol} → {toAsset?.symbol}</div>
-                        </div>
-                    </div>
-                    <div className="flex flex-col items-center sm:items-end space-y-1 sm:space-y-2">
-                        <div className="text-[8px] sm:text-[10px] text-gray-500 font-black uppercase tracking-widest">Receive Equivalent</div>
-                        <div className="text-2xl sm:text-3xl font-black text-emerald-500 font-mono">{equivalentTarget} {toAsset?.symbol}</div>
-                    </div>
-                </div>
-
-                <div className="p-4 sm:p-6 bg-[#0B0E11] rounded-3xl border border-[#2B3139] space-y-4">
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                        <span className="text-gray-500">From Protocol</span>
-                        <span className="text-gray-300">{amount} {fromAsset?.symbol}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                        <span className="text-gray-500">To Protocol</span>
-                        <span className="text-emerald-500">{equivalentTarget} {toAsset?.symbol}</span>
-                    </div>
-                    <div className="pt-2 border-t border-white/5 flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                        <span className="text-gray-500">Execution Mode</span>
-                        <span className="text-indigo-400 italic">INSTANT SETTLEMENT</span>
-                    </div>
-                </div>
-
-                {swapError && (
-                    <div className="p-4 bg-rose-900/20 border border-rose-500/30 rounded-2xl text-[9px] sm:text-[10px] text-rose-400 font-black uppercase text-center animate-pulse">
-                        {swapError}
-                    </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <button 
-                        onClick={() => setShowDeposit(false)}
-                        className="flex-1 py-4 sm:py-6 bg-[#181C25] text-gray-400 font-black uppercase italic tracking-widest rounded-3xl hover:text-white transition-all order-2 sm:order-1"
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        onClick={handleManualSwap}
-                        disabled={isSwapping}
-                        className="flex-[2] py-4 sm:py-6 bg-indigo-600 text-white font-black uppercase italic tracking-widest rounded-3xl shadow-xl hover:bg-indigo-500 transition-all flex items-center justify-center space-x-3 order-1 sm:order-2"
-                    >
-                        {isSwapping ? (
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                            <>
-                                <span>Confirm Instant Swap</span>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                            </>
-                        )}
-                    </button>
-                </div>
-            </div>
-        )}
-
         <div className="grid grid-cols-1 gap-8 items-start">
           <div className="space-y-4">
             {/* Swap Input Card */}
@@ -334,12 +277,12 @@ const SwapView: React.FC<SwapViewProps> = ({
                 <button 
                     onClick={handleAction} 
                     disabled={isSwapping || (isConnected && (!amount || parseFloat(amount) <= 0))}
-                    className={`w-full py-6 rounded-[28px] font-black text-lg transition-all shadow-xl uppercase italic tracking-widest ${isConnected ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-[#2B3139] hover:bg-[#363C45] text-gray-400'}`}
+                    className={`w-full py-6 rounded-[28px] font-black text-lg transition-all shadow-xl uppercase italic tracking-widest ${isConnected ? (needsConfirmation ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white') : 'bg-[#2B3139] hover:bg-[#363C45] text-gray-400'}`}
                 >
                   {isSwapping ? (
                       <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
                   ) : (
-                      isConnected ? (!amount || parseFloat(amount) <= 0 ? 'ENTER AMOUNT' : 'EXECUTE SWAP') : 'CONNECT TO SWAP'
+                      isConnected ? (!amount || parseFloat(amount) <= 0 ? 'ENTER AMOUNT' : (needsConfirmation ? 'CONFIRM SWAP' : 'EXECUTE SWAP')) : 'CONNECT TO SWAP'
                   )}
                 </button>
                 <div className="flex items-center justify-between px-2 text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">

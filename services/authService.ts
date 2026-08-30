@@ -129,7 +129,7 @@ export const authService = {
           }
       }
       try {
-          localStorage.removeItem(SESSION_KEY);
+          localStorage.clear(); // Complete wipe for 'forget' functionality
       } catch (e) {}
       if (syncChannel) syncChannel.postMessage({ type: 'LOGOUT_EVENT' });
       window.dispatchEvent(new CustomEvent('geko-session-local-update', { detail: null }));

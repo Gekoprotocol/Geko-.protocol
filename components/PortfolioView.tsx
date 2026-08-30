@@ -46,9 +46,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   
   const [tradingBalance, setTradingBalance] = useState(0);
   const [demoBalance, setDemoBalance] = useState(100000);
-  const [balLoading, setBalLoading] = useState(false);
   const [dbTransactions, setDbTransactions]     = useState<any[]>([]);
   const [txLoading, setTxLoading]               = useState(false);
+  const [simulatedYield, setSimulatedYield]     = useState(0);
+  const lastUpdateTime = useRef(Date.now());
 
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
@@ -270,8 +271,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
         setStep('success');
         audioSynth.playSuccess();
-        fetchProtocolBalance();
-        fetchDbTransactions();
+        if (onRefreshBalances) onRefreshBalances();
         setTimeout(() => {
             setActiveModal(null);
             setStep('form');
@@ -402,7 +402,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                       {`VERIFIED ${vipTier.name}`}
                    </div>
                 </div>
-                <div className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-mono font-bold text-gray-100 tracking-tighter break-all">
+                <div className="text-xl sm:text-4xl md:text-5xl lg:text-6xl font-mono font-bold text-gray-100 tracking-tighter break-all">
                    ${vaultUsdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
                 <div className="flex gap-8 mt-10 pt-10 border-t border-[#2B3139]">
@@ -448,13 +448,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">On-chain deposits · Live from ledger</p>
             </div>
             <button
-              onClick={() => { fetchProtocolBalance(); fetchDbTransactions(); }}
+              onClick={() => { onRefreshBalances(); audioSynth.playPing(); }}
               className="flex items-center space-x-2 px-4 py-2 bg-[#0B0E11] border border-[#2B3139] rounded-2xl text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-white hover:border-indigo-500/40 transition-all"
             >
-              {balLoading
-                ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              }
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               <span>Refresh</span>
             </button>
           </div>
@@ -500,7 +497,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                       <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest opacity-70">{b.asset}</span>
                       <span className="text-[7px] sm:text-[8px] font-bold text-gray-600">{b.tx_count} tx</span>
                     </div>
-                    <div className="font-mono font-black text-lg sm:text-2xl break-all">
+                    <div className="font-mono font-black text-base sm:text-2xl break-all">
                       {b.balance >= 0.001
                         ? b.balance.toLocaleString(undefined, { minimumFractionDigits: b.asset === 'USDT' ? 2 : 4, maximumFractionDigits: b.asset === 'USDT' ? 2 : 6 })
                         : b.balance.toFixed(8)}
