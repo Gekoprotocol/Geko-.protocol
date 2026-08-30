@@ -46,6 +46,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   
   const [tradingBalance, setTradingBalance] = useState(0);
   const [demoBalance, setDemoBalance] = useState(100000);
+  const [balLoading, setBalLoading] = useState(false);
   const [dbTransactions, setDbTransactions]     = useState<any[]>([]);
   const [txLoading, setTxLoading]               = useState(false);
   const [simulatedYield, setSimulatedYield]     = useState(0);
