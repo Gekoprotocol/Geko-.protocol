@@ -273,9 +273,32 @@ const TradeView: React.FC<TradeViewProps> = ({
             >Trade</button>
         </div>
 
-        <div className="hidden lg:flex items-center space-x-3 bg-indigo-900/10 px-5 py-2 rounded-xl border border-indigo-500/20 group cursor-default relative">
-             <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
-             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Secured Node</span>
+        <div className="hidden lg:flex items-center space-x-6">
+            <div className="flex items-center space-x-3 bg-indigo-900/10 px-5 py-2 rounded-xl border border-indigo-500/20 group cursor-default relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Secured Node</span>
+            </div>
+            
+            {/* 3D Spinning Bitcoin Animation */}
+            <div className="flex items-center gap-3 bg-amber-500/5 px-4 py-2 rounded-xl border border-amber-500/20 shadow-lg shadow-amber-500/5">
+                <div className="relative w-8 h-8 preserve-3d animate-bitcoin-spin">
+                    {/* Front */}
+                    <div className="absolute inset-0 bg-[#F7931A] rounded-full flex items-center justify-center border-2 border-[#E87E04] shadow-inner transform translate-z-[2px]">
+                        <span className="text-white font-bold text-lg select-none">₿</span>
+                    </div>
+                    {/* Back */}
+                    <div className="absolute inset-0 bg-[#F7931A] rounded-full flex items-center justify-center border-2 border-[#E87E04] shadow-inner transform translate-z-[-2px] rotate-y-180">
+                        <span className="text-white font-bold text-lg select-none">₿</span>
+                    </div>
+                    {/* Side (Simulation) */}
+                    <div className="absolute inset-0 bg-[#E87E04] rounded-full transform rotate-x-90 translate-y-[0px]"></div>
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest">Protocol</span>
+                    <span className="text-[10px] text-amber-500 font-black uppercase tracking-tighter italic">BTC Mainnet</span>
+                </div>
+            </div>
         </div>
       </div>
 
