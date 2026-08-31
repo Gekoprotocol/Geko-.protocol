@@ -738,12 +738,14 @@ function TerminalLayout() {
                     }} 
                 />
             )}
-            {activeTab === 'chart' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
+            {activeTab === 'swap' && (
+                <div className="h-full bg-black">
+                    <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} protocolBalances={protocolBalances} />
+                </div>
+            )}
+            {activeTab === 'pulse' && <div className="h-full bg-black"><NetworkPulse assets={assets} onSelect={(s) => { setSelectedSymbol(s); setActiveTab('trade'); }} /></div>}
             {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-            {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} protocolBalances={protocolBalances} />}
-            {activeTab === 'pulse' && <NetworkPulse />}
-            {activeTab === 'visualizer' && <GraphsView assets={assets} selectedAsset={selectedAsset} marketData={[]} setSelectedSymbol={setSelectedSymbol} />}
-            {activeTab === 'vault' && (
+            {activeTab === 'assets' || activeTab === 'vault' ? (
                 <PortfolioView 
                     wallet={walletData} 
                     assets={assets} 
@@ -759,11 +761,13 @@ function TerminalLayout() {
                     onOpenTransferHandled={() => setAutoOpenTransfer(false)}
                     protocolBalances={protocolBalances}
                 />
-            )}
+            ) : null}
+            
+            {activeTab === 'admin' && <AdminDesk />}
             {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
             
             {activeTab === 'settings' && (
-                <div className="h-full overflow-y-auto p-6 lg:p-12 space-y-8 bg-[#0B0E11] custom-scrollbar">
+                <div className="h-full overflow-y-auto p-6 lg:p-12 space-y-8 bg-black custom-scrollbar">
                     <div className="max-w-4xl mx-auto space-y-12">
                         <div className="space-y-2">
                             <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Settings</h1>
@@ -883,12 +887,12 @@ function TerminalLayout() {
       </nav>
 
       {/* MOBILE BOTTOM NAVIGATION */}
-      <nav className="fixed bottom-0 left-0 right-0 lg:hidden h-20 bg-black border-t border-white/5 flex items-center justify-around px-2 z-[100] pb-safe shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
-          <MobileNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Wallet size={24}/>} label="Wallet" />
+      <nav className="fixed bottom-0 left-0 right-0 lg:hidden h-20 bg-black border-t border-white/5 flex items-center justify-around px-2 z-[100] pb-safe shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+          <MobileNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Wallet size={24}/>} label="Home" />
           <MobileNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={24}/>} label="Swap" />
-          <MobileNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Globe size={24}/>} label="Browser" />
-          <MobileNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<LayoutGrid size={24}/>} label="Activity" />
-          <MobileNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={24}/>} label="Settings" />
+          <MobileNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Globe size={24}/>} label="Markets" />
+          <MobileNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={24}/>} label="Trade" />
+          <MobileNavItem active={activeTab === 'assets' || activeTab === 'vault'} onClick={() => setActiveTab('assets')} icon={<LayoutGrid size={24}/>} label="Assets" />
       </nav>
 
       <SafeView>
