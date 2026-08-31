@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
@@ -28,7 +28,8 @@ import {
   X,
   Zap,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  HelpCircle
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
@@ -49,13 +50,13 @@ import { WalletData, AssetInfo, ActiveTrade } from './types';
 export default function App() {
   const network = WalletAdapterNetwork.Mainnet;
   const endpoint = clusterApiUrl(network);
-  const wallets = [
+  const wallets = useMemo(() => [
     new PhantomWalletAdapter(),
     new SolflareWalletAdapter(),
     new CoinbaseWalletAdapter(),
     new TrustWalletAdapter(),
     new LedgerWalletAdapter()
-  ];
+  ], []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>
@@ -80,35 +81,87 @@ function TerminalLayout() {
   const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
   const [protocolBalances, setProtocolBalances] = useState<any[]>([]);
   const [protocolConfig, setProtocolConfig] = useState<any>({});
+  
+  const [autoOpenDeposit, setAutoOpenDeposit] = useState(false);
+  const [autoOpenTransfer, setAutoOpenTransfer] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
 
   // Sync Session
   useEffect(() => {
-    const unsub = authService.observeSession(w => setCustomWallet(w));
+    const unsub = authService.observeSession(w => {
+        setCustomWallet(w);
+        if (w?.role === 'admin') setActiveTab('admin');
+    });
     const timer = setTimeout(() => setIsLoading(false), 2000);
     return () => { unsub(); clearTimeout(timer); };
   }, []);
 
+  // Fetch Prices
+  useEffect(() => {
+    const fetchPrices = async () => {
+        try {
+            const res = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT"]');
+            if (res.ok) setPrices(await res.json());
+        } catch (_) {}
+    };
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Sync Data
+  const refreshData = useCallback(async () => {
+    if (!customWallet?.address) return;
+    try {
+        const res = await fetch(`/api/user/balance?address=${encodeURIComponent(customWallet.address)}&asset=USDT`);
+        if (res.ok) {
+            const data = await res.json();
+            setCustomWallet(prev => prev ? { ...prev, trading_balance: data.trading_balance, status: data.status } : null);
+            if (data.balances) setProtocolBalances(data.balances);
+        }
+        const cfgRes = await fetch('/api/config');
+        if (cfgRes.ok) setProtocolConfig(await cfgRes.json());
+    } catch (_) {}
+  }, [customWallet?.address]);
+
+  useEffect(() => {
+    refreshData();
+    const interval = setInterval(refreshData, 5000);
+    return () => clearInterval(interval);
+  }, [refreshData]);
+
   const isConnected = connected || !!customWallet;
   const isApproved = connected || (!!customWallet && customWallet.status === 'approved');
 
-  const assets: AssetInfo[] = prices.map(p => ({
-    symbol: p.symbol.replace('USDT', ''),
-    name: p.symbol.replace('USDT', ''),
-    price: parseFloat(p.lastPrice),
-    change24h: parseFloat(p.priceChangePercent),
-    marketCap: 'N/A',
-    volume24h: '0'
-  })).filter(a => ['BTC', 'ETH', 'SOL', 'XRP'].includes(a.symbol));
+  const assets: AssetInfo[] = useMemo(() => {
+    if (!prices.length) return [
+        { symbol: 'BTC', name: 'Bitcoin', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
+        { symbol: 'ETH', name: 'Ethereum', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
+        { symbol: 'SOL', name: 'Solana', price: 0, change24h: 0, marketCap: '0', volume24h: '0' }
+    ];
+    return prices.map(p => ({
+        symbol: p.symbol.replace('USDT', ''),
+        name: p.symbol.replace('USDT', ''),
+        price: parseFloat(p.lastPrice),
+        change24h: parseFloat(p.priceChangePercent),
+        marketCap: 'N/A',
+        volume24h: '0'
+    }));
+  }, [prices]);
+
+  const selectedAsset = assets.find(a => a.symbol === selectedSymbol) || assets[0];
 
   const handleNavigate = (t: string, action?: string) => {
     setActiveTab(t as any);
+    if (action === 'deposit') setAutoOpenDeposit(true);
+    if (action === 'transfer') setAutoOpenTransfer(true);
   };
 
-  if (isConnected && !customWallet) {
+  if (isLoading) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-center">
-        <div className="text-7xl font-black animate-web3-splash uppercase tracking-tighter italic">Web3</div>
-      </div>
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-center">
+            <div className="text-7xl font-black animate-web3-splash uppercase tracking-tighter italic">Web3</div>
+        </div>
     );
   }
 
@@ -137,7 +190,7 @@ function TerminalLayout() {
                   <div className="w-10 h-10 bg-[#10B981] rounded-xl flex items-center justify-center shadow-lg shadow-[#10B981]/20">
                       <Zap size={20} className="text-black fill-black" />
                   </div>
-                  <span className="font-black italic uppercase tracking-tighter text-lg">Gecko</span>
+                  <span className="font-black italic uppercase tracking-tighter text-lg text-[#10B981]">Gecko</span>
               </div>
           </div>
           <div className="flex items-center gap-3">
@@ -151,10 +204,28 @@ function TerminalLayout() {
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-hidden relative">
           {activeTab === 'home' && <HomeView wallet={customWallet} assets={assets} onNavigate={handleNavigate} />}
-          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={customWallet} onConnect={() => {}} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => {}} protocolBalances={protocolBalances} />}
+          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={customWallet} onConnect={() => {}} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => handleNavigate('assets', 'deposit')} protocolBalances={protocolBalances} />}
           {activeTab === 'pulse' && <NetworkPulse assets={assets} onSelect={(s) => { setSelectedSymbol(s); setActiveTab('trade'); }} />}
-          {activeTab === 'trade' && <TradeView wallet={customWallet} symbol={selectedSymbol} onSymbolChange={setSelectedSymbol} activeTrades={activeTrades} assets={assets} />}
-          {activeTab === 'assets' && <PortfolioView wallet={customWallet} assets={assets} protocolBalances={protocolBalances} depositAddress="" onConnect={() => {}} onUpdateWallet={setCustomWallet} onDisconnect={() => {}} onRefreshBalances={() => {}} />}
+          {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedSymbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={customWallet} onRefreshBalances={refreshData} />}
+          {activeTab === 'assets' && (
+            <PortfolioView 
+                wallet={customWallet} 
+                assets={assets} 
+                protocolBalances={protocolBalances} 
+                depositAddress={protocolConfig?.solana_deposit_address} 
+                onConnect={() => {}} 
+                onUpdateWallet={setCustomWallet} 
+                onDisconnect={() => { authService.logout(); window.location.href='/'; }} 
+                onRefreshBalances={refreshData} 
+                autoOpenDeposit={autoOpenDeposit}
+                onOpenDepositHandled={() => setAutoOpenDeposit(false)}
+                autoOpenTransfer={autoOpenTransfer}
+                onOpenTransferHandled={() => setAutoOpenTransfer(false)}
+                protocolConfig={protocolConfig}
+            />
+          )}
+          {activeTab === 'admin' && <AdminDesk />}
+          {activeTab === 'settings' && <div className="h-full bg-black p-10">Settings View</div>}
       </main>
 
       {/* BOTTOM NAVIGATION */}
@@ -174,17 +245,17 @@ function TerminalLayout() {
                   <div className="p-8 border-b border-white/5 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                           <div className="w-12 h-12 bg-[#10B981] rounded-2xl flex items-center justify-center">
-                              <User size={24} className="text-black" />
+                              <Zap size={24} className="text-black" />
                           </div>
                           <div>
-                              <div className="text-sm font-black text-white uppercase tracking-tight">Operator Profile</div>
+                              <div className="text-sm font-black text-white uppercase tracking-tight">Gecko Operator</div>
                               <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Institution Verified</div>
                           </div>
                       </div>
                       <button onClick={() => setIsProfileOpen(false)} className="p-2 hover:bg-white/5 rounded-full text-gray-500"><X size={20}/></button>
                   </div>
 
-                  <div className="flex-1 p-6 space-y-4">
+                  <div className="flex-1 p-6 space-y-4 overflow-y-auto no-scrollbar">
                       <div className="bg-black border border-white/5 p-4 rounded-[24px] space-y-4">
                           <div className="flex items-center gap-3">
                               <Mail size={16} className="text-[#10B981]" />
@@ -202,13 +273,19 @@ function TerminalLayout() {
                           </div>
                       </div>
 
-                      <button onClick={() => handleNavigate('assets')} className="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-2xl transition-all group">
+                      <button onClick={() => { handleNavigate('assets'); setIsProfileOpen(false); }} className="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-2xl transition-all group">
                           <div className="flex items-center gap-3 text-gray-400 group-hover:text-white transition-colors">
                               <Shield size={18} />
                               <span className="text-xs font-bold uppercase tracking-widest">Verify KYC</span>
                           </div>
                           <ChevronRight size={16} className="text-gray-600" />
                       </button>
+
+                      {/* SUPPORT SECTION */}
+                      <div className="pt-4 space-y-4">
+                          <div className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em] px-2">Support Center</div>
+                          <SupportFAQ />
+                      </div>
                   </div>
 
                   <div className="p-6 border-t border-white/5">
@@ -226,6 +303,34 @@ function TerminalLayout() {
 
     </div>
   );
+}
+
+function SupportFAQ() {
+    const faqs = [
+        { q: "How to deposit?", a: "Go to Assets -> Deposit, select your coin, and send to the provided address." },
+        { q: "Where is my balance?", a: "Your Spot balance is in Assets. Swap it to USDT to see it in your Trading Account." },
+        { q: "Withdrawal time?", a: "Withdrawals are processed within 5-30 minutes after institutional clearance." },
+        { q: "Institutional Node?", a: "You are currently running on a high-performance Gecko Protocol node." }
+    ];
+    const [open, setOpen] = useState<number | null>(null);
+
+    return (
+        <div className="space-y-2">
+            {faqs.map((f, i) => (
+                <div key={i} className="bg-black/40 rounded-2xl border border-white/5 overflow-hidden">
+                    <button onClick={() => setOpen(open === i ? null : i)} className="w-full p-4 flex items-center justify-between text-left">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{f.q}</span>
+                        <ChevronDown size={14} className={`text-gray-600 transition-transform ${open === i ? 'rotate-180' : ''}`} />
+                    </button>
+                    {open === i && <div className="px-4 pb-4 text-[10px] text-[#10B981] font-medium leading-relaxed italic">{f.a}</div>}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function ChevronDown({ size, className }: any) {
+    return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-9"/></svg>;
 }
 
 function MobileNavItem({ active, icon, label, onClick }: any) {
