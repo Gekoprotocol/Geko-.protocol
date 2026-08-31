@@ -119,7 +119,14 @@ function TerminalLayout() {
         if (res.ok) {
             const data = await res.json();
             setCustomWallet(prev => prev ? { ...prev, trading_balance: data.trading_balance, status: data.status } : null);
-            if (data.balances) setProtocolBalances(data.balances);
+            if (data.balances) {
+                const enriched = data.balances.map((b: any) => {
+                    const assetInfo = assets.find(a => a.symbol === b.asset);
+                    const price = assetInfo ? assetInfo.price : (b.asset === 'USDT' ? 1 : 0);
+                    return { ...b, valueUsd: (parseFloat(b.balance) * price).toFixed(2) };
+                });
+                setProtocolBalances(enriched);
+            }
         }
         const cfgRes = await fetch('/api/config');
         if (cfgRes.ok) setProtocolConfig(await cfgRes.json());
