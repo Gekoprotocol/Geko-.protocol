@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { WalletData, AssetInfo } from '../types';
-import { Plus, DollarSign, ArrowUpRight, ArrowDownLeft, Wallet, Image as ImageIcon } from 'lucide-react';
+import { Plus, Minus, ArrowUpRight, ArrowDownLeft, Wallet, Image as ImageIcon, Globe } from 'lucide-react';
 
 interface HomeViewProps {
   wallet: WalletData | null;
@@ -10,96 +10,108 @@ interface HomeViewProps {
 
 const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'tokens' | 'collectibles'>('tokens');
-  const protocolBalance = wallet?.protocolBalances?.[0]?.amount || '0';
   
-  // Simulated total change
+  // Use protocol_settlement_balance or vault balance as the main figure
+  const mainBalance = wallet?.protocolBalances?.[0]?.amount || '0';
   const totalChange = 4.79;
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0B0E11] text-gray-200 custom-scrollbar flex flex-col">
-      <div className="flex-1 w-full max-w-lg mx-auto p-6 space-y-10 pb-32">
+    <div className="h-full overflow-y-auto bg-black text-white custom-scrollbar flex flex-col font-sans">
+      <div className="flex-1 w-full max-w-md mx-auto p-6 space-y-12 pb-32 pt-12">
         
-        {/* Header / Balance Section */}
-        <div className="text-center pt-8 space-y-2">
-            <div className="text-sm font-medium text-gray-400">Total Balance</div>
-            <div className="text-5xl font-bold text-white tracking-tight">
-                ${parseFloat(protocolBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </div>
-            <div className={`text-sm font-bold flex items-center justify-center gap-1 ${totalChange >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
-                {totalChange >= 0 ? '+' : ''}{totalChange}% ($7.08)
+        {/* Network Badge */}
+        <div className="flex justify-center">
+            <div className="flex items-center gap-2 bg-[#1A1A1A] px-3 py-1.5 rounded-full border border-white/5">
+                <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Solana Mainnet</span>
             </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-between px-2">
-            <ActionButton label="Buy" icon={<Plus size={20} />} onClick={() => onNavigate('trade')} />
-            <ActionButton label="Sell" icon={<DollarSign size={20} />} onClick={() => onNavigate('trade')} />
-            <ActionButton label="Send" icon={<ArrowUpRight size={20} />} onClick={() => onNavigate('vault', 'transfer')} />
-            <ActionButton label="Receive" icon={<ArrowDownLeft size={20} />} onClick={() => onNavigate('vault', 'deposit')} />
+        {/* Balance Section */}
+        <div className="text-center space-y-2">
+            <div className="text-6xl font-bold tracking-tight text-white">
+                ${parseFloat(mainBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+            <div className="flex items-center justify-center gap-1.5">
+                <span className="text-sm font-bold text-[#10B981]">+{totalChange}%</span>
+                <span className="text-sm font-bold text-gray-500">$7.08</span>
+            </div>
         </div>
 
-        {/* Minimal Chart Placeholder (as seen in screenshots) */}
-        <div className="h-24 w-full px-2">
-            <div className="h-full w-full bg-gradient-to-t from-emerald-500/10 to-transparent rounded-2xl relative overflow-hidden flex items-end">
-                <svg className="w-full h-12 text-[#10B981] opacity-50" viewBox="0 0 100 20" preserveAspectRatio="none">
-                    <path d="M0 15 Q 25 5, 50 15 T 100 10" fill="none" stroke="currentColor" strokeWidth="2" />
+        {/* Circular Action Buttons */}
+        <div className="flex justify-around items-center px-4">
+            <ActionCircle label="Buy" icon={<Plus size={24} />} onClick={() => onNavigate('trade')} />
+            <ActionCircle label="Sell" icon={<Minus size={24} />} onClick={() => onNavigate('trade')} />
+            <ActionCircle label="Send" icon={<ArrowUpRight size={24} />} onClick={() => onNavigate('vault', 'transfer')} />
+            <ActionCircle label="Receive" icon={<ArrowDownLeft size={24} />} onClick={() => onNavigate('vault', 'deposit')} />
+        </div>
+
+        {/* Minimal Sparkline Chart (matching the visual in IMG_2526) */}
+        <div className="px-2 pt-4">
+            <div className="h-20 w-full relative group">
+                <svg className="w-full h-full text-[#10B981] drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]" viewBox="0 0 100 30" preserveAspectRatio="none">
+                    <path 
+                        d="M0 25 C 20 25, 40 5, 60 15 S 80 10, 100 5" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="2.5" 
+                        strokeLinecap="round"
+                    />
                 </svg>
             </div>
         </div>
 
-        {/* Tabs */}
-        <div className="space-y-4">
-            <div className="flex border-b border-white/5 px-2">
+        {/* Tabs: Tokens / Collectibles */}
+        <div className="space-y-6 pt-4">
+            <div className="flex gap-8 px-2 border-b border-white/5">
                 <button 
                     onClick={() => setActiveTab('tokens')}
-                    className={`pb-3 text-sm font-bold tracking-tight transition-all relative ${activeTab === 'tokens' ? 'text-white' : 'text-gray-500'}`}
+                    className={`pb-4 text-base font-bold transition-all relative ${activeTab === 'tokens' ? 'text-white' : 'text-gray-500'}`}
                 >
                     Tokens
                     {activeTab === 'tokens' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full"></div>}
                 </button>
                 <button 
                     onClick={() => setActiveTab('collectibles')}
-                    className={`ml-6 pb-3 text-sm font-bold tracking-tight transition-all relative ${activeTab === 'collectibles' ? 'text-white' : 'text-gray-500'}`}
+                    className={`pb-4 text-base font-bold transition-all relative ${activeTab === 'collectibles' ? 'text-white' : 'text-gray-500'}`}
                 >
                     Collectibles
                     {activeTab === 'collectibles' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full"></div>}
                 </button>
             </div>
 
-            {/* Asset List */}
-            <div className="space-y-1">
+            {/* Token List */}
+            <div className="space-y-4">
                 {activeTab === 'tokens' ? (
-                    assets.slice(0, 8).map((asset) => (
+                    assets.map((asset) => (
                         <div 
                             key={asset.symbol}
                             onClick={() => onNavigate('trade')}
-                            className="flex items-center justify-between p-4 hover:bg-white/5 rounded-2xl transition-colors cursor-pointer group"
+                            className="flex items-center justify-between p-2 hover:bg-[#1A1A1A] rounded-2xl transition-all cursor-pointer group active:scale-95"
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-[#181C25] rounded-full flex items-center justify-center border border-white/5 group-hover:border-white/10">
-                                    <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center text-[10px] font-black italic">
+                                <div className="w-12 h-12 bg-[#1A1A1A] rounded-full flex items-center justify-center border border-white/5">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-xs font-black italic shadow-lg">
                                         {asset.symbol[0]}
                                     </div>
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="font-bold text-white">{asset.name}</span>
-                                    <span className="text-xs text-gray-500 font-medium">1 {asset.symbol}</span>
+                                    <span className="font-bold text-white text-base">{asset.name}</span>
+                                    <span className="text-[11px] text-gray-500 font-bold uppercase tracking-tighter">1 {asset.symbol}</span>
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <div className="font-bold text-white">${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                                <div className={`text-xs font-bold ${asset.change24h >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                            <div className="text-right flex flex-col items-end">
+                                <span className="font-bold text-white text-base">${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                <span className={`text-[11px] font-bold ${asset.change24h >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
                                     {asset.change24h >= 0 ? '+' : ''}{asset.change24h}%
-                                </div>
+                                </span>
                             </div>
                         </div>
                     ))
                 ) : (
-                    <div className="text-center py-20 space-y-4">
-                        <div className="w-16 h-16 bg-[#181C25] rounded-2xl flex items-center justify-center mx-auto text-gray-600">
-                            <ImageIcon size={32} />
-                        </div>
-                        <p className="text-sm font-medium text-gray-500 italic">No collectibles found</p>
+                    <div className="py-20 flex flex-col items-center space-y-4 opacity-30">
+                        <ImageIcon size={48} />
+                        <span className="text-xs font-bold uppercase tracking-widest">No Collectibles</span>
                     </div>
                 )}
             </div>
@@ -110,12 +122,12 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
   );
 };
 
-const ActionButton = ({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) => (
-    <button onClick={onClick} className="flex flex-col items-center gap-2 group">
-        <div className="w-14 h-14 bg-[#181C25] rounded-full flex items-center justify-center text-white border border-white/5 group-hover:bg-[#2B3139] group-active:scale-95 transition-all">
+const ActionCircle = ({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) => (
+    <button onClick={onClick} className="flex flex-col items-center gap-3 group">
+        <div className="w-16 h-16 bg-[#1A1A1A] rounded-full flex items-center justify-center text-white border border-white/5 group-hover:bg-[#222222] group-hover:border-white/10 group-active:scale-90 transition-all shadow-xl">
             {icon}
         </div>
-        <span className="text-xs font-bold text-gray-400 group-hover:text-white transition-colors">{label}</span>
+        <span className="text-xs font-bold text-gray-400 group-hover:text-white transition-colors uppercase tracking-widest">{label}</span>
     </button>
 );
 
