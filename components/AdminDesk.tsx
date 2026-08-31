@@ -26,7 +26,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
   const [isCrediting, setIsCrediting] = useState(false);
   
-  const protocolInputRef = useRef<HTMLInputElement>(null);
+  const uid = (user.id || user.wallet_address || 'unknown').toString();
 
   const handleApplyPending = async () => {
       if (!parseFloat(depositAmount)) return;
@@ -164,9 +164,10 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
 
       <button 
         onClick={handleUpdate}
-        className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg bg-indigo-600 hover:bg-indigo-500 text-white`}
+        disabled={savingId === uid}
+        className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg ${savedId === uid ? 'bg-emerald-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
       >
-        Overwrite Node Data
+        {savingId === uid ? 'Syncing...' : (savedId === uid ? 'System Updated ✓' : 'Overwrite Node Data')}
       </button>
     </div>
   );
@@ -204,19 +205,19 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const fetchData = async () => {
     try {
       const [u, t, w, k, s, st, cfg] = await Promise.all([
-        fetch('/api/admin/users').then(r => r.json()),
-        fetch('/api/admin/trades').then(r => r.json()),
-        fetch('/api/admin/withdrawals').then(r => r.json()),
-        fetch('/api/admin/kyc-list').then(r => r.json()),
-        fetch('/api/admin/support-tickets').then(r => r.json()),
-        fetch('/api/admin/status').then(r => r.json()),
-        fetch('/api/config').then(r => r.json())
+        fetch('/api/admin/users').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/trades').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/withdrawals').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/kyc-list').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/support-tickets').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/status').then(r => r.json()).catch(() => null),
+        fetch('/api/config').then(r => r.json()).catch(() => null)
       ]);
-      setDbUsers(u);
-      setRealUserTrades(t);
-      setWithdrawalRequests(w);
-      setKycSubmissions(k);
-      setSupportTickets(s);
+      setDbUsers(Array.isArray(u) ? u : []);
+      setRealUserTrades(Array.isArray(t) ? t : []);
+      setWithdrawalRequests(Array.isArray(w) ? w : []);
+      setKycSubmissions(Array.isArray(k) ? k : []);
+      setSupportTickets(Array.isArray(s) ? s : []);
       setSysStatus(st);
       if (cfg) {
           setDepositInput(cfg.solana_deposit_address || '');
@@ -250,7 +251,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const handleCreditBalance = async (walletAddress: string, currency: string, amount: string) => {
     try {
-        await fetch('/api/admin/credit-spot', {
+        await fetch('/api/admin/credit-balance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ walletAddress, currency, amount })
@@ -261,7 +262,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const handleApproveUser = async (userId: number) => {
       try {
-          await fetch('/api/admin/approve-user', {
+          await fetch('/api/admin/users/approve', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ userId })
@@ -270,12 +271,12 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       } catch (e) { console.error('Approval failed', e); }
   };
 
-  const handleForceOutcome = async (tradeId: string, outcome: 'win' | 'loss') => {
+  const handleForceOutcome = async (tradeId: string, forceOutcome: 'win' | 'loss') => {
       try {
           await fetch('/api/admin/force-outcome', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tradeId, outcome })
+              body: JSON.stringify({ tradeId, forceOutcome })
           });
           fetchData();
       } catch (e) { console.error('Force outcome failed', e); }
@@ -292,12 +293,12 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     } catch (e) { console.error('WR Approval failed', e); }
   };
 
-  const handleApproveKyc = async (kycId: number, walletAddress: string) => {
+  const handleApproveKyc = async (submissionId: number, walletAddress: string) => {
       try {
-          await fetch('/api/admin/approve-kyc', {
+          await fetch('/api/admin/kyc/approve', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ kycId, walletAddress })
+              body: JSON.stringify({ submissionId, walletAddress })
           });
           fetchData();
       } catch (e) { console.error('KYC approval failed', e); }
@@ -306,7 +307,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const handleSupportReply = async () => {
     if (!activeTicket || !adminReply.trim()) return;
     try {
-      await fetch('/api/admin/support-respond', {
+      await fetch('/api/support/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -382,7 +383,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
         )}
         
-        {/* Simplified other tabs to save space/tokens, keeping core logic as requested */}
+        {/* Simplified other tabs to save space/tokens */}
         {activeTab === 'guests' && (
             <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
                 <table className="w-full text-left">
