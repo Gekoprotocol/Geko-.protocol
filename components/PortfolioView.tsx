@@ -40,6 +40,32 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [kycStep, setKycStep] = useState<'country' | 'id_front' | 'id_back' | 'verifying'>('country');
   const [kycCountry, setKycCountry] = useState('');
   const [isKycVerified, setIsKycVerified] = useState(wallet?.kyc_status === 'approved');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ...
+  
+  const triggerFileUpload = (mode: 'camera' | 'gallery') => {
+      if (fileInputRef.current) {
+          if (mode === 'camera') {
+              fileInputRef.current.setAttribute('capture', 'environment');
+          } else {
+              fileInputRef.current.removeAttribute('capture');
+          }
+          fileInputRef.current.click();
+      }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+          // In a real app, you'd upload the file here. 
+          // For now, we simulate the step progression.
+          if (kycStep === 'id_front') {
+              setKycStep('id_back');
+          } else if (kycStep === 'id_back') {
+              handleKycSubmit();
+          }
+      }
+  };
 
   // Ledger State
   const [txs, setTxs] = useState<any[]>([]);
@@ -201,7 +227,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                         onClick={() => { setTransferDirection('trade_to_vault'); setActiveModal('transfer'); }}
                         className="bg-white/10 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
                       >
-                          Withdraw to Vault
+                          Trading to Total Balnce
                       </button>
                   </div>
               </div>
@@ -433,6 +459,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               </div>
               
               <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleFileChange} 
+                  />
                   {kycStep === 'country' && (
                       <div className="space-y-6 animate-in fade-in duration-300">
                           <div className="text-center space-y-2">
@@ -465,14 +498,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                           
                           <div className="grid grid-cols-2 gap-4">
                               <div 
-                                onClick={() => kycStep === 'id_front' ? setKycStep('id_back') : handleKycSubmit()}
+                                onClick={() => triggerFileUpload('camera')}
                                 className="aspect-square bg-gray-50 rounded-[32px] border-4 border-dashed border-gray-200 flex flex-col items-center justify-center space-y-3 hover:border-black transition-all cursor-pointer group"
                               >
                                   <Camera size={32} className="text-gray-300 group-hover:text-black" />
                                   <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Take Photo</span>
                               </div>
                               <div 
-                                onClick={() => kycStep === 'id_front' ? setKycStep('id_back') : handleKycSubmit()}
+                                onClick={() => triggerFileUpload('gallery')}
                                 className="aspect-square bg-gray-50 rounded-[32px] border-4 border-dashed border-gray-200 flex flex-col items-center justify-center space-y-3 hover:border-black transition-all cursor-pointer group"
                               >
                                   <Upload size={32} className="text-gray-300 group-hover:text-black" />

@@ -202,7 +202,7 @@ function TerminalLayout() {
                   <div className="w-10 h-10 bg-[#10B981] rounded-xl flex items-center justify-center shadow-lg shadow-[#10B981]/20">
                       <Zap size={20} className="text-black fill-black" />
                   </div>
-                  <span className="font-black italic uppercase tracking-tighter text-lg text-[#10B981]">Gecko</span>
+                  <span className="font-black italic uppercase tracking-tighter text-lg text-[#10B981]">Geko</span>
               </div>
           </div>
           <div className="flex items-center gap-3">
@@ -261,7 +261,7 @@ function TerminalLayout() {
                               <Zap size={24} className="text-black" />
                           </div>
                           <div>
-                              <div className="text-sm font-black text-white uppercase tracking-tight">Gecko Operator</div>
+                              <div className="text-sm font-black text-white uppercase tracking-tight">Geko Operator</div>
                               <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Institution Verified</div>
                           </div>
                       </div>
@@ -323,7 +323,8 @@ function SupportFAQ() {
         { q: "How to deposit?", a: "Go to Assets -> Deposit, select your coin, and send to the provided address." },
         { q: "Where is my balance?", a: "Your Spot balance is in Assets. Swap it to USDT to see it in your Trading Account." },
         { q: "Withdrawal time?", a: "Withdrawals are processed within 5-30 minutes after institutional clearance." },
-        { q: "Institutional Node?", a: "You are currently running on a high-performance Gecko Protocol node." }
+        { q: "Institutional Node?", a: "You are currently running on a high-performance Geko Protocol node." }
+
     ];
     const [open, setOpen] = useState<number | null>(null);
 
