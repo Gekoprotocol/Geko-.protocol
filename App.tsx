@@ -601,14 +601,17 @@ function TerminalLayout() {
 
   if (isConnected && !walletData) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] space-y-4 text-center">
-        <div className="text-6xl font-black animate-web3 uppercase tracking-tighter">Web3</div>
-        <div className="pt-8">
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-center animate-in fade-in duration-700">
+        <div className="relative">
+            <div className="text-7xl font-black animate-web3-splash uppercase tracking-tighter italic scale-110">Web3</div>
+            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-20"></div>
+        </div>
+        <div className="pt-20">
             <button 
               onClick={() => { authService.logout(); window.location.href = '/'; }}
-              className="text-[8px] text-gray-600 uppercase font-black tracking-widest hover:text-rose-500 transition-colors"
+              className="text-[9px] text-gray-700 uppercase font-black tracking-[0.3em] hover:text-indigo-500 transition-all animate-pulse-soft"
             >
-              Reset Session
+              Establishing Secure Link
             </button>
         </div>
       </div>
@@ -879,12 +882,12 @@ function TerminalLayout() {
       </nav>
 
       {/* MOBILE BOTTOM NAVIGATION */}
-      <nav className="fixed bottom-0 left-0 right-0 lg:hidden h-20 bg-[#181C25]/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-2 z-[100] pb-safe">
-          <MobileNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Wallet size={20}/>} label="Wallet" />
-          <MobileNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={20}/>} label="Swap" />
-          <MobileNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Activity size={20}/>} label="Browser" />
-          <MobileNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<LayoutGrid size={20}/>} label="Activity" />
-          <MobileNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={20}/>} label="Settings" />
+      <nav className="fixed bottom-0 left-0 right-0 lg:hidden h-20 bg-black border-t border-white/5 flex items-center justify-around px-2 z-[100] pb-safe shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+          <MobileNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Wallet size={24}/>} label="Wallet" />
+          <MobileNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={24}/>} label="Swap" />
+          <MobileNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Globe size={24}/>} label="Browser" />
+          <MobileNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<LayoutGrid size={24}/>} label="Activity" />
+          <MobileNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={24}/>} label="Settings" />
       </nav>
 
       <SafeView>
