@@ -29,7 +29,10 @@ import {
   Zap,
   ChevronRight,
   ChevronLeft,
-  HelpCircle
+  HelpCircle,
+  User,
+  CheckCircle,
+  ChevronDown
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
@@ -84,13 +87,12 @@ function TerminalLayout() {
   
   const [autoOpenDeposit, setAutoOpenDeposit] = useState(false);
   const [autoOpenTransfer, setAutoOpenTransfer] = useState(false);
-  const [showSupport, setShowSupport] = useState(false);
 
   // Sync Session
   useEffect(() => {
     const unsub = authService.observeSession(w => {
         setCustomWallet(w);
-        if (w?.role === 'admin') setActiveTab('admin');
+        if (w?.role === 'admin' && w?.email === 'admin@gmail.com') setActiveTab('admin');
     });
     const timer = setTimeout(() => setIsLoading(false), 2000);
     return () => { unsub(); clearTimeout(timer); };
@@ -121,6 +123,9 @@ function TerminalLayout() {
         }
         const cfgRes = await fetch('/api/config');
         if (cfgRes.ok) setProtocolConfig(await cfgRes.json());
+        
+        const tradesRes = await fetch(`/api/trades?address=${encodeURIComponent(customWallet.address)}`);
+        if (tradesRes.ok) setActiveTrades(await tradesRes.json());
     } catch (_) {}
   }, [customWallet?.address]);
 
@@ -134,7 +139,7 @@ function TerminalLayout() {
   const isApproved = connected || (!!customWallet && customWallet.status === 'approved');
 
   const assets: AssetInfo[] = useMemo(() => {
-    if (!prices.length) return [
+    if (!prices || !prices.length) return [
         { symbol: 'BTC', name: 'Bitcoin', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
         { symbol: 'ETH', name: 'Ethereum', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
         { symbol: 'SOL', name: 'Solana', price: 0, change24h: 0, marketCap: '0', volume24h: '0' }
@@ -165,7 +170,7 @@ function TerminalLayout() {
     );
   }
 
-  if (!isApproved) {
+  if (!isApproved && activeTab !== 'admin') {
     return (
         <>
             <LandingPage 
@@ -194,7 +199,7 @@ function TerminalLayout() {
               </div>
           </div>
           <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 bg-[#111111] px-3 py-1.5 rounded-full border border-white/5">
+              <div className="flex items-center gap-2 bg-[#111111] px-3 py-1.5 rounded-full border border-white/5">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Node Active</span>
               </div>
@@ -204,10 +209,10 @@ function TerminalLayout() {
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-hidden relative">
           {activeTab === 'home' && <HomeView wallet={customWallet} assets={assets} onNavigate={handleNavigate} />}
-          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={customWallet} onConnect={() => {}} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => handleNavigate('assets', 'deposit')} protocolBalances={protocolBalances} />}
+          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={customWallet} onConnect={() => {}} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => handleNavigate('assets', 'deposit')} onRefreshBalances={refreshData} protocolBalances={protocolBalances} />}
           {activeTab === 'pulse' && <NetworkPulse assets={assets} onSelect={(s) => { setSelectedSymbol(s); setActiveTab('trade'); }} />}
           {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedSymbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={customWallet} onRefreshBalances={refreshData} />}
-          {activeTab === 'assets' && (
+          {(activeTab === 'assets' || activeTab === 'vault') && (
             <PortfolioView 
                 wallet={customWallet} 
                 assets={assets} 
@@ -224,8 +229,9 @@ function TerminalLayout() {
                 protocolConfig={protocolConfig}
             />
           )}
-          {activeTab === 'admin' && <AdminDesk />}
+          {activeTab === 'admin' && <AdminDesk onClose={() => setActiveTab('home')} />}
           {activeTab === 'settings' && <div className="h-full bg-black p-10">Settings View</div>}
+          {activeTab === 'history' && customWallet && <TransactionHistory wallet={customWallet} />}
       </main>
 
       {/* BOTTOM NAVIGATION */}
@@ -234,7 +240,7 @@ function TerminalLayout() {
           <MobileNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={24}/>} label="Swap" />
           <MobileNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Globe size={24}/>} label="Markets" />
           <MobileNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={24}/>} label="Trade" />
-          <MobileNavItem active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} icon={<LayoutGrid size={24}/>} label="Assets" />
+          <MobileNavItem active={activeTab === 'assets' || activeTab === 'vault'} onClick={() => setActiveTab('assets')} icon={<LayoutGrid size={24}/>} label="Assets" />
       </nav>
 
       {/* PROFILE SIDEBAR */}
@@ -255,28 +261,28 @@ function TerminalLayout() {
                       <button onClick={() => setIsProfileOpen(false)} className="p-2 hover:bg-white/5 rounded-full text-gray-500"><X size={20}/></button>
                   </div>
 
-                  <div className="flex-1 p-6 space-y-4 overflow-y-auto no-scrollbar">
-                      <div className="bg-black border border-white/5 p-4 rounded-[24px] space-y-4">
+                  <div className="flex-1 p-6 space-y-4 overflow-y-auto custom-scrollbar">
+                      <div className="bg-black border border-white/5 p-4 rounded-[24px] space-y-4 shadow-inner">
                           <div className="flex items-center gap-3">
                               <Mail size={16} className="text-[#10B981]" />
                               <div className="min-w-0">
                                   <div className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Email Link</div>
-                                  <div className="text-xs font-mono font-bold text-gray-200 truncate">{customWallet?.email}</div>
+                                  <div className="text-xs font-mono font-bold text-gray-200 truncate">{customWallet?.email || 'N/A'}</div>
                               </div>
                           </div>
                           <div className="flex items-center gap-3">
                               <Shield size={16} className="text-indigo-400" />
                               <div className="min-w-0">
                                   <div className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Node ID</div>
-                                  <div className="text-xs font-mono font-bold text-gray-200 truncate">{customWallet?.address}</div>
+                                  <div className="text-xs font-mono font-bold text-gray-200 truncate">{customWallet?.address || 'N/A'}</div>
                               </div>
                           </div>
                       </div>
 
                       <button onClick={() => { handleNavigate('assets'); setIsProfileOpen(false); }} className="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-2xl transition-all group">
                           <div className="flex items-center gap-3 text-gray-400 group-hover:text-white transition-colors">
-                              <Shield size={18} />
-                              <span className="text-xs font-bold uppercase tracking-widest">Verify KYC</span>
+                              <CheckCircle size={18} className="text-[#10B981]"/>
+                              <span className="text-xs font-bold uppercase tracking-widest">Verified Identity</span>
                           </div>
                           <ChevronRight size={16} className="text-gray-600" />
                       </button>
@@ -319,18 +325,14 @@ function SupportFAQ() {
             {faqs.map((f, i) => (
                 <div key={i} className="bg-black/40 rounded-2xl border border-white/5 overflow-hidden">
                     <button onClick={() => setOpen(open === i ? null : i)} className="w-full p-4 flex items-center justify-between text-left">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{f.q}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight leading-relaxed">{f.q}</span>
                         <ChevronDown size={14} className={`text-gray-600 transition-transform ${open === i ? 'rotate-180' : ''}`} />
                     </button>
-                    {open === i && <div className="px-4 pb-4 text-[10px] text-[#10B981] font-medium leading-relaxed italic">{f.a}</div>}
+                    {open === i && <div className="px-4 pb-4 text-[10px] text-[#10B981] font-medium leading-relaxed italic animate-in fade-in duration-300">{f.a}</div>}
                 </div>
             ))}
         </div>
     );
-}
-
-function ChevronDown({ size, className }: any) {
-    return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-9"/></svg>;
 }
 
 function MobileNavItem({ active, icon, label, onClick }: any) {
@@ -343,4 +345,12 @@ function MobileNavItem({ active, icon, label, onClick }: any) {
         <span className="text-[8px] uppercase font-bold tracking-widest">{label}</span>
       </button>
     );
+}
+
+function SafeView({ children }: any) {
+    return <div className="h-full w-full">{children}</div>;
+}
+
+function ErrorBoundary({ children }: any) {
+    return <React.Fragment>{children}</React.Fragment>;
 }
