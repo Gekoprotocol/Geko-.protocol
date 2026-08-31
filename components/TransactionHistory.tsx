@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { WalletData } from '../types';
+import { Clock, CheckCircle, ArrowRightLeft, Zap, Shield, ChevronDown } from 'lucide-react';
 
 interface Transaction {
     id: string | number;
@@ -41,94 +41,73 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
     useEffect(() => {
         if (!wallet?.address) return;
         fetchHistory();
-        const int = setInterval(fetchHistory, 30000);
+        const int = setInterval(fetchHistory, 10000);
         return () => clearInterval(int);
     }, [wallet?.address]);
 
+    const getIcon = (type: string) => {
+        if (type === 'deposit') return <Zap size={14} className="text-emerald-500" />;
+        if (type === 'swap') return <ArrowRightLeft size={14} className="text-indigo-400" />;
+        if (type === 'trade') return <Clock size={14} className="text-amber-500" />;
+        return <Shield size={14} className="text-gray-400" />;
+    };
+
     return (
-        <div className="h-full flex flex-col p-4 lg:p-8 space-y-6">
-            <div className="flex justify-between items-center px-2">
-                <div>
-                    <h2 className="text-xl lg:text-2xl font-black italic uppercase text-indigo-400 tracking-tight">Ledger_Archive</h2>
-                    <p className="text-[9px] lg:text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Full Transaction History</p>
+        <div className="h-full bg-black flex flex-col font-sans">
+            <div className="p-6 flex justify-between items-center shrink-0 pt-12">
+                <div className="space-y-1">
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Node Ledger</h2>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Record Stream</p>
                 </div>
                 <button 
                     onClick={fetchHistory}
-                    className="px-4 py-2 bg-[#1E2329] border border-[#2B3139] rounded-xl text-[9px] lg:text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all"
+                    className="p-3 bg-[#111111] border border-white/5 rounded-2xl text-gray-500 hover:text-white transition-all"
                 >
-                    Refresh
+                    <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </button>
             </div>
 
-            <div className="flex-1 bg-[#181C25] border border-[#2B3139] rounded-[24px] lg:rounded-[32px] overflow-hidden flex flex-col shadow-2xl min-h-0">
-                <div className="overflow-y-auto custom-scrollbar flex-1">
-                    <div className="min-w-[600px] lg:min-w-0">
-                        <table className="w-full text-left border-collapse">
-                        <thead className="sticky top-0 bg-[#0B0E11] text-[9px] text-gray-500 uppercase font-black border-b border-[#2B3139] z-10">
-                            <tr>
-                                <th className="px-8 py-4">Timestamp</th>
-                                <th className="px-8 py-4">Type</th>
-                                <th className="px-8 py-4">Asset</th>
-                                <th className="px-8 py-4">Amount</th>
-                                <th className="px-8 py-4">Status</th>
-                                <th className="px-8 py-4 text-right">Reference</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#2B3139]">
-                            {txs.map((tx) => (
-                                <tr key={tx.id} className="hover:bg-[#1E2329] transition-colors group">
-                                    <td className="px-8 py-5">
-                                        <div className="text-[10px] font-mono text-gray-400">
-                                            {new Date(tx.created_at).toLocaleString()}
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded ${
-                                            tx.type === 'deposit' || tx.type === 'credit' ? 'bg-emerald-900/20 text-emerald-500' : 
-                                            tx.type === 'withdrawal' ? 'bg-amber-900/20 text-amber-500' : 'bg-indigo-900/20 text-indigo-500'
-                                        }`}>
-                                            {tx.type}
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-5 text-xs font-bold text-gray-300">
-                                        {tx.asset_symbol}
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <div className={`text-sm font-black font-mono ${
-                                            parseFloat(tx.amount as string) >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                                        }`}>
-                                            {parseFloat(tx.amount as string).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <span className="text-[9px] font-bold text-gray-500 uppercase">
-                                            {tx.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-5 text-right">
-                                        <div className="text-[8px] font-mono text-gray-600 truncate max-w-[150px] ml-auto">
-                                            {tx.tx_signature || tx.reference || '-'}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {!loading && txs.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="py-32 text-center">
-                                        <div className="space-y-2">
-                                            <div className="text-[11px] text-gray-600 font-black uppercase tracking-[0.4em]">No Records Found</div>
-                                            <p className="text-[9px] text-gray-700 uppercase tracking-widest font-bold">Protocol Ledger is currently empty</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+            <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-3 pb-32">
+                {txs.map((tx) => (
+                    <div key={tx.id} className="bg-[#111111] border border-white/5 p-5 rounded-[24px] flex items-center justify-between group hover:bg-[#1A1A1A] transition-all">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-black border border-white/5 rounded-2xl flex items-center justify-center">
+                                {getIcon(tx.type)}
+                            </div>
+                            <div className="text-left">
+                                <div className="text-sm font-bold text-white uppercase tracking-tight">
+                                    {tx.type === 'deposit' ? 'Funded' : (tx.type === 'swap' ? 'Swap' : (tx.type === 'trade' ? 'Trade' : tx.type))}
+                                </div>
+                                <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                                    {new Date(tx.created_at).toLocaleDateString()} · {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <div className={`text-sm font-bold tabular-nums ${parseFloat(tx.amount as string) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                                {parseFloat(tx.amount as string) >= 0 ? '+' : ''}{parseFloat(tx.amount as string).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-black uppercase">{tx.asset_symbol}</div>
+                        </div>
                     </div>
-                </div>
+                ))}
+
+                {!loading && txs.length === 0 && (
+                    <div className="py-32 text-center space-y-4 opacity-20">
+                        <Shield size={64} className="mx-auto" />
+                        <div className="space-y-1">
+                            <div className="text-[11px] text-white font-black uppercase tracking-[0.4em]">Ledger Clear</div>
+                            <p className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">No institutional records found</p>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
+
+function RefreshCw({ size, className }: any) {
+    return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.27L21 8"/><path d="M21 3v5h-5"/></svg>;
+}
 
 export default TransactionHistory;
