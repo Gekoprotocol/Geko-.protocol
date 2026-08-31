@@ -863,6 +863,30 @@ app.post('/api/auth/signup-confirm', async (req, res) => {
   }
 });
 
+app.post('/api/auth/wallet-login', async (req, res) => {
+  const { address } = req.body;
+  if (!address) return res.status(400).json({ error: 'Wallet address required' });
+
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const r = await pool.query('SELECT * FROM users WHERE wallet_address = $1', [address]);
+    let user = r.rows[0];
+    
+    if (!user) {
+        // Auto-create as guest
+        const newUser = await pool.query(`
+            INSERT INTO users (wallet_address, status, role, trading_balance, protocol_settlement_balance)
+            VALUES ($1, 'guest', 'user', '0', '0')
+            RETURNING *
+        `, [address]);
+        user = newUser.rows[0];
+    }
+    
+    res.json({ success: true, user: { ...user, address: user.wallet_address } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });

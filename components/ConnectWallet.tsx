@@ -47,7 +47,10 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
       } else {
         data = await universalWallet.connectSolana();
       }
-      onConnect(data);
+      
+      // Integrate with backend auth
+      const backendUser = await authService.walletLogin(data.address);
+      onConnect(backendUser);
     } catch (e: any) {
       setError(e.message || 'Connection failed');
       setConnecting(null);
