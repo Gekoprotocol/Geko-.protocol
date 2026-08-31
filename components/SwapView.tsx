@@ -88,7 +88,8 @@ export default function SwapView({
       <div className="w-full max-w-md mx-auto p-6 space-y-8 pt-12">
         
         <div className="text-center space-y-2">
-            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Gecko Swap</h2>
+            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Geko Swap</h2>
+
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Liquidity Node</p>
         </div>
 
@@ -123,7 +124,13 @@ export default function SwapView({
             {/* Switch Icon */}
             <div className="flex justify-center -my-6 relative z-10">
                 <button 
-                    onClick={() => { const t = fromAsset; setFromAsset(toAsset); setToAsset(t); }}
+                    onClick={() => { 
+                        if (fromAsset && toAsset) {
+                            const t = fromAsset; 
+                            setFromAsset(toAsset); 
+                            setToAsset(t); 
+                        }
+                    }}
                     className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-black shadow-xl border-4 border-black hover:scale-110 active:scale-95 transition-all cursor-pointer"
                 >
                     <ArrowLeftRight size={20} className="rotate-90" />
@@ -163,6 +170,16 @@ export default function SwapView({
         >
             {isSwapping ? <RefreshCw size={20} className="animate-spin" /> : (isConnected ? 'Execute Exchange' : 'Connect Node')}
         </button>
+
+        <div className="bg-indigo-900/10 border border-indigo-500/20 p-5 rounded-[32px] flex items-center gap-4">
+            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white shadow-lg">
+                <Shield size={20} />
+            </div>
+            <div className="text-left">
+                <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Geko Node Routing</div>
+                <div className="text-[8px] text-indigo-400/60 font-bold uppercase tracking-[0.2em]">Institutional Encryption Active</div>
+            </div>
+        </div>
 
         <div className="bg-[#111111] p-6 rounded-[32px] border border-white/5 space-y-4">
             <div className="flex justify-between items-center">
@@ -239,6 +256,7 @@ const AssetSelectorModal = ({ isOpen, onClose, onSelect, assets, protocolBalance
 };
 
 const SwapSymbol = ({ symbol }: { symbol: string }) => {
+    if (!symbol) return <div className="w-5 h-5 bg-gray-600 rounded-full" />;
     if (symbol === 'BTC') return <div className="w-5 h-5 bg-[#F7931A] rounded-full flex items-center justify-center text-[10px] font-bold text-white">B</div>;
     if (symbol === 'ETH') return <div className="w-5 h-5 bg-[#627EEA] rounded-full flex items-center justify-center text-[10px] font-bold text-white">Ξ</div>;
     if (symbol === 'SOL') return <div className="w-5 h-5 bg-gradient-to-br from-[#14F195] to-[#9945FF] rounded-full flex items-center justify-center text-[10px] font-bold text-black italic">S</div>;

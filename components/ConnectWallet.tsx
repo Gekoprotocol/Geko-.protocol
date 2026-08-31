@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { universalWallet } from '../services/universalWallet';
+import { authService } from '../services/authService';
 import { WalletData } from '../types';
 import { X, Search, Shield, ChevronRight } from 'lucide-react';
 
