@@ -216,7 +216,7 @@ const TradeView: React.FC<TradeViewProps> = ({
 
   return (
     <div 
-        className="flex flex-col h-full bg-[#0B0E11] text-gray-300 font-mono select-none relative"
+        className="flex flex-col h-full bg-[#0B0E11] text-gray-300 font-mono select-none relative overflow-y-auto custom-scrollbar"
     >
       {/* Global Settlement Notification */}
       {settlementNotification && (
@@ -282,17 +282,17 @@ const TradeView: React.FC<TradeViewProps> = ({
             
             {/* 3D Spinning Bitcoin Animation */}
             <div className="flex items-center gap-3 bg-amber-500/5 px-4 py-2 rounded-xl border border-amber-500/20 shadow-lg shadow-amber-500/5">
-                <div className="relative w-8 h-8 preserve-3d animate-bitcoin-spin">
+                <div className="relative w-8 h-8 animate-bitcoin-spin" style={{ transformStyle: 'preserve-3d' }}>
                     {/* Front */}
-                    <div className="absolute inset-0 bg-[#F7931A] rounded-full flex items-center justify-center border-2 border-[#E87E04] shadow-inner transform translate-z-[2px]">
+                    <div className="absolute inset-0 bg-[#F7931A] rounded-full flex items-center justify-center border-2 border-[#E87E04] shadow-inner" style={{ transform: 'translateZ(4px)' }}>
                         <span className="text-white font-bold text-lg select-none">₿</span>
                     </div>
                     {/* Back */}
-                    <div className="absolute inset-0 bg-[#F7931A] rounded-full flex items-center justify-center border-2 border-[#E87E04] shadow-inner transform translate-z-[-2px] rotate-y-180">
+                    <div className="absolute inset-0 bg-[#F7931A] rounded-full flex items-center justify-center border-2 border-[#E87E04] shadow-inner" style={{ transform: 'translateZ(-4px) rotateY(180deg)' }}>
                         <span className="text-white font-bold text-lg select-none">₿</span>
                     </div>
-                    {/* Side (Simulation) */}
-                    <div className="absolute inset-0 bg-[#E87E04] rounded-full transform rotate-x-90 translate-y-[0px]"></div>
+                    {/* Edge Simulation */}
+                    <div className="absolute inset-0 bg-[#E87E04] rounded-full" style={{ transform: 'rotateX(90deg)' }}></div>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest">Protocol</span>

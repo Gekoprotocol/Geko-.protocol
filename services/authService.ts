@@ -75,6 +75,28 @@ export const authService = {
     return walletData;
   },
 
+  walletLogin: async (address: string): Promise<WalletData> => {
+    const response = await fetch('/api/auth/wallet-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address })
+    });
+    
+    if (!response.ok) throw new Error("Wallet authentication failed");
+    const result = await response.json();
+    
+    const walletData = { 
+      ...result.user.wallet_data, 
+      address: result.user.address,
+      id: result.user.id,
+      status: result.user.status,
+      role: result.user.role
+    };
+    
+    authService.saveSession(walletData);
+    return walletData;
+  },
+
   signupRequest: async (email: string, password: string, name?: string): Promise<any> => {
     const response = await fetch('/api/auth/signup-request', {
       method: 'POST',

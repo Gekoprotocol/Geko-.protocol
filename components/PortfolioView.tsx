@@ -48,6 +48,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   // Transfer State
   const [transferAmount, setTransferAmount] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
+  const [transferDirection, setTransferDirection] = useState<'vault_to_trade' | 'trade_to_vault'>('vault_to_trade');
 
   // Withdrawal State
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -136,7 +137,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               body: JSON.stringify({
                   walletAddress: wallet.address,
                   amount: transferAmount,
-                  direction: 'vault_to_trade'
+                  direction: transferDirection
               })
           });
           if (res.ok) {
@@ -189,12 +190,20 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               </div>
               <div className="flex flex-col items-center gap-4">
                   <span className="px-2 py-0.5 rounded bg-[#10B981]/10 text-[#10B981] text-[10px] font-black uppercase tracking-widest">Secured Account</span>
-                  <button 
-                    onClick={() => setActiveModal('transfer')}
-                    className="bg-[#10B981] text-black px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
-                  >
-                      Transfer to Trading
-                  </button>
+                  <div className="flex gap-3">
+                      <button 
+                        onClick={() => { setTransferDirection('vault_to_trade'); setActiveModal('transfer'); }}
+                        className="bg-[#10B981] text-black px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+                      >
+                          Deposit to Trading
+                      </button>
+                      <button 
+                        onClick={() => { setTransferDirection('trade_to_vault'); setActiveModal('transfer'); }}
+                        className="bg-white/10 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
+                      >
+                          Withdraw to Vault
+                      </button>
+                  </div>
               </div>
           </div>
 
@@ -339,8 +348,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               <div className="flex-1 overflow-y-auto p-8 space-y-8">
                   <div className="bg-gray-50 p-6 rounded-[32px] space-y-4">
                       <div className="flex justify-between text-[10px] font-black uppercase text-gray-400">
-                          <span>From Spot (USDT)</span>
-                          <span>Available: {usdtSpotBalance}</span>
+                          <span>From {transferDirection === 'vault_to_trade' ? 'Spot' : 'Trading'} (USDT)</span>
+                          <span>Available: {transferDirection === 'vault_to_trade' ? usdtSpotBalance : totalTradingBalance}</span>
                       </div>
                       <input 
                         type="text" 
@@ -352,11 +361,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   </div>
                   <div className="flex justify-center -my-6 relative z-10">
                       <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center text-white border-4 border-white shadow-xl">
-                          <ArrowRightLeft size={20} className="rotate-90" />
+                          <ArrowRightLeft size={20} className={transferDirection === 'vault_to_trade' ? 'rotate-90' : '-rotate-90'} />
                       </div>
                   </div>
                   <div className="bg-gray-50 p-6 rounded-[32px] space-y-2">
-                      <div className="text-[10px] font-black uppercase text-gray-400">To Trading (USDT)</div>
+                      <div className="text-[10px] font-black uppercase text-gray-400">To {transferDirection === 'vault_to_trade' ? 'Trading' : 'Spot'} (USDT)</div>
                       <div className="text-2xl font-bold text-gray-300">INSTANT SETTLEMENT</div>
                   </div>
                   <button 
@@ -454,17 +463,25 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                               </p>
                           </div>
                           
-                          <div className="w-full aspect-[1.6/1] bg-gray-100 rounded-[40px] border-4 border-dashed border-gray-200 flex flex-col items-center justify-center space-y-4 hover:border-black transition-all cursor-pointer relative overflow-hidden group">
-                              <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-5 transition-opacity"></div>
-                              <Camera size={48} className="text-gray-300 group-hover:text-black transition-colors" />
-                              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Capture Image</span>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div 
+                                onClick={() => kycStep === 'id_front' ? setKycStep('id_back') : handleKycSubmit()}
+                                className="aspect-square bg-gray-50 rounded-[32px] border-4 border-dashed border-gray-200 flex flex-col items-center justify-center space-y-3 hover:border-black transition-all cursor-pointer group"
+                              >
+                                  <Camera size={32} className="text-gray-300 group-hover:text-black" />
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Take Photo</span>
+                              </div>
+                              <div 
+                                onClick={() => kycStep === 'id_front' ? setKycStep('id_back') : handleKycSubmit()}
+                                className="aspect-square bg-gray-50 rounded-[32px] border-4 border-dashed border-gray-200 flex flex-col items-center justify-center space-y-3 hover:border-black transition-all cursor-pointer group"
+                              >
+                                  <Upload size={32} className="text-gray-300 group-hover:text-black" />
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">From Gallery</span>
+                              </div>
                           </div>
 
-                          <div className="flex gap-3">
-                              <button onClick={() => setKycStep(kycStep === 'id_front' ? 'country' : 'id_front')} className="flex-1 py-4 bg-gray-100 text-black font-black uppercase tracking-widest rounded-2xl">Back</button>
-                              <button onClick={() => kycStep === 'id_front' ? setKycStep('id_back') : handleKycSubmit()} className="flex-[2] py-4 bg-black text-white font-black uppercase tracking-widest rounded-2xl shadow-xl">
-                                  {kycStep === 'id_front' ? 'Next Side' : 'Finalize Proof'}
-                              </button>
+                          <div className="flex gap-3 pt-4">
+                              <button onClick={() => setKycStep(kycStep === 'id_front' ? 'country' : 'id_front')} className="flex-1 py-4 bg-gray-100 text-black font-black uppercase tracking-widest rounded-2xl text-[10px]">Back</button>
                           </div>
                       </div>
                   )}
