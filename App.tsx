@@ -51,6 +51,7 @@ import {
   Activity,
   LogOut,
   ArrowLeftRight,
+  Globe,
   Sun,
   Moon,
   Menu,
