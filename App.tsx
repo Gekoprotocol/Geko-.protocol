@@ -1,61 +1,34 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
-import { WalletModalProvider, WalletMultiButton, useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { clusterApiUrl } from '@solana/web3.js';
 import { 
-  BitKeepWalletAdapter,
-  BitpieWalletAdapter,
-  CloverWalletAdapter,
-  Coin98WalletAdapter,
-  CoinbaseWalletAdapter,
-  FractalWalletAdapter,
-  HuobiWalletAdapter,
-  HyperPayWalletAdapter,
-  KeystoneWalletAdapter,
-  KrystalWalletAdapter,
-  LedgerWalletAdapter,
-  MathWalletAdapter,
-  NekoWalletAdapter,
-  NightlyWalletAdapter,
-  OntoWalletAdapter,
   PhantomWalletAdapter,
-  SafePalWalletAdapter,
-  SaifuWalletAdapter,
-  SalmonWalletAdapter,
-  SkyWalletAdapter,
   SolflareWalletAdapter,
-  SolongWalletAdapter,
-  SpotWalletAdapter,
-  TokenaryWalletAdapter,
-  TokenPocketWalletAdapter,
-  TorusWalletAdapter,
-  TrezorWalletAdapter,
+  CoinbaseWalletAdapter,
   TrustWalletAdapter,
-  WalletConnectWalletAdapter,
-  XDEFIWalletAdapter
+  LedgerWalletAdapter
 } from '@solana/wallet-adapter-wallets';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 import { 
-  LayoutDashboard, 
-  TrendingUp, 
   Wallet, 
-  ShieldCheck, 
-  Headset, 
-  Trophy, 
   Settings,
   RefreshCw,
   LayoutGrid,
-  Activity,
-  LogOut,
-  ArrowLeftRight,
+  TrendingUp,
   Globe,
-  Sun,
-  Moon,
+  MoreVertical,
+  LogOut,
+  Mail,
+  Shield,
   Menu,
-  X
+  X,
+  Zap,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
@@ -65,917 +38,193 @@ import HomeView from './components/HomeView';
 import TradeView from './components/TradeView';
 import { PortfolioView } from './components/PortfolioView';
 import SwapView from './components/SwapView';
-import WalletDashboard from './components/WalletDashboard';
-import GraphsView from './components/GraphsView';
-import { SupportWidget } from './components/SupportWidget';
 import { NetworkPulse } from './components/NetworkPulse';
 import AdminDesk from './components/AdminDesk';
 import TransactionHistory from './components/TransactionHistory';
 import { WalletData, AssetInfo, ActiveTrade } from './types';
-
-const API_BASE = window.location.origin;
-
-/**
- * ERROR BOUNDARY
- */
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("[CRITICAL_UI_FAILURE]", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0B0E11] text-gray-400 p-10 text-center">
-          <h1 className="text-2xl font-black text-rose-500 mb-4 uppercase">Terminal Fault Detected</h1>
-          <div className="max-w-xl bg-[#181C25] border border-rose-500/20 p-6 rounded-2xl mb-8 text-left">
-            <p className="text-xs font-mono text-rose-400 mb-4">Exception: {this.state.error?.message || "Unknown error"}</p>
-            <pre className="text-[10px] font-mono text-gray-600 overflow-auto max-h-40">{this.state.error?.stack}</pre>
-          </div>
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Please refresh the page to try again</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 /**
  * MAIN APP COMPONENT
  */
 export default function App() {
   const network = WalletAdapterNetwork.Mainnet;
-  const endpoint = useMemo(() => clusterApiUrl(network), []);
-  const wallets = useMemo(() => [
+  const endpoint = clusterApiUrl(network);
+  const wallets = [
     new PhantomWalletAdapter(),
     new SolflareWalletAdapter(),
     new CoinbaseWalletAdapter(),
     new TrustWalletAdapter(),
-    new LedgerWalletAdapter(),
-    new TorusWalletAdapter(),
-    new MathWalletAdapter(),
-    new BitKeepWalletAdapter(),
-    new BitpieWalletAdapter(),
-    new CloverWalletAdapter(),
-    new Coin98WalletAdapter(),
-    new FractalWalletAdapter(),
-    new HuobiWalletAdapter(),
-    new HyperPayWalletAdapter(),
-    new KeystoneWalletAdapter(),
-    new KrystalWalletAdapter(),
-    new NekoWalletAdapter(),
-    new NightlyWalletAdapter(),
-    new OntoWalletAdapter(),
-    new SafePalWalletAdapter(),
-    new SaifuWalletAdapter(),
-    new SalmonWalletAdapter(),
-    new SkyWalletAdapter(),
-    new SolongWalletAdapter(),
-    new SpotWalletAdapter(),
-    new TokenaryWalletAdapter(),
-    new TokenPocketWalletAdapter(),
-    new TorusWalletAdapter(),
-    new TrezorWalletAdapter(),
-    new WalletConnectWalletAdapter({ network: WalletAdapterNetwork.Mainnet, options: { projectId: 'e9057f920251e06f52e5c6a1e9444458' } }),
-    new XDEFIWalletAdapter()
-  ], []);
+    new LedgerWalletAdapter()
+  ];
 
   return (
-    <ErrorBoundary>
-        <ConnectionProvider endpoint={endpoint}>
-          <WalletProvider wallets={wallets} autoConnect>
-            <WalletModalProvider featuredWallets={10}>
-              <TerminalLayout />
-            </WalletModalProvider>
-          </WalletProvider>
-        </ConnectionProvider>
-    </ErrorBoundary>
+    <ConnectionProvider endpoint={endpoint}>
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <TerminalLayout />
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
   );
 }
 
-/**
- * TERMINAL LAYOUT
- */
 function TerminalLayout() {
-  const { publicKey, connected, disconnect } = useWallet();
-  const { setVisible } = useWalletModal();
-  
-  // Initialize tab based on existing session role
-  const initialSession = authService.getSession();
-  const [activeTab, setActiveTab] = useState(initialSession?.role === 'admin' ? 'admin' : 'home');
-  
-  const [userData, setUserData] = useState<any>(null);
-  const [vaultBalance, setVaultBalance] = useState(0);
-  const [protocolBalances, setProtocolBalances] = useState<any[]>([]);
-  const [prices, setPrices] = useState<any[]>([]);
+  const { connected, disconnect } = useWallet();
+  const [activeTab, setActiveTab] = useState<'home' | 'swap' | 'pulse' | 'trade' | 'assets' | 'admin' | 'history' | 'settings'>('home');
   const [isLoading, setIsLoading] = useState(true);
-  const [isIdentityOpen, setIsIdentityOpen] = useState(false);
-  const [autoOpenDeposit, setAutoOpenDeposit] = useState(false);
-  const [autoOpenTransfer, setAutoOpenTransfer] = useState(false);
-  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
-  const [selectedSymbol, setSelectedSymbol] = useState('BTC');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const [isDemo, setIsDemo] = useState(false);
-  const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
-  const [tradingBalance, setTradingBalance] = useState(0);
   const [customWallet, setCustomWallet] = useState<WalletData | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState('BTC');
+  const [prices, setPrices] = useState<any[]>([]);
+  const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
+  const [protocolBalances, setProtocolBalances] = useState<any[]>([]);
+  const [protocolConfig, setProtocolConfig] = useState<any>({});
 
+  // Sync Session
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
-
-  // Load Session
-  useEffect(() => {
-    const unsub = authService.observeSession(wallet => {
-        setCustomWallet(wallet);
-        // If login returns admin role, switch to admin tab
-        if (wallet?.role === 'admin') {
-            setActiveTab('admin');
-        }
-    });
-    return () => unsub();
+    const unsub = authService.observeSession(w => setCustomWallet(w));
+    const timer = setTimeout(() => setIsLoading(false), 2000);
+    return () => { unsub(); clearTimeout(timer); };
   }, []);
 
-  const activeAddress = customWallet?.address || publicKey?.toBase58();
   const isConnected = connected || !!customWallet;
   const isApproved = connected || (!!customWallet && customWallet.status === 'approved');
-  const isPending = !!customWallet && (customWallet.status === 'guest' || customWallet.status === 'pending_approval');
 
+  const assets: AssetInfo[] = prices.map(p => ({
+    symbol: p.symbol.replace('USDT', ''),
+    name: p.symbol.replace('USDT', ''),
+    price: parseFloat(p.lastPrice),
+    change24h: parseFloat(p.priceChangePercent),
+    marketCap: 'N/A',
+    volume24h: '0'
+  })).filter(a => ['BTC', 'ETH', 'SOL', 'XRP'].includes(a.symbol));
 
-  // Sync Active Trades
-  useEffect(() => {
-    if (!isApproved || !activeAddress) return;
-    const fetchTrades = async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        try {
-            const res = await fetch(`/api/user/active-trades?address=${encodeURIComponent(activeAddress)}`, {
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            if (res.ok) {
-                const data = await res.json();
-                const synced: ActiveTrade[] = (Array.isArray(data) ? data : []).map((t: any) => {
-                    if (!t) return null;
-                    const createdDate = new Date(t.created_at || Date.now());
-                    return {
-                        id: String(t.id || Math.random().toString(36).substring(7)),
-                        symbol: String(t.symbol || 'BTC'),
-                        userName: 'Local_Node',
-                        direction: String(t.direction || 'up').toLowerCase() as 'up' | 'down',
-                        amount: (t.amount || '0').toString(),
-                        entryPrice: parseFloat(t.entry_price || '0'),
-                        startTime: isNaN(createdDate.getTime()) ? Date.now() : createdDate.getTime(),
-                        duration: parseInt(t.duration || '60'),
-                        leverage: parseInt(t.leverage || '1'),
-                        status: (t.status || 'pending') as any,
-                        forceOutcome: t.force_outcome
-                    };
-                }).filter((t): t is ActiveTrade => t !== null);
-                setActiveTrades(synced);
-            }
-        } catch (e) { console.warn("Trade sync failed", e); }
-        finally { clearTimeout(timeoutId); }
-    };
-    fetchTrades();
-    const interval = setInterval(fetchTrades, 3000);
-    return () => clearInterval(interval);
-  }, [isApproved, activeAddress]);
-
-  // Sync Trading Balance and check for force_logout / approval status
-  useEffect(() => {
-    if (!isConnected || !activeAddress) return;
-    const fetchBal = async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        try {
-            const res = await fetch(`/api/user/balance?address=${encodeURIComponent(activeAddress)}&asset=USDT`, {
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            if (res.ok) {
-                const data = await res.json();
-                
-                // FORCE LOGOUT CHECK
-                if (data?.status === 'force_logout') {
-                    authService.logout();
-                    window.location.href = '/';
-                    return;
-                }
-
-                // AUTO-SYNC STATUS FROM DB
-                if (data?.status && customWallet && data.status !== customWallet.status) {
-                    console.log(`[Identity] Status Sync: ${customWallet.status} -> ${data.status}`);
-                    const updated = { ...customWallet, status: data.status };
-                    setCustomWallet(updated);
-                    authService.saveSession(updated);
-                }
-
-                setTradingBalance(isDemo ? (data?.demo_balance || 0) : (data?.trading_balance || 0));
-                setVaultBalance(data?.balance || 0);
-                if (data?.balances) {
-                    setProtocolBalances(data.balances);
-                }
-            }
-        } catch (e) { console.warn("Balance sync failed", e); }
-        finally { clearTimeout(timeoutId); }
-    };
-    fetchBal();
-    const interval = setInterval(fetchBal, 3000);
-    return () => clearInterval(interval);
-  }, [isConnected, activeAddress, isDemo, customWallet]);
-
-  const handleWalletConnect = (data: WalletData, email?: string) => {
-    setCustomWallet(data);
-    authService.saveSession(data);
-    setIsWalletModalOpen(false);
+  const handleNavigate = (t: string, action?: string) => {
+    setActiveTab(t as any);
   };
 
-  // Sync custom wallet to DB
-  useEffect(() => {
-    if (customWallet && customWallet.status === 'approved') {
-        fetch('/api/users/upsert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                wallet_address: customWallet.address,
-                wallet_data: customWallet
-            })
-        }).catch(e => console.error("Sync failed", e));
-    }
-  }, [customWallet]);
-
-  const handleForceOutcome = (tradeId: string, updates: Partial<ActiveTrade>) => {
-    setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, ...updates } : t));
-  };
-
-  const activeTradingBalance = tradingBalance;
-
-  // Map prices to AssetInfo format
-  const assets: AssetInfo[] = useMemo(() => {
-    if (!Array.isArray(prices)) return [];
-    const allowedSymbols = ['BTC', 'ETH', 'XRP', 'DOGE', 'SOL', 'USDT'];
-    return prices.map(p => {
-      if (!p || typeof p !== 'object') return null;
-      const price = parseFloat(p.lastPrice || '0');
-      const change = parseFloat(p.priceChangePercent || '0');
-      const sym = (p.symbol || 'BTCUSDT').replace('USDT', '');
-      return {
-        symbol: sym,
-        name: sym,
-        price: isNaN(price) ? 0 : price,
-        change24h: isNaN(change) ? 0 : change,
-        marketCap: 'N/A',
-        volume24h: String(p.volume || '0')
-      };
-    }).filter((a): a is AssetInfo => a !== null && allowedSymbols.includes(a.symbol));
-  }, [prices]);
-
-  const selectedAsset = useMemo(() => {
-    return assets.find(a => a.symbol === selectedSymbol) || assets[0] || { symbol: 'BTC', name: 'Bitcoin', price: 0, change24h: 0, marketCap: '0', volume24h: '0' };
-  }, [assets, selectedSymbol]);
-
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
-  const [nicknameInput, setNicknameInput] = useState('');
-
-  useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    });
-  }, []);
-
-  const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setDeferredPrompt(null);
-    }
-  };
-
-  // Fetch User Data & Balances
-  const [protocolConfig, setProtocolConfig] = useState<any>({
-    solana_deposit_address: '6HmBxJuv9f5P92am6AK18KZGkHGqbNUazYXXKhvrDviw',
-    btc_deposit_address: '',
-    eth_deposit_address: '',
-    usdt_deposit_address: ''
-  });
-
-  // Fetch Global Config
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const res = await fetch('/api/config');
-        if (res.ok) {
-          const data = await res.json();
-          setProtocolConfig(data);
-        }
-      } catch (_) {}
-    };
-    fetchConfig();
-    const interval = setInterval(fetchConfig, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 20000); // 20s safety
-    return () => clearTimeout(timer);
-  }, []);
-
-  const refreshData = useCallback(async (nickname?: string) => {
-    if (!activeAddress) {
-      setIsLoading(false);
-      return;
-    }
-    const address = activeAddress;
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      // Upsert User
-      const upsertRes = await fetch('/api/users/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, nickname }),
-        signal: controller.signal
-      });
-      
-      if (upsertRes.ok) {
-        const userJson = await upsertRes.json();
-        setUserData(userJson.user);
-
-        // SYNC STATUS
-        if (userJson.user.status && customWallet && userJson.user.status !== customWallet.status) {
-            const updated = { ...customWallet, status: userJson.user.status };
-            setCustomWallet(updated);
-            authService.saveSession(updated);
-        }
-
-        if (!userJson.user.nickname && !nickname) {
-          setIsNicknameModalOpen(true);
-        } else if (nickname) {
-          setIsNicknameModalOpen(false);
-        }
-      }
-
-      // Get Balances (request all assets)
-      const balRes = await fetch(`/api/user/balance?address=${encodeURIComponent(address)}`, {
-          signal: controller.signal
-      });
-      if (balRes.ok) {
-        const balJson = await balRes.json();
-        setVaultBalance(balJson.balance || 0);
-        setProtocolBalances(balJson.balances || []);
-        setUserData((prev: any) => ({
-          ...prev,
-          trading_balance: balJson.trading_balance,
-          demo_balance: balJson.demo_balance,
-          protocol_settlement_balance: balJson.balance
-        }));
-      }
-    } catch (err) {
-      console.warn("[Sync] Background sync check failed");
-    } finally {
-      clearTimeout(timeoutId);
-      setIsLoading(false); // Definitively stop loading
-    }
-  }, [activeAddress, customWallet]);
-
-  // Aggressive Immediate Sync on Connection
-  useEffect(() => {
-    if (isApproved && activeAddress) {
-      const address = activeAddress;
-      console.log(`[Identity] AGGRESSIVE_SYNC_TRIGGERED: ${address}`);
-      
-      const fastSync = async () => {
-        try {
-          await fetch('/api/users/upsert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wallet_address: address })
-          });
-          console.log("[Identity] Aggressive sync success");
-          refreshData();
-        } catch (e) {
-          console.error("[Identity] Aggressive sync failed", e);
-        }
-      };
-      
-      fastSync();
-    }
-  }, [isApproved, activeAddress, refreshData]);
-
-  const handleNicknameSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (nicknameInput.trim()) {
-      refreshData(nicknameInput.trim());
-    }
-  };
-
-  // Price Feed
-  useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        const res = await fetch('/api/binance/prices');
-        if (!res.ok) return;
-        const data = await res.json();
-        setPrices(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.warn("Price feed error", e);
-      }
-    };
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (isConnected && activeAddress) {
-      const address = activeAddress;
-      // Heartbeat every 15 seconds (more frequent)
-      const interval = setInterval(async () => {
-        try {
-          await fetch('/api/users/heartbeat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wallet_address: address })
-          });
-        } catch (_) {}
-      }, 15000);
-      return () => clearInterval(interval);
-    }
-  }, [isConnected, activeAddress]);
-
-  useEffect(() => {
-    if (isConnected && activeAddress) {
-      refreshData();
-      const interval = setInterval(refreshData, 10000); // 10s is plenty
-      return () => clearInterval(interval);
-    }
-  }, [isConnected, activeAddress, refreshData]);
-
-  const walletData: WalletData | null = useMemo(() => {
-    if (!activeAddress) return null;
-    try {
-        return {
-          address: String(activeAddress),
-          name: customWallet?.name || userData?.nickname,
-          nickname: userData?.nickname || customWallet?.nickname,
-          source: String(customWallet?.source || (connected ? 'Solana' : 'Unknown')),
-          trading_balance: Number(activeTradingBalance || 0),
-          isDemo: Boolean(isDemo),
-          kyc_status: customWallet?.kyc_status || 'none',
-          status: customWallet?.status || 'guest',
-          balances: Array.isArray(customWallet?.balances) ? customWallet.balances : [],
-          protocolBalances: [
-            { 
-                symbol: 'USDT', 
-                amount: String(vaultBalance || 0), 
-                valueUsd: String(vaultBalance || 0) 
-            }
-          ],
-          history: Array.isArray(customWallet?.history) ? customWallet.history : []
-        };
-    } catch (e) {
-        console.error("[Identity] Failed to construct walletData", e);
-        return null;
-    }
-  }, [activeAddress, customWallet, connected, userData, vaultBalance, activeTradingBalance, isDemo]);
-
-  if (activeTab === 'admin') {
+  if (isConnected && !customWallet) {
     return (
-      <ErrorBoundary>
-          <AdminDesk 
-            onClose={() => setActiveTab('home')} 
-            managedWallet={walletData} 
-            activeTrades={activeTrades} 
-            onForceOutcome={handleForceOutcome} 
-          />
-      </ErrorBoundary>
-    );
-  }
-
-  if (!isConnected) {
-    return (
-      <SafeView>
-        <LandingPage 
-          onLoginSuccess={handleWalletConnect} 
-          onConnectWalletClick={() => setIsWalletModalOpen(true)}
-          initialView="login"
-          assets={assets}
-          onAdminAccess={() => setActiveTab('admin')}
-        />
-        {isWalletModalOpen && (
-          <ConnectWallet onConnect={handleWalletConnect} onClose={() => setIsWalletModalOpen(false)} />
-        )}
-      </SafeView>
-    );
-  }
-
-  if (isConnected && !isApproved) {
-    return (
-        <SafeView>
-            <LandingPage 
-                onLoginSuccess={handleWalletConnect} 
-                onConnectWalletClick={() => setIsWalletModalOpen(true)}
-                initialView={isPending ? 'wait' : 'login'}
-                assets={assets}
-                onAdminAccess={() => setActiveTab('admin')}
-            />
-        </SafeView>
-    );
-  }
-
-  if (isConnected && !walletData) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-center animate-in fade-in duration-700">
-        <div className="relative">
-            <div className="text-7xl font-black animate-web3-splash uppercase tracking-tighter italic scale-110">Web3</div>
-            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-20"></div>
-        </div>
-        <div className="pt-20">
-            <button 
-              onClick={() => { authService.logout(); window.location.href = '/'; }}
-              className="text-[9px] text-gray-700 uppercase font-black tracking-[0.3em] hover:text-indigo-500 transition-all animate-pulse-soft"
-            >
-              Establishing Secure Link
-            </button>
-        </div>
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-center">
+        <div className="text-7xl font-black animate-web3-splash uppercase tracking-tighter italic">Web3</div>
       </div>
     );
   }
 
+  if (!isApproved) {
+    return (
+        <>
+            <LandingPage 
+                onLoginSuccess={(d) => setCustomWallet(d)} 
+                onConnectWalletClick={() => setIsWalletModalOpen(true)}
+            />
+            {isWalletModalOpen && <ConnectWallet onConnect={(d) => { setCustomWallet(d); setIsWalletModalOpen(false); }} onClose={() => setIsWalletModalOpen(false)} />}
+        </>
+    );
+  }
+
   return (
-    <div className={`h-screen h-[100dvh] w-screen flex flex-col overflow-hidden ${isDarkMode ? 'bg-[#0B0E11] text-[#EAECEF]' : 'bg-gray-50 text-gray-900'} font-sans`}>
+    <div className="h-screen w-screen flex flex-col bg-black text-white font-sans overflow-hidden">
       
-      {/* TOP BAR */}
-      <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 glass shrink-0 z-50 sticky top-0">
-        <div className="flex items-center gap-2 lg:gap-3">
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="lg:hidden p-2 mr-2 hover:bg-white/5 rounded-lg transition-all text-gray-400 hover:text-white"
-          >
-            <Menu size={20} />
-          </button>
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
-            <span className="text-white font-black text-[10px] italic">GK</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="font-black tracking-tighter text-base uppercase italic leading-none">GEKO</span>
-          </div>
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="ml-4 p-2 hover:bg-white/5 rounded-lg transition-all"
-          >
-            {isDarkMode ? <Sun size={14} className="text-amber-500" /> : <Moon size={14} className="text-indigo-400" />}
-          </button>
-        </div>
-
-        <div className="flex items-center gap-6">
-            <div className="hidden lg:flex items-center space-x-6">
-              {(Array.isArray(prices) ? prices : []).filter(p => p && typeof p === 'object' && p.symbol).slice(0, 2).map(p => {
-                  const price = parseFloat(p.lastPrice || '0');
-                  const change = parseFloat(p.priceChangePercent || '0');
-                  return (
-                      <div key={p.symbol} className="flex flex-col items-end">
-                          <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{p.symbol}</span>
-                          <span className={`text-xs font-mono font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                              ${price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                      </div>
-                  );
-              })}
-            </div>
-            <div className="w-px h-6 bg-white/10" />
-            <div className="flex items-center justify-center bg-indigo-600 rounded-xl px-1">
-                <WalletMultiButton className="!bg-transparent !text-white !h-10 !text-[8px] sm:!text-[10px] !font-black !uppercase !tracking-widest !rounded-xl hover:!bg-white/5 transition-all border-none shadow-none !whitespace-nowrap" />
-            </div>
-        </div>
-      </header>
-
-      {/* SIDEBAR OVERLAY */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* SIDEBAR */}
-      <aside className={`fixed top-0 left-0 h-full w-72 z-[70] bg-[#181C25] border-r border-white/5 transform transition-transform duration-300 ease-in-out lg:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full p-6">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-black text-[10px] italic">GK</span>
+      {/* TOP NAVIGATION */}
+      <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0 z-50 bg-black/80 backdrop-blur-xl">
+          <div className="flex items-center gap-4">
+              <button onClick={() => setIsProfileOpen(true)} className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-400">
+                  <Menu size={24} />
+              </button>
+              <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-[#10B981] rounded-xl flex items-center justify-center shadow-lg shadow-[#10B981]/20">
+                      <Zap size={20} className="text-black fill-black" />
+                  </div>
+                  <span className="font-black italic uppercase tracking-tighter text-lg">Gecko</span>
               </div>
-              <span className="font-black text-lg uppercase italic text-white">GEKO</span>
-            </div>
-            <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white"
-            >
-              <X size={20} />
-            </button>
           </div>
-
-          <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
-            <SidebarNavItem active={activeTab === 'home'} onClick={() => { setActiveTab('home'); setIsSidebarOpen(false); }} icon={<LayoutDashboard size={18}/>} label="Home" />
-            <SidebarNavItem active={activeTab === 'pulse'} onClick={() => { setActiveTab('pulse'); setIsSidebarOpen(false); }} icon={<Activity size={18}/>} label="Pulse" />
-            <SidebarNavItem active={activeTab === 'chart'} onClick={() => { setActiveTab('chart'); setIsSidebarOpen(false); }} icon={<TrendingUp size={18}/>} label="Chart" />
-            <SidebarNavItem active={activeTab === 'trade'} onClick={() => { setActiveTab('trade'); setIsSidebarOpen(false); }} icon={<ArrowLeftRight size={18}/>} label="Trade" />
-            <SidebarNavItem active={activeTab === 'swap'} onClick={() => { setActiveTab('swap'); setIsSidebarOpen(false); }} icon={<RefreshCw size={18}/>} label="Swap" />
-            <SidebarNavItem active={activeTab === 'vault'} onClick={() => { setActiveTab('vault'); setIsSidebarOpen(false); }} icon={<Wallet size={18}/>} label="Assets" />
-            <SidebarNavItem active={activeTab === 'history'} onClick={() => { setActiveTab('history'); setIsSidebarOpen(false); }} icon={<LayoutGrid size={18}/>} label="History" />
-            <SidebarNavItem active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }} icon={<Settings size={18}/>} label="Settings" />
-          </nav>
-
-          <div className="mt-auto pt-6 border-t border-white/5 space-y-4">
-            <button 
-                onClick={() => {
-                    authService.logout(walletData?.email);
-                    window.location.href = '/';
-                }}
-                className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl text-rose-500 hover:bg-rose-500/10 transition-all group"
-            >
-                <LogOut size={18} />
-                <span className="text-xs uppercase font-black tracking-widest">Back to Login</span>
-            </button>
-            
-            <div className="flex items-center gap-3 px-2 opacity-50">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[8px] font-mono text-gray-400 truncate">{activeAddress}</span>
-            </div>
+          <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 bg-[#111111] px-3 py-1.5 rounded-full border border-white/5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Node Active</span>
+              </div>
           </div>
-        </div>
-      </aside>
+      </header>
 
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-hidden relative">
-        <SafeView>
-            {activeTab === 'home' && (
-                <HomeView 
-                    wallet={walletData} 
-                    assets={assets} 
-                    onNavigate={(t, action) => {
-                        setActiveTab(t as any);
-                        if (action === 'deposit') setAutoOpenDeposit(true);
-                        if (action === 'transfer') setAutoOpenTransfer(true);
-                    }} 
-                />
-            )}
-            {activeTab === 'swap' && (
-                <div className="h-full bg-black">
-                    <SwapView assets={assets} isConnected={isConnected} wallet={walletData} onConnect={() => setIsWalletModalOpen(true)} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => { setActiveTab('vault'); setAutoOpenDeposit(true); }} onRefreshBalances={refreshData} depositAddress={protocolConfig.solana_deposit_address} protocolConfig={protocolConfig} protocolBalances={protocolBalances} />
-                </div>
-            )}
-            {activeTab === 'pulse' && <div className="h-full bg-black"><NetworkPulse assets={assets} onSelect={(s) => { setSelectedSymbol(s); setActiveTab('trade'); }} /></div>}
-            {activeTab === 'trade' && <TradeView assets={assets} selectedAsset={selectedAsset} selectedSymbol={selectedAsset.symbol} setSelectedSymbol={setSelectedSymbol} marketData={[]} isConnected={isConnected} onPlaceTrade={() => {}} activeTrades={activeTrades} wallet={walletData} onRefreshBalances={() => refreshData()} />}
-            {activeTab === 'assets' || activeTab === 'vault' ? (
-                <PortfolioView 
-                    wallet={walletData} 
-                    assets={assets} 
-                    depositAddress={protocolConfig.solana_deposit_address} 
-                    protocolConfig={protocolConfig} 
-                    onConnect={() => setIsWalletModalOpen(true)} 
-                    onUpdateWallet={(d) => setCustomWallet(d)} 
-                    onDisconnect={disconnect} 
-                    onRefreshBalances={refreshData} 
-                    autoOpenDeposit={autoOpenDeposit} 
-                    onOpenDepositHandled={() => setAutoOpenDeposit(false)} 
-                    autoOpenTransfer={autoOpenTransfer}
-                    onOpenTransferHandled={() => setAutoOpenTransfer(false)}
-                    protocolBalances={protocolBalances}
-                />
-            ) : null}
-            
-            {activeTab === 'admin' && <AdminDesk />}
-            {activeTab === 'history' && walletData && <TransactionHistory wallet={walletData} />}
-            
-            {activeTab === 'settings' && (
-                <div className="h-full overflow-y-auto p-6 lg:p-12 space-y-8 bg-black custom-scrollbar">
-                    <div className="max-w-4xl mx-auto space-y-12">
-                        <div className="space-y-2">
-                            <h1 className="text-4xl font-black text-gray-100 italic uppercase tracking-tighter">Settings</h1>
-                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Configure Protocol & Account Preferences</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Account Type */}
-                            <div className="bg-[#181C25] p-8 rounded-[32px] border border-white/5 space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-indigo-600/10 rounded-2xl text-indigo-400">
-                                        <Trophy size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-black text-white uppercase italic">Account Type</h3>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Toggle between Live and Demo environments</p>
-                                    </div>
-                                </div>
-                                <div className="flex bg-[#0B0E11] p-1.5 rounded-2xl border border-white/5">
-                                    <button 
-                                        onClick={() => setIsDemo(false)}
-                                        className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${!isDemo ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                                    >
-                                        Live Trading
-                                    </button>
-                                    <button 
-                                        onClick={() => setIsDemo(true)}
-                                        className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${isDemo ? 'bg-amber-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                                    >
-                                        Demo Trading
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Support Node */}
-                            <div className="bg-[#181C25] p-8 rounded-[32px] border border-white/5 space-y-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-blue-600/10 rounded-2xl text-blue-500">
-                                        <Headset size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-black text-white uppercase italic">Support Node</h3>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Institutional Assistance 24/7</p>
-                                    </div>
-                                </div>
-                                <p className="text-[11px] text-gray-400 leading-relaxed">For immediate support, please use the secure widget in the bottom right corner of your terminal.</p>
-                            </div>
-
-                            {/* Logout */}
-                            <div className="bg-rose-950/10 p-8 rounded-[32px] border border-rose-500/10 space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-rose-600/10 rounded-2xl text-rose-500">
-                                        <LogOut size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-black text-white uppercase italic">Terminate Session</h3>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase">Logout from Geko Terminal</p>
-                                    </div>
-                                </div>
-                                <button 
-                                    onClick={() => {
-                                        authService.logout(walletData?.email);
-                                        window.location.href = '/';
-                                    }}
-                                    className="w-full py-4 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all shadow-lg"
-                                >
-                                    LOG OUT TERMINAL
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="pt-8 border-t border-white/5 flex items-center justify-between opacity-50">
-                            <div className="flex items-center space-x-3">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                <div className="text-[10px] font-mono font-bold text-gray-400">Node: {activeAddress?.slice(0,24)}...</div>
-                            </div>
-                            <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Protocol V2.0.4 - Secure</div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {activeTab === 'kyc' && (
-                <PortfolioView 
-                    wallet={walletData} 
-                    assets={assets} 
-                    depositAddress={protocolConfig.solana_deposit_address} 
-                    protocolConfig={protocolConfig} 
-                    onConnect={() => setIsWalletModalOpen(true)} 
-                    onUpdateWallet={(d) => setCustomWallet(d)} 
-                    onDisconnect={disconnect} 
-                    onRefreshBalances={refreshData} 
-                    autoOpenDeposit={autoOpenDeposit} 
-                    onOpenDepositHandled={() => setAutoOpenDeposit(false)} 
-                    autoOpenTransfer={autoOpenTransfer}
-                    onOpenTransferHandled={() => setAutoOpenTransfer(false)}
-                    protocolBalances={protocolBalances}
-                />
-            )}
-            {activeTab === 'leaderboard' && <div className="p-20 text-center">
-                <h2 className="text-3xl font-black uppercase italic tracking-tighter">Global Rankings</h2>
-                <p className="text-gray-500">Leaderboard data streaming shortly...</p>
-              </div>}
-        </SafeView>
+          {activeTab === 'home' && <HomeView wallet={customWallet} assets={assets} onNavigate={handleNavigate} />}
+          {activeTab === 'swap' && <SwapView assets={assets} isConnected={isConnected} wallet={customWallet} onConnect={() => {}} onSignUp={() => {}} onSwap={() => {}} onDeposit={() => {}} protocolBalances={protocolBalances} />}
+          {activeTab === 'pulse' && <NetworkPulse assets={assets} onSelect={(s) => { setSelectedSymbol(s); setActiveTab('trade'); }} />}
+          {activeTab === 'trade' && <TradeView wallet={customWallet} symbol={selectedSymbol} onSymbolChange={setSelectedSymbol} activeTrades={activeTrades} assets={assets} />}
+          {activeTab === 'assets' && <PortfolioView wallet={customWallet} assets={assets} protocolBalances={protocolBalances} depositAddress="" onConnect={() => {}} onUpdateWallet={setCustomWallet} onDisconnect={() => {}} onRefreshBalances={() => {}} />}
       </main>
 
-      {/* BOTTOM NAVIGATION (Desktop only) */}
-      <nav className="hidden lg:flex h-20 border-t border-white/5 bg-[#181C25]/80 backdrop-blur-xl items-center justify-center px-4 gap-8 z-50">
-          <BottomNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={18}/>} label="Home" />
-          <BottomNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Activity size={18}/>} label="Pulse" />
-          <BottomNavItem active={activeTab === 'chart'} onClick={() => setActiveTab('chart')} icon={<TrendingUp size={18}/>} label="Chart" />
-          <BottomNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<ArrowLeftRight size={18}/>} label="Trade" />
-          <BottomNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={18}/>} label="Swap" />
-          <BottomNavItem active={activeTab === 'vault'} onClick={() => setActiveTab('vault')} icon={<Wallet size={18}/>} label="Assets" />
-          <BottomNavItem active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<LayoutGrid size={18}/>} label="History" />
-          <BottomNavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={18}/>} label="Settings" />
-      </nav>
-
-      {/* MOBILE BOTTOM NAVIGATION */}
-      <nav className="fixed bottom-0 left-0 right-0 lg:hidden h-20 bg-black border-t border-white/5 flex items-center justify-around px-2 z-[100] pb-safe shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+      {/* BOTTOM NAVIGATION */}
+      <nav className="fixed bottom-0 left-0 right-0 h-20 bg-black border-t border-white/5 flex items-center justify-around px-2 z-[100] pb-safe shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
           <MobileNavItem active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Wallet size={24}/>} label="Home" />
           <MobileNavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon={<RefreshCw size={24}/>} label="Swap" />
           <MobileNavItem active={activeTab === 'pulse'} onClick={() => setActiveTab('pulse')} icon={<Globe size={24}/>} label="Markets" />
           <MobileNavItem active={activeTab === 'trade'} onClick={() => setActiveTab('trade')} icon={<TrendingUp size={24}/>} label="Trade" />
-          <MobileNavItem active={activeTab === 'assets' || activeTab === 'vault'} onClick={() => setActiveTab('assets')} icon={<LayoutGrid size={24}/>} label="Assets" />
+          <MobileNavItem active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} icon={<LayoutGrid size={24}/>} label="Assets" />
       </nav>
 
-      <SafeView>
-        <SupportWidget wallet={walletData} />
-      </SafeView>
+      {/* PROFILE SIDEBAR */}
+      {isProfileOpen && (
+          <div className="fixed inset-0 z-[1000] flex">
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsProfileOpen(false)} />
+              <aside className="relative w-80 bg-[#0A0A0A] h-full border-r border-white/5 shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
+                  <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-[#10B981] rounded-2xl flex items-center justify-center">
+                              <User size={24} className="text-black" />
+                          </div>
+                          <div>
+                              <div className="text-sm font-black text-white uppercase tracking-tight">Operator Profile</div>
+                              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Institution Verified</div>
+                          </div>
+                      </div>
+                      <button onClick={() => setIsProfileOpen(false)} className="p-2 hover:bg-white/5 rounded-full text-gray-500"><X size={20}/></button>
+                  </div>
 
-      {isIdentityOpen && walletData && (
-          <WalletDashboard wallet={walletData} onClose={() => setIsIdentityOpen(false)} onDisconnect={disconnect} />
-      )}
+                  <div className="flex-1 p-6 space-y-4">
+                      <div className="bg-black border border-white/5 p-4 rounded-[24px] space-y-4">
+                          <div className="flex items-center gap-3">
+                              <Mail size={16} className="text-[#10B981]" />
+                              <div className="min-w-0">
+                                  <div className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Email Link</div>
+                                  <div className="text-xs font-mono font-bold text-gray-200 truncate">{customWallet?.email}</div>
+                              </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                              <Shield size={16} className="text-indigo-400" />
+                              <div className="min-w-0">
+                                  <div className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Node ID</div>
+                                  <div className="text-xs font-mono font-bold text-gray-200 truncate">{customWallet?.address}</div>
+                              </div>
+                          </div>
+                      </div>
 
-      {isNicknameModalOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-[#181C25] border border-[#2B3139] rounded-[40px] max-w-md w-full p-10 shadow-2xl relative">
-            <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
-            <div className="text-center space-y-6">
-              <div className="w-20 h-20 bg-indigo-600/20 rounded-3xl flex items-center justify-center mx-auto border border-indigo-500/30">
-                <ShieldCheck size={40} className="text-indigo-400" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-black text-white italic uppercase tracking-tight">Identity Uplink</h2>
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-[0.2em]">Protocol Entry Authorization Required</p>
-              </div>
-              <form onSubmit={handleNicknameSubmit} className="space-y-4 text-left">
-                <div className="space-y-2">
-                  <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Establish Protocol Nickname</label>
-                  <input 
-                    type="text" 
-                    required 
-                    value={nicknameInput}
-                    onChange={(e) => setNicknameInput(e.target.value)}
-                    placeholder="e.g. ALPHA_TRADER"
-                    className="w-full bg-[#0B0E11] border border-[#2B3139] focus:border-indigo-500 rounded-2xl p-5 text-base font-mono font-bold text-gray-100 outline-none transition-all shadow-inner"
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase italic tracking-[0.2em] rounded-2xl shadow-xl transition-all"
-                >
-                  Finalize Authorization
-                </button>
-              </form>
-              <div className="pt-4 border-t border-white/5">
-                 <p className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Connected Wallet: {activeAddress?.slice(0,16)}...</p>
-              </div>
-            </div>
+                      <button onClick={() => handleNavigate('assets')} className="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-2xl transition-all group">
+                          <div className="flex items-center gap-3 text-gray-400 group-hover:text-white transition-colors">
+                              <Shield size={18} />
+                              <span className="text-xs font-bold uppercase tracking-widest">Verify KYC</span>
+                          </div>
+                          <ChevronRight size={16} className="text-gray-600" />
+                      </button>
+                  </div>
+
+                  <div className="p-6 border-t border-white/5">
+                      <button 
+                        onClick={() => { authService.logout(); window.location.href = '/'; }}
+                        className="w-full flex items-center gap-4 p-4 bg-rose-950/20 text-rose-500 rounded-[24px] hover:bg-rose-900/30 transition-all font-black uppercase italic tracking-widest text-xs"
+                      >
+                          <LogOut size={18} />
+                          <span>Back to Login</span>
+                      </button>
+                  </div>
+              </aside>
           </div>
-        </div>
       )}
+
     </div>
-  );
-}
-
-function SafeView({ children }: { children: React.ReactNode }) {
-    return (
-        <ErrorBoundary>
-            {children}
-        </ErrorBoundary>
-    );
-}
-
-function BottomNavItem({ active, icon, label, onClick }: any) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-1 px-6 py-2 rounded-2xl transition-all duration-300 group ${active ? 'text-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}
-    >
-      <div className={`${active ? 'text-indigo-500' : 'text-gray-600 group-hover:text-indigo-400'} transition-colors`}>{icon}</div>
-      <span className="text-[10px] uppercase font-black tracking-widest">{label}</span>
-      {active && <div className="w-1 h-1 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]"></div>}
-    </button>
-  );
-}
-
-function SidebarNavItem({ active, icon, label, onClick }: any) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl transition-all duration-300 group ${active ? 'bg-indigo-600 text-white font-black shadow-xl shadow-indigo-600/20' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
-    >
-      <div className={`${active ? 'text-white' : 'text-gray-600 group-hover:text-indigo-400'} transition-colors`}>{icon}</div>
-      <span className="text-xs uppercase font-black tracking-widest">{label}</span>
-      {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_white]"></div>}
-    </button>
   );
 }
 
@@ -989,15 +238,4 @@ function MobileNavItem({ active, icon, label, onClick }: any) {
         <span className="text-[8px] uppercase font-bold tracking-widest">{label}</span>
       </button>
     );
-}
-
-function BalanceWidget({ label, value, color }: any) {
-  return (
-    <div className="flex flex-col group cursor-default min-w-[120px]">
-      <span className="text-[9px] uppercase font-black text-gray-500 tracking-[0.2em] mb-0.5 group-hover:text-gray-400 transition-colors whitespace-nowrap">{label}</span>
-      <span className={`text-lg lg:text-xl font-mono font-bold tracking-tighter ${color} drop-shadow-sm tabular-nums`}>
-        ${parseFloat(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-      </span>
-    </div>
-  );
 }
