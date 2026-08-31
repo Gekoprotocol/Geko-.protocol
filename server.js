@@ -1239,21 +1239,12 @@ app.get('/api/user/transactions', async (req, res) => {
 });
 
 app.get('/api/user/balance', async (req, res) => {
-  const { address, asset } = req.query;
+  const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const userRes = await pool.query('SELECT * FROM users WHERE wallet_address = $1', [address]);
     const user = userRes.rows[0] || { trading_balance: '0', protocol_settlement_balance: '0', demo_balance: '100000', status: 'guest', kyc_status: 'none' };
-
-    if (asset === 'USDT') {
-      return res.json({ 
-        wallet_address: address, asset: 'USDT', status: user.status, kyc_status: user.kyc_status,
-        balance: parseFloat(user.protocol_settlement_balance || 0),
-        trading_balance: parseFloat(user.trading_balance || 0),
-        demo_balance: parseFloat(user.demo_balance || 100000)
-      });
-    }
 
     const r = await pool.query(`
         SELECT asset_symbol as asset, SUM(amount) as balance 
@@ -1263,10 +1254,15 @@ app.get('/api/user/balance', async (req, res) => {
     `, [address]);
     
     const balances = r.rows.map(row => ({ ...row, balance: parseFloat(row.balance) }));
+    
+    // Ensure USDT from protocol_settlement_balance is included
     const usdtIdx = balances.findIndex(b => b.asset === 'USDT');
     const usdtBal = parseFloat(user.protocol_settlement_balance || 0);
-    if (usdtIdx >= 0) balances[usdtIdx].balance = usdtBal;
-    else balances.push({ asset: 'USDT', balance: usdtBal });
+    if (usdtIdx >= 0) {
+        balances[usdtIdx].balance = usdtBal;
+    } else {
+        balances.push({ asset: 'USDT', balance: usdtBal });
+    }
 
     return res.json({ 
         wallet_address: address, 
@@ -1275,10 +1271,80 @@ app.get('/api/user/balance', async (req, res) => {
         kyc_status: user.kyc_status, 
         trading_balance: parseFloat(user.trading_balance || 0), 
         demo_balance: parseFloat(user.demo_balance || 100000),
-        balance: usdtBal, // Main USDT protocol balance
+        protocol_settlement_balance: usdtBal,
         user: user 
     });
   } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/swap-to-trading', async (req, res) => {
+  const { address, from, to, amount, targetAmount } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const amt = parseFloat(amount);
+    const tAmt = parseFloat(targetAmount);
+    
+    // Deduct 'from' asset from transactions (spot)
+    await recordTransaction({
+        wallet_address: address,
+        asset_symbol: from.toUpperCase(),
+        amount: -amt,
+        type: 'swap',
+        reference: `swap_to_trading_out_${from}_to_${to}`,
+        status: 'completed'
+    });
+
+    // Credit 'to' asset (USDT) to trading_balance
+    if (to.toUpperCase() === 'USDT') {
+        await pool.query(`
+            UPDATE users SET 
+                trading_balance = (trading_balance::numeric + $1)::text 
+            WHERE wallet_address = $2
+        `, [tAmt, address]);
+    }
+
+    await recordTransaction({
+        wallet_address: address,
+        asset_symbol: to.toUpperCase(),
+        amount: tAmt,
+        type: 'swap',
+        reference: `swap_to_trading_in_${to}_from_${from}`,
+        status: 'completed'
+    });
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/swap-internal', async (req, res) => {
+  const { address, from, to, amount, targetAmount } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const amt = parseFloat(amount);
+    const tAmt = parseFloat(targetAmount);
+
+    // Deduct 'from' asset
+    await recordTransaction({
+        wallet_address: address,
+        asset_symbol: from.toUpperCase(),
+        amount: -amt,
+        type: 'swap',
+        reference: `swap_internal_out_${from}_to_${to}`,
+        status: 'completed'
+    });
+
+    // Credit 'to' asset
+    await recordTransaction({
+        wallet_address: address,
+        asset_symbol: to.toUpperCase(),
+        amount: tAmt,
+        type: 'swap',
+        reference: `swap_internal_in_${to}_from_${from}`,
+        status: 'completed'
+    });
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Trades ───────────────────────────────────────────────────────────────

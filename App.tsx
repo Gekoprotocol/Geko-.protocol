@@ -115,7 +115,7 @@ function TerminalLayout() {
   const refreshData = useCallback(async () => {
     if (!customWallet?.address) return;
     try {
-        const res = await fetch(`/api/user/balance?address=${encodeURIComponent(customWallet.address)}&asset=USDT`);
+        const res = await fetch(`/api/user/balance?address=${encodeURIComponent(customWallet.address)}`);
         if (res.ok) {
             const data = await res.json();
             setCustomWallet(prev => prev ? { ...prev, trading_balance: data.trading_balance, status: data.status } : null);

@@ -206,10 +206,10 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     try {
       const [u, t, w, k, s, st, cfg] = await Promise.all([
         fetch('/api/admin/users').then(r => r.json()).catch(() => []),
-        fetch('/api/admin/trades').then(r => r.json()).catch(() => []),
-        fetch('/api/admin/withdrawals').then(r => r.json()).catch(() => []),
-        fetch('/api/admin/kyc-list').then(r => r.json()).catch(() => []),
-        fetch('/api/admin/support-tickets').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/active-trades').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/withdrawal-requests').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/kyc/submissions').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/support/tickets').then(r => r.json()).catch(() => []),
         fetch('/api/admin/status').then(r => r.json()).catch(() => null),
         fetch('/api/config').then(r => r.json()).catch(() => null)
       ]);
@@ -237,10 +237,10 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const handleSaveBalance = async (user: any, balances: any) => {
     setSavingId(user.id.toString());
     try {
-      await fetch('/api/admin/update-balance', {
+      await fetch('/api/admin/users/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, ...balances })
+        body: JSON.stringify({ id: user.id, ...balances })
       });
       setSavedId(user.id.toString());
       setTimeout(() => setSavedId(null), 3000);
@@ -258,6 +258,28 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         });
         fetchData();
     } catch (e) { console.error('Credit failed', e); }
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+      try {
+          await fetch('/api/admin/users/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: userId })
+          });
+          fetchData();
+      } catch (e) { console.error('Delete failed', e); }
+  };
+
+  const handleLogoutUser = async (userId: number) => {
+      try {
+          await fetch('/api/admin/users/logout', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: userId })
+          });
+          fetchData();
+      } catch (e) { console.error('Logout failed', e); }
   };
 
   const handleApproveUser = async (userId: number) => {
@@ -373,8 +395,8 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 key={user.id}
                 user={user}
                 onSave={handleSaveBalance}
-                onDelete={() => {}}
-                onLogoutUser={() => {}}
+                onDelete={handleDeleteUser}
+                onLogoutUser={handleLogoutUser}
                 onCreditBalance={handleCreditBalance}
                 savingId={savingId}
                 savedId={savedId}
