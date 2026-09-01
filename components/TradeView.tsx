@@ -160,14 +160,14 @@ const TradeView: React.FC<TradeViewProps> = ({
           }).catch(() => {});
         }
 
-        const netPnl = isWin ? (pnl - parseFloat(trade.amount)) : parseFloat(trade.amount);
-        setSettlementNotification({ status: isWin ? 'won' : 'lost', amount: netPnl.toFixed(2) });
+        const displayAmount = isWin ? pnl : parseFloat(trade.amount);
+        setSettlementNotification({ status: isWin ? 'won' : 'lost', amount: displayAmount.toFixed(2) });
         setShowResultModal(true);
 
         const settledTrade: ActiveTrade = {
           ...trade,
           status: isWin ? 'won' : 'lost',
-          pnl: isWin ? (pnl - parseFloat(trade.amount)) : -parseFloat(trade.amount),
+          pnl: isWin ? pnl : -parseFloat(trade.amount),
           settledAt: now
         };
         setLocalSettledTrades(prev => [settledTrade, ...prev].slice(0, 10));

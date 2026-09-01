@@ -437,59 +437,73 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         )}
 
         {activeTab === 'intercept' && (
-            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-black text-[9px] text-gray-500 uppercase font-black">
-                        <tr><th className="px-8 py-4">Session</th><th className="px-8 py-4">Trade</th><th className="px-8 py-4 text-right">Intervention</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#2B3139]">
-                        {realUserTrades.map(tx => (
-                            <tr key={tx.id} className="hover:bg-white/5 transition-colors">
-                                <td className="px-8 py-6">
-                                    <div className="text-xs text-indigo-400 font-mono font-bold">
-                                        {(tx.wallet_address || 'UNKNOWN').slice(0,12)}...
-                                    </div>
-                                    <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-1">
-                                        {tx.userName || 'Institutional Operator'}
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6">
-                                    <div className="flex flex-col">
-                                        <div className="font-black text-white text-sm">
-                                            ${parseFloat(tx.amount).toLocaleString()} {tx.symbol}
-                                        </div>
-                                        <div className={`text-[9px] font-black uppercase tracking-widest ${tx.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                            {tx.direction === 'up' ? 'Long / Call' : 'Short / Put'}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-8 py-6 text-right space-x-2">
-                                    <button 
-                                        onClick={() => handleForceOutcome(tx.id, 'win')} 
-                                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${tx.force_outcome === 'win' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-black border border-emerald-900/30 text-emerald-900 hover:bg-emerald-950'}`}
-                                    >
-                                        Grant Win
-                                    </button>
-                                    <button 
-                                        onClick={() => handleForceOutcome(tx.id, 'loss')} 
-                                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${tx.force_outcome === 'loss' ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20' : 'bg-black border border-rose-900/30 text-rose-900 hover:bg-rose-950'}`}
-                                    >
-                                        Grant Loss
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                        {realUserTrades.length === 0 && (
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden flex flex-col h-full max-h-[70vh]">
+                <div className="overflow-x-auto overflow-y-auto custom-scrollbar flex-1">
+                    <table className="w-full text-left border-separate border-spacing-0">
+                        <thead className="bg-black text-[9px] text-gray-500 uppercase font-black sticky top-0 z-10">
                             <tr>
-                                <td colSpan={3} className="px-8 py-20 text-center">
-                                    <div className="text-gray-600 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
-                                        Waiting for Node activity...
-                                    </div>
-                                </td>
+                                <th className="px-8 py-6 border-b border-[#2B3139]">Session / Node</th>
+                                <th className="px-8 py-6 border-b border-[#2B3139]">Active Trade Detail</th>
+                                <th className="px-8 py-6 border-b border-[#2B3139] text-right">Intervention</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-[#2B3139]">
+                            {realUserTrades.map(tx => (
+                                <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
+                                    <td className="px-8 py-8">
+                                        <div className="text-xs text-indigo-400 font-mono font-bold group-hover:text-indigo-300 transition-colors">
+                                            {(tx.wallet_address || 'UNKNOWN').slice(0,18)}...
+                                        </div>
+                                        <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-2 flex items-center gap-2">
+                                            <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                            {tx.userName || 'Institutional Operator'}
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-8">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="font-black text-white text-base tracking-tight">
+                                                ${parseFloat(tx.amount).toLocaleString()} {tx.symbol}
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${tx.direction === 'up' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                                    {tx.direction === 'up' ? 'Long / Call' : 'Short / Put'}
+                                                </div>
+                                                <div className="text-[9px] text-gray-600 font-bold uppercase">Lev: {tx.leverage}x</div>
+                                                <div className="text-[9px] text-gray-600 font-bold uppercase">Dur: {tx.duration}s</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-8 text-right space-x-3">
+                                        <button 
+                                            onClick={() => handleForceOutcome(tx.id, 'win')} 
+                                            className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${tx.force_outcome === 'win' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/40' : 'bg-black border border-emerald-900/30 text-emerald-900 hover:bg-emerald-900 hover:text-white'}`}
+                                        >
+                                            Grant Win
+                                        </button>
+                                        <button 
+                                            onClick={() => handleForceOutcome(tx.id, 'loss')} 
+                                            className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${tx.force_outcome === 'loss' ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/40' : 'bg-black border border-rose-900/30 text-rose-900 hover:bg-rose-900 hover:text-white'}`}
+                                        >
+                                            Grant Loss
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {realUserTrades.length === 0 && (
+                                <tr>
+                                    <td colSpan={3} className="px-8 py-32 text-center">
+                                        <div className="space-y-4">
+                                            <div className="text-gray-700 text-4xl font-black italic uppercase tracking-tighter opacity-20">No Active Data</div>
+                                            <div className="text-gray-600 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
+                                                Waiting for Node activity...
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         )}
 
