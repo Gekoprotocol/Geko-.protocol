@@ -92,12 +92,12 @@ body {
   transform: rotateY(180deg);
 }
 
-.translate-z-\[2px\] {
-  transform: translateZ(2px);
+.translate-z-\[5px\] {
+  transform: translateZ(5px);
 }
 
-.translate-z-\[-2px\] {
-  transform: translateZ(-2px);
+.translate-z-\[-5px\] {
+  transform: translateZ(-5px);
 }
 
 @keyframes bitcoin-spin {
@@ -108,3 +108,28 @@ body {
 .animate-bitcoin-spin {
   animation: bitcoin-spin 3s linear infinite;
 }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes zoom-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-in {
+  animation-duration: 0.3s;
+  animation-fill-mode: forwards;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-in { animation-name: fade-in; }
+.slide-in-from-bottom { animation-name: slide-in-from-bottom; }
+.zoom-in { animation-name: zoom-in; }

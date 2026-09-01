@@ -256,17 +256,35 @@ const TradeView: React.FC<TradeViewProps> = ({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => setSelectedDirection('up')} className={`py-3 rounded-[20px] font-black uppercase text-[10px] transition-all active:scale-95 ${selectedDirection === 'up' ? 'bg-emerald-500 text-black' : 'bg-emerald-900/30 text-emerald-500 border border-emerald-500/20'}`}>Long ↑</button>
-                    <button onClick={() => setSelectedDirection('down')} className={`py-3 rounded-[20px] font-black uppercase text-[10px] transition-all active:scale-95 ${selectedDirection === 'down' ? 'bg-rose-500 text-white' : 'bg-rose-900/30 text-rose-500 border border-rose-500/20'}`}>Short ↓</button>
+                <div className="space-y-3">
+                    <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Duration</span><span className="text-indigo-400">{duration}s</span></div>
+                    <div className="grid grid-cols-3 gap-2">
+                        {[15, 30, 60, 120, 300].map(d => (
+                            <button key={d} onClick={() => setDuration(d)} className={`py-2 rounded-xl text-[9px] font-black border transition-all ${duration === d ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black border-white/5 text-gray-500'}`}>{d}s</button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Leverage</span><span className="text-[#10B981]">{leverage}x</span></div>
+                    <div className="grid grid-cols-3 gap-2">
+                        {[10, 20, 50, 100].map(l => (
+                            <button key={l} onClick={() => setLeverage(l)} className={`py-2 rounded-xl text-[9px] font-black border transition-all ${leverage === l ? 'bg-[#10B981] border-[#10B981] text-black' : 'bg-black border-white/5 text-gray-500'}`}>{l}x</button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                    <button onClick={() => setSelectedDirection('up')} className={`py-3 rounded-[20px] font-black uppercase text-[10px] transition-all active:scale-95 ${selectedDirection === 'up' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-emerald-900/30 text-emerald-500 border border-emerald-500/20'}`}>Long ↑</button>
+                    <button onClick={() => setSelectedDirection('down')} className={`py-3 rounded-[20px] font-black uppercase text-[10px] transition-all active:scale-95 ${selectedDirection === 'down' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-rose-900/30 text-rose-500 border border-rose-500/20'}`}>Short ↓</button>
                 </div>
                 
                 <button 
                     onClick={() => executeTrade()} 
                     disabled={!canTrade || !selectedDirection} 
-                    className={`w-full py-4 rounded-[20px] font-black uppercase text-[10px] tracking-[0.2em] transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 text-white shadow-2xl animate-pulse' : 'bg-gray-800 text-gray-600'}`}
+                    className={`w-full py-4 rounded-[20px] font-black uppercase text-[10px] tracking-[0.2em] transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 text-white shadow-2xl animate-pulse' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
                 >
-                    Start Trade
+                    Execute Trade
                 </button>
 
                 <div className="bg-[#111111] p-4 rounded-2xl border border-white/5 space-y-2">
