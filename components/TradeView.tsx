@@ -187,9 +187,9 @@ const TradeView: React.FC<TradeViewProps> = ({
                   </div>
                   <div className="space-y-2">
                       <h2 className={`text-4xl font-black uppercase italic tracking-tighter ${settlementNotification.status === 'won' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {settlementNotification.status === 'won' ? 'Geko Win' : 'Geko Loss'}
+                          {settlementNotification.status === 'won' ? 'Profit Confirmed' : 'Node Loss'}
                       </h2>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.4em]">Protocol Confirmed</p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.4em]">Institutional Settlement</p>
                   </div>
                   <div className="text-6xl font-black text-white tracking-tighter">
                       {settlementNotification.status === 'won' ? '+' : '-'}${settlementNotification.amount}
