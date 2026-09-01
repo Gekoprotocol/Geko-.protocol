@@ -255,7 +255,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             </div>
         </div>
 
-        <div className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl overflow-y-auto pb-48 custom-scrollbar`}>
+        <div className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl overflow-y-auto h-full pb-40 custom-scrollbar`}>
             <div className="p-4 lg:p-5 space-y-4 lg:space-y-6 flex-1 flex flex-col min-h-0">
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="text-[8px] text-[#10B981] font-black uppercase mb-1">{wallet?.isDemo ? 'Demo Account' : 'Institutional Terminal'}</div>
