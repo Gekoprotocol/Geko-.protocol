@@ -161,8 +161,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                  walletAddress: wallet.address,
-                  amount: transferAmount,
+                  walletAddress: wallet.address || (wallet as any).wallet_address,
+                  amount: String(transferAmount),
                   direction: transferDirection
               })
           });
@@ -210,25 +210,37 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           
           {/* Main Balance Card */}
           <div className="text-center space-y-4 py-4">
-              <div className="text-sm font-medium text-gray-500 uppercase tracking-[0.2em]">Total Balance</div>
+              <div className="text-sm font-medium text-gray-500 uppercase tracking-[0.2em]">Institutional Value</div>
               <div className="text-6xl font-bold tracking-tight text-white">
                   ${(totalTradingBalance + totalSpotValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               <div className="flex flex-col items-center gap-4">
-                  <span className="px-2 py-0.5 rounded bg-[#10B981]/10 text-[#10B981] text-[10px] font-black uppercase tracking-widest">Secured Account</span>
-                  <div className="flex gap-3">
-                      <button 
-                        onClick={() => { setTransferDirection('vault_to_trade'); setActiveModal('transfer'); }}
-                        className="bg-[#10B981] text-black px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
-                      >
-                          Deposit to Trading
-                      </button>
-                      <button 
-                        onClick={() => { setTransferDirection('trade_to_vault'); setActiveModal('transfer'); }}
-                        className="bg-white/10 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
-                      >
-                          Trading to Total Balnce
-                      </button>
+                  <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest">Geko Node Settlement</span>
+                  
+                  <div className="w-full bg-[#111111] border border-white/5 p-4 rounded-[28px] space-y-3">
+                      <div className="flex justify-between items-center px-2">
+                          <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Trading Account</span>
+                          <span className="text-sm font-mono font-bold text-[#10B981]">${totalTradingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center px-2">
+                          <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Spot Account</span>
+                          <span className="text-sm font-mono font-bold text-indigo-400">${totalSpotValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="h-px bg-white/5 mx-2"></div>
+                      <div className="flex gap-2 pt-1">
+                          <button 
+                            onClick={() => { setTransferDirection('vault_to_trade'); setActiveModal('transfer'); }}
+                            className="flex-1 bg-white text-black py-3 rounded-2xl text-[9px] font-black uppercase tracking-tighter hover:bg-gray-200 transition-all active:scale-95"
+                          >
+                              Deposit to Trading
+                          </button>
+                          <button 
+                            onClick={() => { setTransferDirection('trade_to_vault'); setActiveModal('transfer'); }}
+                            className="flex-1 bg-black border border-white/10 text-white py-3 rounded-2xl text-[9px] font-black uppercase tracking-tighter hover:bg-white/5 transition-all active:scale-95"
+                          >
+                              Withdraw to Spot
+                          </button>
+                      </div>
                   </div>
               </div>
           </div>

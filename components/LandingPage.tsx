@@ -19,11 +19,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   initialView = 'login',
   assets = [],
 }) => {
-  const [view, setView] = useState<'login' | 'signup' | 'wait'>(initialView);
+  const [view, setView] = useState<'login' | 'signup' | 'wait' | 'forgot'>(initialView);
   const [signupStep, setSignupStep] = useState<'initial' | 'verify'>('initial');
 
   useEffect(() => {
-    if (initialView) setView(initialView);
+    if (initialView) setView(initialView as any);
   }, [initialView]);
 
   const [email, setEmail] = useState('');
@@ -42,7 +42,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     setIsLoading(true);
 
     try {
-      if (view === 'signup') {
+      if (view === 'forgot') {
+        await authService.forgotPassword(email);
+        setMsg('Password recovery request sent to admin.');
+        setTimeout(() => setView('login'), 3000);
+      } else if (view === 'signup') {
         if (signupStep === 'initial') {
             if (password !== confirmPassword) throw new Error('Passwords do not match');
             const res = await authService.signupRequest(email, password, name);
@@ -113,7 +117,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             
             <form onSubmit={handleAuth} className="space-y-6">
                 <div className="space-y-4">
-                    {view === 'login' || signupStep === 'initial' ? (
+                    {view === 'forgot' ? (
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Account Email</label>
+                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-black border border-white/5 focus:border-[#10B981] rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all shadow-inner" />
+                            <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest mt-2 px-1">We'll notify the admin to recover your access.</p>
+                        </div>
+                    ) : (view === 'login' || signupStep === 'initial') ? (
                         <>
                             {view === 'signup' && (
                                 <div className="space-y-2">
@@ -126,7 +136,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                 <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email Address" className="w-full bg-black border border-white/5 focus:border-[#10B981] rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all shadow-inner" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Secret Password</label>
+                                <div className="flex justify-between items-center px-1">
+                                    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Secret Password</label>
+                                    {view === 'login' && (
+                                        <button type="button" onClick={() => setView('forgot')} className="text-[9px] text-indigo-400 font-black uppercase tracking-widest hover:text-white transition-colors">Forgot?</button>
+                                    )}
+                                </div>
                                 <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-black border border-white/5 focus:border-[#10B981] rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all shadow-inner" />
                             </div>
                             {view === 'signup' && (
@@ -148,12 +163,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {msg && <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl text-[9px] font-black uppercase text-emerald-500 text-center tracking-widest">{msg}</div>}
 
                 <button type="submit" disabled={isLoading} className="w-full bg-[#10B981] hover:bg-[#0da673] disabled:opacity-50 text-black font-black uppercase italic tracking-[0.2em] py-5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center space-x-3">
-                    {isLoading ? <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : <span>{view === 'login' ? 'Establish Link' : (signupStep === 'initial' ? 'Request Access' : 'Verify Identity')}</span>}
+                    {isLoading ? <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : <span>{view === 'login' ? 'Establish Link' : (view === 'forgot' ? 'Recover Secret' : (signupStep === 'initial' ? 'Request Access' : 'Verify Identity'))}</span>}
                 </button>
 
                 <div className="text-center">
                     <button type="button" onClick={() => { setView(view === 'login' ? 'signup' : 'login'); setSignupStep('initial'); setError(''); setMsg(''); }} className="text-[10px] text-gray-500 font-black uppercase tracking-widest hover:text-[#10B981] transition-colors">
-                        {view === 'login' ? "New Operator? Create Account" : "Registered Node? Login"}
+                        {view === 'login' ? "New Operator? Create Account" : (view === 'forgot' ? "Back to Login" : "Registered Node? Login")}
                     </button>
                 </div>
             </form>

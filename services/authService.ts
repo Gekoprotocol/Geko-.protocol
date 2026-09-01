@@ -119,6 +119,17 @@ export const authService = {
     return result;
   },
 
+  forgotPassword: async (email: string): Promise<any> => {
+    const response = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Forgot password request failed");
+    return result;
+  },
+
   signup: async (email: string, password: string, invitationCode: string): Promise<any> => {
     throw new Error('Endpoint deprecated. Use signupRequest and signupConfirm.');
   },

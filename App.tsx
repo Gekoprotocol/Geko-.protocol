@@ -131,7 +131,7 @@ function TerminalLayout() {
         const cfgRes = await fetch('/api/config');
         if (cfgRes.ok) setProtocolConfig(await cfgRes.json());
         
-        const tradesRes = await fetch(`/api/trades?address=${encodeURIComponent(customWallet.address)}`);
+        const tradesRes = await fetch(`/api/user/active-trades?address=${encodeURIComponent(customWallet.address)}`);
         if (tradesRes.ok) setActiveTrades(await tradesRes.json());
     } catch (_) {}
   }, [customWallet?.address]);
