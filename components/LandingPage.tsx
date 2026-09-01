@@ -98,7 +98,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="w-20 h-20 bg-[#10B981] rounded-[24px] flex items-center justify-center mx-auto shadow-2xl shadow-[#10B981]/20">
                 <div className="flex flex-col items-center">
                     <Zap size={32} className="text-black fill-black" />
-                    <span className="text-black font-black text-xs uppercase tracking-tighter">Gecko</span>
+                    <span className="text-black font-black text-xs uppercase tracking-tighter">Geko</span>
                 </div>
             </div>
             <div className="space-y-1">

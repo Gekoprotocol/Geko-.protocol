@@ -183,6 +183,7 @@ function TerminalLayout() {
             <LandingPage 
                 onLoginSuccess={(d) => setCustomWallet(d)} 
                 onConnectWalletClick={() => setIsWalletModalOpen(true)}
+                initialView={customWallet?.status === 'guest' ? 'wait' : 'login'}
             />
             {isWalletModalOpen && <ConnectWallet onConnect={(d) => { setCustomWallet(d); setIsWalletModalOpen(false); }} onClose={() => setIsWalletModalOpen(false)} />}
         </>
@@ -262,6 +263,7 @@ function TerminalLayout() {
                           </div>
                           <div>
                               <div className="text-sm font-black text-white uppercase tracking-tight">Geko Operator</div>
+
                               <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Institution Verified</div>
                           </div>
                       </div>

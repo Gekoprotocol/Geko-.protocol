@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AssetInfo, WalletData } from '../types';
-import { ArrowLeftRight, RefreshCw, ChevronDown, Shield } from 'lucide-react';
+import { ArrowLeftRight, RefreshCw, ChevronDown, Shield, X } from 'lucide-react';
 
 interface SwapViewProps {
   assets: AssetInfo[];
@@ -30,21 +30,22 @@ export default function SwapView({
   const [swapResult, setSwapResult] = useState<{ success: boolean; msg: string } | null>(null);
 
   useEffect(() => {
-    if (assets.length >= 2) {
+    if (Array.isArray(assets) && assets.length >= 2) {
       if (!fromAsset) setFromAsset(assets.find(a => a.symbol === 'BTC') || assets[0]);
       if (!toAsset) setToAsset(assets.find(a => a.symbol === 'USDT') || assets[1]);
     }
   }, [assets]);
 
   const getSourceBalance = (symbol: string) => {
+      if (!protocolBalances) return 0;
       const b = protocolBalances.find(pb => pb.asset === symbol);
       return b ? parseFloat(b.balance as any) : 0;
   };
 
   const targetAmount = useMemo(() => {
-    if (!amount || !fromAsset || !toAsset || fromAsset.price === 0) return '0.00';
-    const fromPrice = fromAsset.price || 1;
-    const toPrice = toAsset.price || 1;
+    if (!amount || !fromAsset || !toAsset || !fromAsset.price || !toAsset.price) return '0.00';
+    const fromPrice = fromAsset.price;
+    const toPrice = toAsset.price;
     return (parseFloat(amount) * (fromPrice / toPrice)).toFixed(6);
   }, [amount, fromAsset, toAsset]);
 
@@ -70,14 +71,14 @@ export default function SwapView({
           });
 
           if (res.ok) {
-              setSwapResult({ success: true, msg: 'Settlement confirmed' });
+              setSwapResult({ success: true, msg: 'Geko Settlement Confirmed' });
               setAmount('');
               if (onRefreshBalances) onRefreshBalances();
           } else {
-              setSwapResult({ success: false, msg: 'Insufficient pool liquidity' });
+              setSwapResult({ success: false, msg: 'Node Liquidity Insufficient' });
           }
       } catch (e) {
-          setSwapResult({ success: false, msg: 'Network routing error' });
+          setSwapResult({ success: false, msg: 'Link Routing Error' });
       } finally {
           setIsSwapping(false);
       }
@@ -89,17 +90,15 @@ export default function SwapView({
         
         <div className="text-center space-y-2">
             <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Geko Swap</h2>
-
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Liquidity Node</p>
         </div>
 
         <div className="bg-[#111111] border border-white/5 rounded-[40px] p-6 space-y-4 shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-white opacity-10 group-hover:opacity-30 transition-opacity"></div>
             
-            {/* Pay Section */}
             <div className="bg-black border border-white/5 p-6 rounded-[32px] space-y-2 shadow-inner">
                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500 tracking-widest px-1">
-                    <span>From Spot Account</span>
+                    <span>Pay From Spot</span>
                     <span className="text-gray-400">Bal: {getSourceBalance(fromAsset?.symbol || '').toFixed(4)}</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -121,7 +120,6 @@ export default function SwapView({
                 </div>
             </div>
 
-            {/* Switch Icon */}
             <div className="flex justify-center -my-6 relative z-10">
                 <button 
                     onClick={() => { 
@@ -137,7 +135,6 @@ export default function SwapView({
                 </button>
             </div>
 
-            {/* Receive Section */}
             <div className="bg-black border border-white/5 p-6 rounded-[32px] space-y-2 shadow-inner">
                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500 tracking-widest px-1">
                     <span>To {toAsset?.symbol === 'USDT' ? "Trading Vault" : "Spot Account"}</span>
@@ -158,7 +155,7 @@ export default function SwapView({
         </div>
 
         {swapResult && (
-            <div className={`p-4 rounded-2xl text-[10px] font-black uppercase text-center ${swapResult.success ? 'bg-[#10B981]/10 text-[#10B981]' : 'bg-rose-500/10 text-rose-500'}`}>
+            <div className={`p-4 rounded-2xl text-[10px] font-black uppercase text-center animate-in zoom-in duration-300 ${swapResult.success ? 'bg-[#10B981]/10 text-[#10B981]' : 'bg-rose-500/10 text-rose-500'}`}>
                 {swapResult.msg}
             </div>
         )}
@@ -214,21 +211,22 @@ export default function SwapView({
 const AssetSelectorModal = ({ isOpen, onClose, onSelect, assets, protocolBalances }: any) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-[3000] flex items-end">
+        <div className="fixed inset-0 z-[3000] flex items-end animate-in fade-in duration-300">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="relative w-full bg-[#0A0A0A] border-t border-white/5 rounded-t-[40px] p-8 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar animate-in slide-in-from-bottom duration-500">
                 <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-black uppercase italic italic tracking-tighter text-white">Select Coin</h3>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Select Coin</h3>
                     <button onClick={onClose} className="p-2 bg-white/5 rounded-full text-gray-500"><X size={20} className="text-white" /></button>
                 </div>
                 <div className="space-y-3">
                     {/* Add USDT explicitly since it might not be in the Binance price list */}
-                    {[...assets, { symbol: 'USDT', name: 'TetherUS', price: 1 }].reduce((acc: any[], current: any) => {
+                    {[...(Array.isArray(assets) ? assets : []), { symbol: 'USDT', name: 'TetherUS', price: 1 }].reduce((acc: any[], current: any) => {
                         const x = acc.find(item => item.symbol === current.symbol);
                         if (!x) return acc.concat([current]);
                         else return acc;
                     }, []).map((asset: any) => {
-                        const bal = protocolBalances.find((pb: any) => pb.asset === asset.symbol)?.balance || 0;
+                        const balRes = protocolBalances?.find((pb: any) => pb.asset === asset.symbol);
+                        const bal = balRes ? balRes.balance : 0;
                         return (
                             <button 
                                 key={asset.symbol}
@@ -243,7 +241,7 @@ const AssetSelectorModal = ({ isOpen, onClose, onSelect, assets, protocolBalance
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="font-mono text-sm text-white">{parseFloat(bal).toFixed(4)}</div>
+                                    <div className="font-mono text-sm text-white">{parseFloat(bal as any).toFixed(4)}</div>
                                     <div className="text-[8px] text-gray-600 font-black uppercase">Institutional Pool</div>
                                 </div>
                             </button>
