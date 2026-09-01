@@ -320,7 +320,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               </div>
               
               <div className="space-y-3">
-                  {txs.slice(0, 10).map((tx) => (
+                  {txs.slice(0, 50).map((tx) => (
                       <div key={tx.id} className="bg-[#111111] border border-white/5 p-5 rounded-[24px] flex items-center justify-between">
                           <div className="flex items-center gap-4">
                               <div className="w-10 h-10 bg-black border border-white/5 rounded-xl flex items-center justify-center">

@@ -19,7 +19,6 @@ interface TradeViewProps {
 }
 
 const MIN_TRADE   = 100;
-const PAYOUT_RATE = 0.85;
 const PRESETS     = [100, 250, 500, 1000, 2500, 5000];
 
 const TradeView: React.FC<TradeViewProps> = ({
@@ -170,7 +169,7 @@ const TradeView: React.FC<TradeViewProps> = ({
           pnl: isWin ? pnl : -parseFloat(trade.amount),
           settledAt: now
         };
-        setLocalSettledTrades(prev => [settledTrade, ...prev].slice(0, 10));
+        setLocalSettledTrades(prev => [settledTrade, ...prev].slice(0, 50));
       }
       setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
     }, 1000);
@@ -304,8 +303,8 @@ const TradeView: React.FC<TradeViewProps> = ({
                 </button>
 
                 <div className="bg-[#111111] p-4 rounded-2xl border border-white/5 space-y-2">
-                    <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Profit</span><span className="text-[#10B981]">+85%</span></div>
-                    <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Risk</span><span className="text-rose-500">Variable</span></div>
+                    <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Est. Profit</span><span className="text-[#10B981]">+{leverage}% (+${((parsedAmount * leverage) / 100).toFixed(2)})</span></div>
+                    <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Risk</span><span className="text-rose-500">Institutional</span></div>
                 </div>
 
                 <div className="space-y-3 pt-6">
