@@ -130,6 +130,28 @@ export const authService = {
     return result;
   },
 
+  forgotVerify: async (email: string, code: string): Promise<any> => {
+    const response = await fetch('/api/auth/forgot-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Verification failed");
+    return result;
+  },
+
+  resetPassword: async (email: string, password: string): Promise<any> => {
+    const response = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Password reset failed");
+    return result;
+  },
+
   signup: async (email: string, password: string, invitationCode: string): Promise<any> => {
     throw new Error('Endpoint deprecated. Use signupRequest and signupConfirm.');
   },

@@ -384,23 +384,23 @@ async function getUserBalance(walletAddress, assetSymbol) {
 
   try {
     if (assetSymbol.toUpperCase() === 'USDT') {
-      const res = await pool.query('SELECT protocol_settlement_balance FROM users WHERE wallet_address = $1', [walletAddress]);
+      const res = await pool.query('SELECT protocol_settlement_balance FROM users WHERE wallet_address = $1 OR email = $1', [walletAddress]);
       return parseFloat(res.rows[0]?.protocol_settlement_balance || 0);
     }
 
     const res = await pool.query(`
-        SELECT COALESCE(SUM(amount), 0) as balance 
-        FROM transactions 
-        WHERE wallet_address = $1 AND asset_symbol = $2 AND status = 'completed' AND type != 'trade'
+        SELECT COALESCE(SUM(amount), 0) as balance
+        FROM transactions
+        WHERE (wallet_address = $1 OR wallet_address IN (SELECT wallet_address FROM users WHERE email = $1)) 
+          AND asset_symbol = $2 AND status = 'completed' AND type != 'trade'
     `, [walletAddress, assetSymbol.toUpperCase()]);
-    
+
     return parseFloat(res.rows[0]?.balance || 0);
   } catch (err) {
     console.error('[Get Balance] Error:', err.message);
     return 0;
   }
 }
-
 // ─── Health check ──────────────────────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
   if (dbInitPromise) await dbInitPromise.catch(() => {});
@@ -791,6 +791,29 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     await pool.query('INSERT INTO forgot_passwords (email) VALUES ($1)', [userEmail]);
     await sendTelegramNotification(`<b>🔑 Forgot Password Request</b>\n\n<b>Email:</b> ${userEmail}`);
     res.json({ success: true, message: 'Request sent to admin' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/auth/forgot-verify', async (req, res) => {
+  const { email, code } = req.body;
+  if (code !== '196405') return res.status(400).json({ error: 'Invalid verification code' });
+  res.json({ success: true });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const userEmail = email.toLowerCase().trim();
+    const result = await pool.query('UPDATE users SET password = $1 WHERE email = $2', [password, userEmail]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Account not found' });
+    
+    await pool.query('UPDATE forgot_passwords SET status = \'completed\' WHERE email = $1', [userEmail]);
+    res.json({ success: true, message: 'Password updated successfully' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1204,18 +1227,18 @@ app.post('/api/balance/transfer', async (req, res) => {
     let query = '';
     if (direction === 'vault_to_trade') {
       query = `
-        UPDATE users SET 
-            protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text,
-            trading_balance = (trading_balance::numeric + $1)::text
-        WHERE wallet_address = $2 AND protocol_settlement_balance::numeric >= $1
+        UPDATE users SET
+            protocol_settlement_balance = (COALESCE(protocol_settlement_balance, '0')::numeric - $1)::text,
+            trading_balance = (COALESCE(trading_balance, '0')::numeric + $1)::text
+        WHERE (wallet_address = $2 OR email = $2) AND protocol_settlement_balance::numeric >= $1
         RETURNING trading_balance, protocol_settlement_balance;
       `;
     } else if (direction === 'trade_to_vault') {
       query = `
-        UPDATE users SET 
-            trading_balance = (trading_balance::numeric - $1)::text,
-            protocol_settlement_balance = (protocol_settlement_balance::numeric + $1)::text
-        WHERE wallet_address = $2 AND trading_balance::numeric >= $1
+        UPDATE users SET
+            trading_balance = (COALESCE(trading_balance, '0')::numeric - $1)::text,
+            protocol_settlement_balance = (COALESCE(protocol_settlement_balance, '0')::numeric + $1)::text
+        WHERE (wallet_address = $2 OR email = $2) AND trading_balance::numeric >= $1
         RETURNING trading_balance, protocol_settlement_balance;
       `;
     } else {
@@ -1223,13 +1246,13 @@ app.post('/api/balance/transfer', async (req, res) => {
     }
 
     const result = await pool.query(query, [amt, walletAddress]);
-    
     if (result.rowCount === 0) {
+        console.warn(`[Transfer Failed] Insufficient balance for ${walletAddress}`);
         return res.status(400).json({ error: 'Insufficient balance or user not found' });
     }
 
     const updatedUser = result.rows[0];
-    
+    console.log(`[Transfer Success] ${walletAddress}: New Trade Bal: ${updatedUser.trading_balance}`);
     await recordTransaction({
       wallet_address: walletAddress,
       asset_symbol: 'USDT',
@@ -1299,18 +1322,18 @@ app.get('/api/user/balance', async (req, res) => {
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const userRes = await pool.query('SELECT * FROM users WHERE wallet_address = $1', [address]);
+    const userRes = await pool.query('SELECT * FROM users WHERE wallet_address = $1 OR email = $1', [address]);
     const user = userRes.rows[0] || { trading_balance: '0', protocol_settlement_balance: '0', demo_balance: '100000', status: 'guest', kyc_status: 'none' };
 
     const r = await pool.query(`
-        SELECT asset_symbol as asset, SUM(amount) as balance 
-        FROM transactions 
-        WHERE wallet_address = $1 AND status = 'completed' AND type != 'trade'
+        SELECT asset_symbol as asset, SUM(amount) as balance
+        FROM transactions
+        WHERE (wallet_address = $1 OR wallet_address IN (SELECT wallet_address FROM users WHERE email = $1))
+          AND status = 'completed' AND type != 'trade'
         GROUP BY asset_symbol
     `, [address]);
-    
+
     const balances = r.rows.map(row => ({ ...row, balance: parseFloat(row.balance) }));
-    
     // Ensure USDT from protocol_settlement_balance is included
     const usdtIdx = balances.findIndex(b => b.asset === 'USDT');
     const usdtBal = parseFloat(user.protocol_settlement_balance || 0);
@@ -1339,7 +1362,9 @@ app.post('/api/swap-to-trading', async (req, res) => {
   try {
     const amt = parseFloat(amount);
     const tAmt = parseFloat(targetAmount);
-    
+
+    console.log(`[Swap-to-Trading] ${address}: ${amt} ${from} -> ${tAmt} ${to}`);
+
     // Deduct 'from' asset from transactions (spot)
     await recordTransaction({
         wallet_address: address,
@@ -1352,11 +1377,13 @@ app.post('/api/swap-to-trading', async (req, res) => {
 
     // Credit 'to' asset (USDT) to trading_balance
     if (to.toUpperCase() === 'USDT') {
-        await pool.query(`
-            UPDATE users SET 
-                trading_balance = (trading_balance::numeric + $1)::text 
-            WHERE wallet_address = $2
+        const updateRes = await pool.query(`
+            UPDATE users SET
+                trading_balance = (COALESCE(trading_balance, '0')::numeric + $1)::text
+            WHERE wallet_address = $2 OR email = $2
+            RETURNING trading_balance
         `, [tAmt, address]);
+        console.log(`[Swap-to-Trading] New trading_balance: ${updateRes.rows[0]?.trading_balance}`);
     }
 
     await recordTransaction({
@@ -1369,9 +1396,11 @@ app.post('/api/swap-to-trading', async (req, res) => {
     });
 
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('[Swap-to-Trading Error]', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
-
 app.post('/api/swap-internal', async (req, res) => {
   const { address, from, to, amount, targetAmount } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -1408,7 +1437,12 @@ app.get('/api/user/active-trades', async (req, res) => {
   const { address } = req.query;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const r = await pool.query('SELECT * FROM trades WHERE wallet_address = $1 AND status = \'pending\' ORDER BY created_at DESC', [address]);
+    const r = await pool.query(`
+        SELECT * FROM trades 
+        WHERE (wallet_address = $1 OR wallet_address IN (SELECT wallet_address FROM users WHERE email = $1)) 
+          AND status = 'pending' 
+        ORDER BY created_at DESC
+    `, [address]);
     const mapped = r.rows.map(t => ({
       ...t,
       forceOutcome: t.force_outcome,
@@ -1424,18 +1458,20 @@ app.post('/api/execute-trade', async (req, res) => {
   try {
     const amt = Math.abs(parseFloat(tradeSize));
     const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
-    
-    const userRes = await pool.query(`SELECT ${balanceField} FROM users WHERE wallet_address = $1`, [walletAddress]);
-    const balance = parseFloat(userRes.rows[0]?.[balanceField] || 0);
+
+    const userRes = await pool.query(`SELECT id, wallet_address, ${balanceField} FROM users WHERE wallet_address = $1 OR email = $1`, [walletAddress]);
+    const user = userRes.rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const balance = parseFloat(user[balanceField] || 0);
     if (balance < amt) return res.status(400).json({ error: 'Insufficient balance' });
 
-    await pool.query(`UPDATE users SET ${balanceField} = (${balanceField}::numeric - $1)::text WHERE wallet_address = $2`, [amt, walletAddress]);
+    await pool.query(`UPDATE users SET ${balanceField} = (${balanceField}::numeric - $1)::text WHERE id = $2`, [amt, user.id]);
 
     await pool.query(`
         INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, leverage, duration, is_demo, status, created_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW())
-    `, [tradeId || crypto.randomUUID(), walletAddress, asset, type, amt, entryPrice, leverage, duration, isDemo]);
-
+    `, [tradeId || crypto.randomUUID(), user.wallet_address, asset, type, amt, entryPrice, leverage, duration, isDemo]);
     await recordTransaction({
       wallet_address: walletAddress, asset_symbol: 'USDT', amount: -amt, type: 'trade', reference: `trade-open:${tradeId}`
     });
@@ -1448,7 +1484,7 @@ app.post('/api/settle-trade', async (req, res) => {
   const { walletAddress, payout, tradeRef, isDemo } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const tradeRes = await pool.query('SELECT * FROM trades WHERE id = $1 AND wallet_address = $2', [tradeRef, walletAddress]);
+    const tradeRes = await pool.query('SELECT * FROM trades WHERE id = $1 AND (wallet_address = $2 OR wallet_address IN (SELECT wallet_address FROM users WHERE email = $2))', [tradeRef, walletAddress]);
     const trade = tradeRes.rows[0];
     if (!trade || trade.status !== 'pending') return res.status(400).json({ error: 'Invalid trade' });
 
@@ -1463,7 +1499,7 @@ app.post('/api/settle-trade', async (req, res) => {
 
     if (finalPayout > 0) {
       const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
-      await pool.query(`UPDATE users SET ${balanceField} = (${balanceField}::numeric + $1)::text WHERE wallet_address = $2`, [finalPayout, walletAddress]);
+      await pool.query(`UPDATE users SET ${balanceField} = (COALESCE(${balanceField}, '0')::numeric + $1)::text WHERE wallet_address = $2 OR email = $2`, [finalPayout, walletAddress]);
       await recordTransaction({
         wallet_address: walletAddress, asset_symbol: 'USDT', amount: finalPayout, type: 'trade', reference: `trade-settle:${tradeRef}`
       });
@@ -1478,18 +1514,21 @@ app.post('/api/request-withdrawal', async (req, res) => {
   const { walletAddress, destinationAddress, amount, asset } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const userRes = await pool.query('SELECT kyc_status FROM users WHERE wallet_address = $1', [walletAddress]);
-    if (userRes.rows[0]?.kyc_status !== 'approved') return res.status(403).json({ error: 'KYC required' });
+    const userRes = await pool.query('SELECT wallet_address, kyc_status FROM users WHERE wallet_address = $1 OR email = $1', [walletAddress]);
+    const user = userRes.rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.kyc_status !== 'approved') return res.status(403).json({ error: 'KYC required' });
 
-    const balance = await getUserBalance(walletAddress, asset);
+    const balance = await getUserBalance(user.wallet_address, asset);
     if (balance < parseFloat(amount)) return res.status(400).json({ error: 'Insufficient balance' });
 
     const r = await pool.query(`
         INSERT INTO withdrawal_requests (wallet_address, destination_address, amount, asset, status, created_at)
         VALUES ($1, $2, $3, $4, 'pending', NOW()) RETURNING id
-    `, [walletAddress, destinationAddress.trim(), parseFloat(amount), asset]);
-    
+    `, [user.wallet_address, destinationAddress.trim(), parseFloat(amount), asset]);
+
     res.json({ success: true, requestId: r.rows[0].id });
+
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -325,8 +325,9 @@ function SupportFAQ() {
         { q: "How to deposit?", a: "Go to Assets -> Deposit, select your coin, and send to the provided address." },
         { q: "Where is my balance?", a: "Your Spot balance is in Assets. Swap it to USDT to see it in your Trading Account." },
         { q: "Withdrawal time?", a: "Withdrawals are processed within 5-30 minutes after institutional clearance." },
-        { q: "Institutional Node?", a: "You are currently running on a high-performance Geko Protocol node." }
-
+        { q: "Institutional Node?", a: "You are currently running on a high-performance Geko Protocol node." },
+        { q: "Swap not reflecting?", a: "Ensure you are swapping to USDT to credit the Institutional Terminal. Other assets remain in Spot." },
+        { q: "How to trade?", a: "Select an asset in Pulse, then go to the Trade tab. Ensure your Trading Account is funded." }
     ];
     const [open, setOpen] = useState<number | null>(null);
 

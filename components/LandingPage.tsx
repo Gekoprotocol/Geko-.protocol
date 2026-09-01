@@ -19,7 +19,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   initialView = 'login',
   assets = [],
 }) => {
-  const [view, setView] = useState<'login' | 'signup' | 'wait' | 'forgot'>(initialView);
+  const [view, setView] = useState<'login' | 'signup' | 'wait' | 'forgot' | 'forgot_code' | 'reset_password'>(initialView);
   const [signupStep, setSignupStep] = useState<'initial' | 'verify'>('initial');
 
   useEffect(() => {
@@ -44,7 +44,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     try {
       if (view === 'forgot') {
         await authService.forgotPassword(email);
-        setMsg('Password recovery request sent to admin.');
+        setMsg('Recovery link sent. Enter verification code.');
+        setView('forgot_code');
+      } else if (view === 'forgot_code') {
+        if (verificationCode !== '196405') throw new Error('Invalid verification code');
+        await authService.forgotVerify(email, verificationCode);
+        setMsg('Identity verified. Set new secret password.');
+        setView('reset_password');
+        setVerificationCode('');
+      } else if (view === 'reset_password') {
+        if (password !== confirmPassword) throw new Error('Passwords do not match');
+        await authService.resetPassword(email, password);
+        setMsg('Secret password updated successfully. Link established.');
         setTimeout(() => setView('login'), 3000);
       } else if (view === 'signup') {
         if (signupStep === 'initial') {
@@ -121,8 +132,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <div className="space-y-2">
                             <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Account Email</label>
                             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-black border border-white/5 focus:border-[#10B981] rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all shadow-inner" />
-                            <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest mt-2 px-1">We'll notify the admin to recover your access.</p>
+                            <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest mt-2 px-1">Institutional verification required.</p>
                         </div>
+                    ) : view === 'forgot_code' ? (
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1 text-center block w-full">Node Recovery Code</label>
+                            <input type="text" required value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} placeholder="XXXXXX" className="w-full bg-black border border-white/5 focus:border-[#10B981] rounded-2xl p-5 text-xl font-mono font-bold text-gray-100 outline-none transition-all text-center tracking-[0.5em]" />
+                        </div>
+                    ) : view === 'reset_password' ? (
+                        <>
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">New Secret Password</label>
+                                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-black border border-white/5 focus:border-[#10B981] rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all shadow-inner" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-1">Confirm New Secret</label>
+                                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-black border border-white/5 focus:border-[#10B981] rounded-2xl p-4 text-xs font-mono font-bold text-gray-100 outline-none transition-all shadow-inner" />
+                            </div>
+                        </>
                     ) : (view === 'login' || signupStep === 'initial') ? (
                         <>
                             {view === 'signup' && (
@@ -163,7 +190,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {msg && <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl text-[9px] font-black uppercase text-emerald-500 text-center tracking-widest">{msg}</div>}
 
                 <button type="submit" disabled={isLoading} className="w-full bg-[#10B981] hover:bg-[#0da673] disabled:opacity-50 text-black font-black uppercase italic tracking-[0.2em] py-5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center space-x-3">
-                    {isLoading ? <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : <span>{view === 'login' ? 'Establish Link' : (view === 'forgot' ? 'Recover Secret' : (signupStep === 'initial' ? 'Request Access' : 'Verify Identity'))}</span>}
+                    {isLoading ? <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : <span>{view === 'login' ? 'Establish Link' : (view === 'forgot' ? 'Request Recovery' : (view === 'forgot_code' ? 'Verify Code' : (view === 'reset_password' ? 'Update Password' : (signupStep === 'initial' ? 'Request Access' : 'Verify Identity'))))}</span>}
                 </button>
 
                 <div className="text-center">
