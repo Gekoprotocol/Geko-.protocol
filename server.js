@@ -359,18 +359,15 @@ async function recordTransaction({ wallet_address, asset_symbol, amount, type, p
   if (!dbAvailable || !pool || !wallet_address) return null;
 
   try {
-    // Upsert user if not exists
-    await pool.query(`
-        INSERT INTO users (wallet_address, last_seen, created_at)
-        VALUES ($1, NOW(), NOW())
-        ON CONFLICT (wallet_address) DO UPDATE SET last_seen = NOW()
-    `, [wallet_address]);
+    // Resolve real wallet address if identifier is email
+    const userRes = await pool.query('SELECT wallet_address FROM users WHERE wallet_address = $1 OR email = $1', [wallet_address]);
+    const actualAddress = userRes.rows[0]?.wallet_address || wallet_address;
 
     const res = await pool.query(`
         INSERT INTO transactions (wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
-    `, [wallet_address, asset_symbol.toUpperCase(), parseFloat(amount), type, payment_id, tx_signature, reference, status]);
+    `, [actualAddress, asset_symbol.toUpperCase(), parseFloat(amount), type, payment_id, tx_signature, reference, status]);
 
     return res.rows[0];
   } catch (err) {
@@ -1212,62 +1209,31 @@ app.get('/api/admin/support/tickets', async (req, res) => {
 // ─── Balance Transfer ─────────────────────────────────────────────────────
 app.post('/api/balance/transfer', async (req, res) => {
   const { walletAddress, amount, direction } = req.body;
-  console.log(`[Transfer] Attempting ${direction} for ${walletAddress}: ${amount}`);
-  
-  if (!walletAddress || amount === undefined || !direction) {
-      return res.status(400).json({ error: 'Missing parameters' });
-  }
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
   try {
     const amt = Math.abs(parseFloat(amount));
-    if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid transfer amount' });
+    if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
 
-    // Atomic update to prevent race conditions and handle TEXT columns via cast
+    const userRes = await pool.query('SELECT * FROM users WHERE wallet_address = $1 OR email = $1', [walletAddress]);
+    const user = userRes.rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const actualAddr = user.wallet_address;
     let query = '';
     if (direction === 'vault_to_trade') {
-      query = `
-        UPDATE users SET
-            protocol_settlement_balance = (COALESCE(protocol_settlement_balance, '0')::numeric - $1)::text,
-            trading_balance = (COALESCE(trading_balance, '0')::numeric + $1)::text
-        WHERE (wallet_address = $2 OR email = $2) AND protocol_settlement_balance::numeric >= $1
-        RETURNING trading_balance, protocol_settlement_balance;
-      `;
-    } else if (direction === 'trade_to_vault') {
-      query = `
-        UPDATE users SET
-            trading_balance = (COALESCE(trading_balance, '0')::numeric - $1)::text,
-            protocol_settlement_balance = (COALESCE(protocol_settlement_balance, '0')::numeric + $1)::text
-        WHERE (wallet_address = $2 OR email = $2) AND trading_balance::numeric >= $1
-        RETURNING trading_balance, protocol_settlement_balance;
-      `;
+        if (parseFloat(user.protocol_settlement_balance || 0) < amt) return res.status(400).json({ error: 'Insufficient Spot balance' });
+        query = `UPDATE users SET protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text, trading_balance = (COALESCE(trading_balance, '0')::numeric + $1)::text WHERE id = $2 RETURNING trading_balance`;
     } else {
-      return res.status(400).json({ error: 'Invalid direction' });
+        if (parseFloat(user.trading_balance || 0) < amt) return res.status(400).json({ error: 'Insufficient Trading balance' });
+        query = `UPDATE users SET trading_balance = (trading_balance::numeric - $1)::text, protocol_settlement_balance = (COALESCE(protocol_settlement_balance, '0')::numeric + $1)::text WHERE id = $2 RETURNING trading_balance`;
     }
 
-    const result = await pool.query(query, [amt, walletAddress]);
-    if (result.rowCount === 0) {
-        console.warn(`[Transfer Failed] Insufficient balance for ${walletAddress}`);
-        return res.status(400).json({ error: 'Insufficient balance or user not found' });
-    }
+    const result = await pool.query(query, [amt, user.id]);
+    await recordTransaction({ wallet_address: actualAddr, asset_symbol: 'USDT', amount: amt, type: 'transfer', reference: `transfer:${direction}` });
 
-    const updatedUser = result.rows[0];
-    console.log(`[Transfer Success] ${walletAddress}: New Trade Bal: ${updatedUser.trading_balance}`);
-    await recordTransaction({
-      wallet_address: walletAddress,
-      asset_symbol: 'USDT',
-      amount: amt,
-      type: 'transfer',
-      reference: `transfer:${direction}`,
-      status: 'completed'
-    });
-
-    console.log(`[Transfer] Success for ${walletAddress}. New balances: Vault=${updatedUser.protocol_settlement_balance}, Trade=${updatedUser.trading_balance}`);
-    res.json({ success: true, ...updatedUser });
-  } catch (e) { 
-      console.error('[Transfer Error]', e.message);
-      res.status(500).json({ error: e.message }); 
-  }
+    res.json({ success: true, trading_balance: result.rows[0].trading_balance });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Visitor Tracking ─────────────────────────────────────────────────────

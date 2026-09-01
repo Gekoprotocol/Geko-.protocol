@@ -170,6 +170,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               setActiveModal(null);
               setTransferAmount('');
               onRefreshBalances();
+          } else {
+              const err = await res.json();
+              alert(err.error || 'Transfer failed. Check node liquidity.');
           }
       } catch (e) {
       } finally {

@@ -75,7 +75,8 @@ export default function SwapView({
               setAmount('');
               if (onRefreshBalances) onRefreshBalances();
           } else {
-              setSwapResult({ success: false, msg: 'Node Liquidity Insufficient' });
+              const err = await res.json();
+              setSwapResult({ success: false, msg: err.error || 'Node Liquidity Insufficient' });
           }
       } catch (e) {
           setSwapResult({ success: false, msg: 'Link Routing Error' });
