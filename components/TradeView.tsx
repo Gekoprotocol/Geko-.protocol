@@ -213,6 +213,22 @@ const TradeView: React.FC<TradeViewProps> = ({
             </div>
         </div>
 
+        {/* MOBILE VIEW TOGGLE */}
+        <div className="lg:hidden flex bg-[#0B0E11] rounded-xl p-1 border border-[#2B3139]">
+            <button 
+                onClick={() => setMobileView('chart')} 
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${mobileView === 'chart' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+            >
+                Chart
+            </button>
+            <button 
+                onClick={() => setMobileView('controls')} 
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${mobileView === 'controls' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
+            >
+                Trade
+            </button>
+        </div>
+
         <div className="hidden lg:flex items-center space-x-6">
             <div className="flex items-center gap-3 bg-amber-500/5 px-4 py-2 rounded-xl border border-amber-500/20 shadow-lg">
                 <div className="relative w-10 h-10 animate-bitcoin-spin" style={{ transformStyle: 'preserve-3d', perspective: '1000px' }}>
@@ -239,7 +255,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             </div>
         </div>
 
-        <div className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl overflow-y-auto pb-32 custom-scrollbar`}>
+        <div className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl overflow-y-auto pb-48 custom-scrollbar`}>
             <div className="p-4 lg:p-5 space-y-4 lg:space-y-6 flex-1 flex flex-col min-h-0">
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
                     <div className="text-[8px] text-[#10B981] font-black uppercase mb-1">{wallet?.isDemo ? 'Demo Account' : 'Institutional Terminal'}</div>
