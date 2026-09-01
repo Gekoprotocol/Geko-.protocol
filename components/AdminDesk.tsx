@@ -28,11 +28,11 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   
   const uid = (user.id || user.wallet_address || 'unknown').toString();
 
-  const handleApplyPending = async () => {
+  const handleCreditBalance = async (target: 'spot' | 'trade') => {
       if (!parseFloat(depositAmount)) return;
       setIsCrediting(true);
       try {
-          await onCreditBalance(user.wallet_address, depositCurrency, depositAmount);
+          await onCreditBalance(user.wallet_address, depositCurrency, depositAmount, target);
           setLocalSwapSent(false);
           setDepositAmount('0');
       } finally {
@@ -108,10 +108,10 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
       </div>
       
       <div className="grid grid-cols-1 gap-3 pt-2">
-          {/* SPOT ACCOUNT MANAGEMENT */}
+          {/* ACCOUNT MANAGEMENT */}
           <div className="bg-[#0B0E11] p-4 rounded-2xl border border-indigo-500/30 space-y-3">
               <div className="flex justify-between items-center">
-                  <div className="text-[9px] text-[#10B981] font-black uppercase tracking-widest">Spot Account (Admin Control)</div>
+                  <div className="text-[9px] text-[#10B981] font-black uppercase tracking-widest">Quick Funding (Spot/Trade)</div>
                   <div className="text-[8px] text-gray-600 font-mono">ID: {user.id}</div>
               </div>
               
@@ -119,7 +119,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
                   <select 
                     value={depositCurrency} 
                     onChange={e => setDepositCurrency(e.target.value)}
-                    className="flex-1 bg-black border border-white/5 rounded-xl px-3 py-2 text-[10px] font-mono text-white outline-none focus:border-[#10B981]"
+                    className="flex-1 bg-black border border-white/5 rounded-xl px-2 py-2 text-[9px] font-mono text-white outline-none focus:border-[#10B981]"
                   >
                       {['BTC', 'ETH', 'SOL', 'USDT', 'BNB'].map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -127,16 +127,25 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
                     type="text" 
                     value={depositAmount} 
                     onChange={e => setDepositAmount(e.target.value)}
-                    placeholder="Amount" 
-                    className="flex-[2] bg-black border border-white/5 rounded-xl px-4 py-2 text-[10px] font-mono text-white outline-none focus:border-[#10B981]" 
+                    placeholder="Amt" 
+                    className="flex-[1.5] bg-black border border-white/5 rounded-xl px-3 py-2 text-[9px] font-mono text-white outline-none focus:border-[#10B981]" 
                   />
-                  <button 
-                    onClick={handleApplyPending}
-                    disabled={isCrediting}
-                    className="bg-[#10B981] text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-emerald-400 disabled:opacity-50 transition-all"
-                  >
-                      {isCrediting ? '...' : 'Fund'}
-                  </button>
+                  <div className="flex gap-1">
+                      <button 
+                        onClick={() => handleCreditBalance('spot')}
+                        disabled={isCrediting}
+                        className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter hover:bg-indigo-500 disabled:opacity-50 transition-all"
+                      >
+                          Spot
+                      </button>
+                      <button 
+                        onClick={() => handleCreditBalance('trade')}
+                        disabled={isCrediting}
+                        className="bg-[#10B981] text-black px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter hover:bg-emerald-400 disabled:opacity-50 transition-all"
+                      >
+                          Trade
+                      </button>
+                  </div>
               </div>
           </div>
 
@@ -174,12 +183,13 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
 };
 
 export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'guests' | 'intercept' | 'withdrawals' | 'kyc' | 'support' | 'config'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'guests' | 'intercept' | 'withdrawals' | 'kyc' | 'support' | 'config' | 'forgot_passwords'>('users');
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [realUserTrades, setRealUserTrades] = useState<any[]>([]);
   const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
   const [kycSubmissions, setKycSubmissions] = useState<any[]>([]);
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [forgotPasswordRequests, setForgotPasswordRequests] = useState<any[]>([]);
   const [sysStatus, setSysStatus] = useState<any>(null);
   
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -204,20 +214,22 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const fetchData = async () => {
     try {
-      const [u, t, w, k, s, st, cfg] = await Promise.all([
+      const [u, t, w, k, s, st, cfg, fp] = await Promise.all([
         fetch('/api/admin/users').then(r => r.json()).catch(() => []),
         fetch('/api/admin/active-trades').then(r => r.json()).catch(() => []),
         fetch('/api/admin/withdrawal-requests').then(r => r.json()).catch(() => []),
         fetch('/api/admin/kyc/submissions').then(r => r.json()).catch(() => []),
         fetch('/api/admin/support/tickets').then(r => r.json()).catch(() => []),
         fetch('/api/admin/status').then(r => r.json()).catch(() => null),
-        fetch('/api/config').then(r => r.json()).catch(() => null)
+        fetch('/api/config').then(r => r.json()).catch(() => null),
+        fetch('/api/admin/forgot-passwords').then(r => r.json()).catch(() => [])
       ]);
       setDbUsers(Array.isArray(u) ? u : []);
       setRealUserTrades(Array.isArray(t) ? t : []);
       setWithdrawalRequests(Array.isArray(w) ? w : []);
       setKycSubmissions(Array.isArray(k) ? k : []);
       setSupportTickets(Array.isArray(s) ? s : []);
+      setForgotPasswordRequests(Array.isArray(fp) ? fp : []);
       setSysStatus(st);
       if (cfg) {
           setDepositInput(cfg.solana_deposit_address || '');
@@ -249,12 +261,12 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     finally { setSavingId(null); }
   };
 
-  const handleCreditBalance = async (walletAddress: string, currency: string, amount: string) => {
+  const handleCreditBalance = async (walletAddress: string, currency: string, amount: string, target: 'spot' | 'trade' = 'spot') => {
     try {
         await fetch('/api/admin/credit-balance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress, currency, amount })
+            body: JSON.stringify({ walletAddress, currency, amount, target })
         });
         fetchData();
     } catch (e) { console.error('Credit failed', e); }
@@ -373,13 +385,13 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <h1 className="text-lg md:text-xl font-black italic uppercase text-[#10B981] tracking-tighter leading-none">Geko Protocols_Admin</h1>
           </div>
           <nav className="flex space-x-1 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
-            {['users', 'guests', 'intercept', 'withdrawals', 'kyc', 'support', 'config'].map(tab => (
+            {['users', 'guests', 'intercept', 'withdrawals', 'kyc', 'support', 'forgot_passwords', 'config'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
                 className={`px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${activeTab === tab ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-[#2B3139]'}`}
               >
-                {tab}
+                {tab === 'forgot_passwords' ? 'Forgot Pass' : tab}
               </button>
             ))}
           </nav>
@@ -432,15 +444,163 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </thead>
                     <tbody className="divide-y divide-[#2B3139]">
                         {realUserTrades.map(tx => (
-                            <tr key={tx.id}>
-                                <td className="px-8 py-6 text-xs text-indigo-400 font-mono">{tx.wallet_address.slice(0,12)}...</td>
-                                <td className="px-8 py-6 font-bold">${tx.amount} {tx.direction}</td>
+                            <tr key={tx.id} className="hover:bg-white/5 transition-colors">
+                                <td className="px-8 py-6">
+                                    <div className="text-xs text-indigo-400 font-mono font-bold">
+                                        {(tx.wallet_address || 'UNKNOWN').slice(0,12)}...
+                                    </div>
+                                    <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                                        {tx.userName || 'Institutional Operator'}
+                                    </div>
+                                </td>
+                                <td className="px-8 py-6">
+                                    <div className="flex flex-col">
+                                        <div className="font-black text-white text-sm">
+                                            ${parseFloat(tx.amount).toLocaleString()} {tx.symbol}
+                                        </div>
+                                        <div className={`text-[9px] font-black uppercase tracking-widest ${tx.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                            {tx.direction === 'up' ? 'Long / Call' : 'Short / Put'}
+                                        </div>
+                                    </div>
+                                </td>
                                 <td className="px-8 py-6 text-right space-x-2">
-                                    <button onClick={() => handleForceOutcome(tx.id, 'win')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase border ${tx.force_outcome === 'win' ? 'bg-emerald-600 text-white' : 'border-emerald-900 text-emerald-900'}`}>Grant Win</button>
-                                    <button onClick={() => handleForceOutcome(tx.id, 'loss')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase border ${tx.force_outcome === 'loss' ? 'bg-rose-600 text-white' : 'border-rose-900 text-rose-900'}`}>Grant Loss</button>
+                                    <button 
+                                        onClick={() => handleForceOutcome(tx.id, 'win')} 
+                                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${tx.force_outcome === 'win' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-black border border-emerald-900/30 text-emerald-900 hover:bg-emerald-950'}`}
+                                    >
+                                        Grant Win
+                                    </button>
+                                    <button 
+                                        onClick={() => handleForceOutcome(tx.id, 'loss')} 
+                                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${tx.force_outcome === 'loss' ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20' : 'bg-black border border-rose-900/30 text-rose-900 hover:bg-rose-950'}`}
+                                    >
+                                        Grant Loss
+                                    </button>
                                 </td>
                             </tr>
                         ))}
+                        {realUserTrades.length === 0 && (
+                            <tr>
+                                <td colSpan={3} className="px-8 py-20 text-center">
+                                    <div className="text-gray-600 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
+                                        Waiting for Node activity...
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        )}
+
+        {activeTab === 'withdrawals' && (
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-black text-[9px] text-gray-500 uppercase font-black">
+                        <tr>
+                            <th className="px-8 py-4">User</th>
+                            <th className="px-8 py-4">Amount / Asset</th>
+                            <th className="px-8 py-4">Destination</th>
+                            <th className="px-8 py-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2B3139]">
+                        {withdrawalRequests.map(wr => (
+                            <tr key={wr.id} className="hover:bg-white/5 transition-colors">
+                                <td className="px-8 py-6">
+                                    <div className="text-xs font-bold text-gray-200">{wr.nickname || 'Unknown'}</div>
+                                    <div className="text-[8px] text-indigo-400 font-mono">{(wr.wallet_address || '').slice(0,10)}...</div>
+                                </td>
+                                <td className="px-8 py-6">
+                                    <div className="text-sm font-black text-white">${wr.amount}</div>
+                                    <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{wr.asset}</div>
+                                </td>
+                                <td className="px-8 py-6">
+                                    <div className="text-[10px] font-mono text-emerald-500 break-all max-w-[200px]">{wr.destination_address}</div>
+                                </td>
+                                <td className="px-8 py-6 text-right">
+                                    {wr.status === 'pending' ? (
+                                        <button 
+                                            onClick={() => handleApproveWithdrawal(wr.id)}
+                                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
+                                        >
+                                            Approve
+                                        </button>
+                                    ) : (
+                                        <span className="text-[9px] font-black uppercase text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-full">Processed</span>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                        {withdrawalRequests.length === 0 && (
+                            <tr><td colSpan={4} className="px-8 py-20 text-center text-gray-600 text-[10px] font-black uppercase tracking-[0.4em]">No pending withdrawals</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        )}
+
+        {activeTab === 'kyc' && (
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-black text-[9px] text-gray-500 uppercase font-black">
+                        <tr>
+                            <th className="px-8 py-4">Node Link</th>
+                            <th className="px-8 py-4">Region</th>
+                            <th className="px-8 py-4">Docs</th>
+                            <th className="px-8 py-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2B3139]">
+                        {kycSubmissions.map(k => (
+                            <tr key={k.id} className="hover:bg-white/5 transition-colors">
+                                <td className="px-8 py-6">
+                                    <div className="text-xs font-mono font-bold text-indigo-400">{(k.wallet_address || '').slice(0,12)}...</div>
+                                </td>
+                                <td className="px-8 py-6 text-[10px] font-black text-gray-200 uppercase tracking-widest">{k.country}</td>
+                                <td className="px-8 py-6 space-x-2">
+                                    <button className="text-[8px] font-black uppercase text-indigo-400 border border-indigo-400/20 px-2 py-1 rounded hover:bg-indigo-400 hover:text-white transition-all">Front</button>
+                                    <button className="text-[8px] font-black uppercase text-indigo-400 border border-indigo-400/20 px-2 py-1 rounded hover:bg-indigo-400 hover:text-white transition-all">Back</button>
+                                </td>
+                                <td className="px-8 py-6 text-right">
+                                    {k.status === 'pending' ? (
+                                        <button 
+                                            onClick={() => handleApproveKyc(k.id, k.wallet_address)}
+                                            className="bg-[#10B981] text-black px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-400 shadow-lg shadow-emerald-500/20"
+                                        >
+                                            Approve Identity
+                                        </button>
+                                    ) : (
+                                        <span className="text-[9px] font-black uppercase text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-full">Verified ✓</span>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                        {kycSubmissions.length === 0 && (
+                            <tr><td colSpan={4} className="px-8 py-20 text-center text-gray-600 text-[10px] font-black uppercase tracking-[0.4em]">No pending KYC links</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        )}
+
+        {activeTab === 'forgot_passwords' && (
+            <div className="bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-black text-[9px] text-gray-500 uppercase font-black">
+                        <tr><th className="px-8 py-4">Email Address</th><th className="px-8 py-4">Status</th><th className="px-8 py-4 text-right">Requested At</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2B3139]">
+                        {forgotPasswordRequests.map(r => (
+                            <tr key={r.id} className="hover:bg-white/5">
+                                <td className="px-8 py-6 font-bold">{r.email}</td>
+                                <td className="px-8 py-6"><span className="px-2 py-1 bg-amber-500/10 text-amber-500 rounded text-[8px] font-black uppercase tracking-widest">{r.status}</span></td>
+                                <td className="px-8 py-6 text-right text-[10px] text-gray-500">{new Date(r.created_at).toLocaleString()}</td>
+                            </tr>
+                        ))}
+                        {forgotPasswordRequests.length === 0 && (
+                            <tr><td colSpan={3} className="px-8 py-12 text-center text-gray-600 text-xs font-bold uppercase tracking-[0.2em]">No recovery requests active</td></tr>
+                        )}
                     </tbody>
                 </table>
             </div>

