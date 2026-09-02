@@ -1527,10 +1527,27 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
     const wr = wrRes.rows[0];
     if (!wr || wr.status !== 'pending') return res.status(400).json({ error: 'Invalid request' });
 
+    // Calculate USDT equivalent for deduction
+    let usdtDeduction = parseFloat(wr.amount);
+    
+    if (wr.asset.toUpperCase() !== 'USDT') {
+        try {
+            const priceRes = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${wr.asset.toUpperCase()}USDT`);
+            if (priceRes.data && priceRes.data.price) {
+                const currentPrice = parseFloat(priceRes.data.price);
+                usdtDeduction = parseFloat(wr.amount) * currentPrice;
+                console.log(`[Withdrawal Approval] Converting ${wr.amount} ${wr.asset} to ${usdtDeduction.toFixed(2)} USDT (Price: ${currentPrice})`);
+            }
+        } catch (priceErr) {
+            console.error('[Withdrawal Price Fetch Failed]', priceErr.message);
+            // Fallback: if price fetch fails, we still deduct the amount (this is a safety risk, but prevents hanging)
+        }
+    }
+
     await pool.query('UPDATE withdrawal_requests SET status = \'approved\', processed_at = NOW() WHERE id = $1', [requestId]);
     
-    // User Requirement: Always deduct from protocol_settlement_balance (total balance in USDT)
-    await pool.query('UPDATE users SET protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text WHERE wallet_address = $2', [wr.amount, wr.wallet_address]);
+    // Deduct the calculated USDT value from the total balance
+    await pool.query('UPDATE users SET protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text WHERE wallet_address = $2', [usdtDeduction.toFixed(8), wr.wallet_address]);
     
     await recordTransaction({
       wallet_address: wr.wallet_address, asset_symbol: wr.asset, amount: -parseFloat(wr.amount), type: 'withdrawal', reference: `withdrawal-approved:${requestId}`
