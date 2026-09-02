@@ -117,7 +117,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
             </div>
             <div className="space-y-1">
-                <h1 className="text-4xl font-black text-white italic uppercase tracking-tighter">Establish Link</h1>
+                <h1 className="text-4xl font-black text-white italic uppercase tracking-tighter">Log in</h1>
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Node Access</p>
             </div>
         </div>
@@ -190,7 +190,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {msg && <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl text-[9px] font-black uppercase text-emerald-500 text-center tracking-widest">{msg}</div>}
 
                 <button type="submit" disabled={isLoading} className="w-full bg-[#10B981] hover:bg-[#0da673] disabled:opacity-50 text-black font-black uppercase italic tracking-[0.2em] py-5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center space-x-3">
-                    {isLoading ? <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : <span>{view === 'login' ? 'Establish Link' : (view === 'forgot' ? 'Request Recovery' : (view === 'forgot_code' ? 'Verify Code' : (view === 'reset_password' ? 'Update Password' : (signupStep === 'initial' ? 'Request Access' : 'Verify Identity'))))}</span>}
+                    {isLoading ? <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : <span>{view === 'login' ? 'Log in' : (view === 'forgot' ? 'Request Recovery' : (view === 'forgot_code' ? 'Verify Code' : (view === 'reset_password' ? 'Update Password' : (signupStep === 'initial' ? 'Request Access' : 'Verify Identity'))))}</span>}
                 </button>
 
                 <div className="text-center">

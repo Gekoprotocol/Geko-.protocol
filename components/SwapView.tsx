@@ -55,10 +55,7 @@ export default function SwapView({
       setSwapResult(null);
       
       try {
-          const isToUsdt = toAsset.symbol === 'USDT';
-          const endpoint = isToUsdt ? '/api/swap-to-trading' : '/api/swap-internal';
-          
-          const res = await fetch(endpoint, {
+          const res = await fetch('/api/swap-internal', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -138,7 +135,7 @@ export default function SwapView({
 
             <div className="bg-black border border-white/5 p-6 rounded-[32px] space-y-2 shadow-inner">
                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500 tracking-widest px-1">
-                    <span>To {toAsset?.symbol === 'USDT' ? "Trading Vault" : "Spot Account"}</span>
+                    <span>To Spot Account</span>
                     <span className="text-indigo-400">AI Estimate</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -185,7 +182,7 @@ export default function SwapView({
                 <span className="text-[10px] font-black text-[#10B981] uppercase tracking-widest">0.00%</span>
             </div>
             <p className="text-[9px] text-gray-600 font-bold leading-relaxed uppercase text-center tracking-tighter">
-                NOTICE: Assets swapped to USDT are instantly credited to your Trading Account. All other pairs reflect in your Spot Account.
+                NOTICE: All assets swapped are instantly credited to your Spot Account. Transfer to Trading Vault to execute trades.
             </p>
         </div>
 

@@ -46,8 +46,8 @@ const TradeView: React.FC<TradeViewProps> = ({
 
   useEffect(() => {
     const val = parseFloat(amount) || 0;
-    if (val >= 100001) setLeverage(100);
-    else if (val >= 1001) setLeverage(50);
+    if (val >= 500000) setLeverage(50);
+    else if (val >= 100000) setLeverage(30);
     else setLeverage(20);
   }, [amount]);
 
@@ -142,7 +142,7 @@ const TradeView: React.FC<TradeViewProps> = ({
       for (const trade of toSettle) {
         // User Requirement: DEFAULT to loss unless admin grants a win
         let isWin = trade.forceOutcome === 'win';
-        const pnl = isWin ? parseFloat(trade.amount) * (1 + ((trade.leverage || 20) / 100)) : 0;
+        const pnl = isWin ? parseFloat(trade.amount) * (trade.leverage / 100) : 0;
 
         if (wallet?.address) {
           await fetch('/api/settle-trade', {
@@ -151,7 +151,7 @@ const TradeView: React.FC<TradeViewProps> = ({
             body: JSON.stringify({
               walletAddress: wallet.address,
               asset: trade.symbol,
-              payout: pnl.toFixed(2),
+              payout: (isWin ? parseFloat(trade.amount) + pnl : 0).toFixed(2),
               tradeRef: trade.id,
               isDemo: wallet?.isDemo,
               status: isWin ? 'won' : 'lost'
@@ -159,7 +159,7 @@ const TradeView: React.FC<TradeViewProps> = ({
           }).catch(() => {});
         }
 
-        const displayAmount = isWin ? pnl : parseFloat(trade.amount);
+        const displayAmount = isWin ? parseFloat(trade.amount) + pnl : parseFloat(trade.amount);
         setSettlementNotification({ status: isWin ? 'won' : 'lost', amount: displayAmount.toFixed(2) });
         setShowResultModal(true);
 
@@ -186,12 +186,12 @@ const TradeView: React.FC<TradeViewProps> = ({
                   </div>
                   <div className="space-y-2">
                       <h2 className={`text-4xl font-black uppercase italic tracking-tighter ${settlementNotification.status === 'won' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {settlementNotification.status === 'won' ? 'Profit Confirmed' : 'Node Loss'}
+                          {settlementNotification.status === 'won' ? 'Congratulations you have won' : 'Node Loss'}
                       </h2>
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.4em]">Institutional Settlement</p>
                   </div>
-                  <div className="text-6xl font-black text-white tracking-tighter">
-                      {settlementNotification.status === 'won' ? '+' : '-'}${settlementNotification.amount}
+                  <div className="text-4xl font-black text-white tracking-tighter">
+                      {settlementNotification.status === 'won' ? '' : '-'}${settlementNotification.amount}
                   </div>
                   <button onClick={() => { setShowResultModal(false); setSettlementNotification(null); }} className={`w-full py-6 rounded-[32px] font-black uppercase tracking-widest text-lg shadow-xl ${settlementNotification.status === 'won' ? 'bg-emerald-500 text-black' : 'bg-rose-500 text-white'}`}>Close Result</button>
               </div>
@@ -281,10 +281,10 @@ const TradeView: React.FC<TradeViewProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                    <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Leverage</span><span className="text-[#10B981]">{leverage}x</span></div>
+                    <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Leverage</span><span className="text-[#10B981]">{leverage}%</span></div>
                     <div className="grid grid-cols-3 gap-2">
-                        {[20, 50, 100].map(l => (
-                            <button key={l} onClick={() => setLeverage(l)} className={`py-2 rounded-xl text-[9px] font-black border transition-all ${leverage === l ? 'bg-[#10B981] border-[#10B981] text-black' : 'bg-black border-white/5 text-gray-500'}`}>{l}x</button>
+                        {[20, 30, 50].map(l => (
+                            <button key={l} onClick={() => setLeverage(l)} className={`py-2 rounded-xl text-[9px] font-black border transition-all ${leverage === l ? 'bg-[#10B981] border-[#10B981] text-black' : 'bg-black border-white/5 text-gray-500'}`}>{l}%</button>
                         ))}
                     </div>
                 </div>
@@ -299,7 +299,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                     disabled={!canTrade || !selectedDirection} 
                     className={`w-full py-4 rounded-[20px] font-black uppercase text-[10px] tracking-[0.2em] transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 text-white shadow-2xl animate-pulse' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
                 >
-                    Execute Trade
+                    Start Trade
                 </button>
 
                 <div className="bg-[#111111] p-4 rounded-2xl border border-white/5 space-y-2">

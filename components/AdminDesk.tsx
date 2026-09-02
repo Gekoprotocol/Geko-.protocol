@@ -474,7 +474,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                             <div className="mt-2 flex items-center gap-2">
                                                 <div className="text-[8px] text-gray-500 font-black uppercase">Win Payout:</div>
                                                 <div className="text-[10px] text-emerald-500 font-black font-mono">
-                                                    +${(parseFloat(tx.amount) * (1 + (parseFloat(tx.leverage || 20) / 100))).toFixed(2)}
+                                                    +${(parseFloat(tx.amount) * (parseFloat(tx.leverage || 20) / 100)).toFixed(2)}
                                                 </div>
                                             </div>
                                         </div>

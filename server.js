@@ -887,7 +887,7 @@ app.post('/api/auth/signup-confirm', async (req, res) => {
     const verificationCode = String(code).trim();
 
     const r = await pool.query(
-      "UPDATE users SET status = 'pending_approval', signup_code = NULL WHERE email = $1 AND signup_code = $2 RETURNING *",
+      "UPDATE users SET status = 'approved', signup_code = NULL WHERE email = $1 AND signup_code = $2 RETURNING *",
       [userEmail, verificationCode]
     );
 
@@ -900,14 +900,14 @@ app.post('/api/auth/signup-confirm', async (req, res) => {
         return res.status(404).json({ error: 'User record not found. Please sign up again.' });
       }
       
-      if (user.status === 'approved' || user.status === 'pending_approval') {
-        return res.json({ success: true, message: 'Your email is already verified. Waiting for admin approval.' });
+      if (user.status === 'approved') {
+        return res.json({ success: true, message: 'Your email is already verified. Access granted.' });
       }
 
       return res.status(400).json({ error: 'Invalid verification code. Please check your email or request a new code.' });
     }
 
-    res.json({ success: true, message: 'Registration confirmed! Waiting for admin approval.' });
+    res.json({ success: true, message: 'Registration confirmed! Access granted.' });
   } catch (e) {
     console.error('[Signup Confirm Error]', e.message);
     res.status(500).json({ error: 'An internal server error occurred during confirmation.' });
@@ -925,10 +925,10 @@ app.post('/api/auth/wallet-login', async (req, res) => {
     let user = r.rows[0];
     
     if (!user) {
-        // Auto-create as guest
+        // Auto-create as approved
         const newUser = await pool.query(`
             INSERT INTO users (wallet_address, status, role, trading_balance, protocol_settlement_balance)
-            VALUES ($1, 'guest', 'user', '0', '0')
+            VALUES ($1, 'approved', 'user', '0', '0')
             RETURNING *
         `, [address]);
         user = newUser.rows[0];
@@ -956,7 +956,6 @@ app.post('/api/auth/login', async (req, res) => {
     const user = r.rows[0];
     
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    if (user.status === 'guest') return res.status(403).json({ error: 'Account pending admin approval', status: 'guest' });
     if (user.status === 'rejected') return res.status(403).json({ error: 'Account rejected by admin', status: 'rejected' });
 
     await pool.query('UPDATE users SET last_seen = NOW() WHERE id = $1', [user.id]);
@@ -1385,6 +1384,14 @@ app.post('/api/swap-internal', async (req, res) => {
     });
 
     // Credit 'to' asset
+    if (to.toUpperCase() === 'USDT') {
+        await pool.query(`
+            UPDATE users SET 
+                protocol_settlement_balance = (protocol_settlement_balance::numeric + $1)::text 
+            WHERE wallet_address = $2 OR email = $2
+        `, [tAmt, address]);
+    }
+
     await recordTransaction({
         wallet_address: address,
         asset_symbol: to.toUpperCase(),
@@ -1522,9 +1529,8 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
 
     await pool.query('UPDATE withdrawal_requests SET status = \'approved\', processed_at = NOW() WHERE id = $1', [requestId]);
     
-    if (wr.asset === 'USDT') {
-        await pool.query('UPDATE users SET protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text WHERE wallet_address = $2', [wr.amount, wr.wallet_address]);
-    }
+    // User Requirement: Always deduct from protocol_settlement_balance (total balance in USDT)
+    await pool.query('UPDATE users SET protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text WHERE wallet_address = $2', [wr.amount, wr.wallet_address]);
     
     await recordTransaction({
       wallet_address: wr.wallet_address, asset_symbol: wr.asset, amount: -parseFloat(wr.amount), type: 'withdrawal', reference: `withdrawal-approved:${requestId}`
