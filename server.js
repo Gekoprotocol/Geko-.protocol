@@ -1373,7 +1373,26 @@ app.post('/api/swap-internal', async (req, res) => {
     const amt = parseFloat(amount);
     const tAmt = parseFloat(targetAmount);
 
-    // Deduct 'from' asset
+    if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid swap amount' });
+
+    // 1. Check if user has enough balance
+    const currentFromBal = await getUserBalance(address, from);
+    if (currentFromBal < amt) {
+        return res.status(400).json({ error: `Insufficient ${from} balance for swap` });
+    }
+
+    // 2. Deduct 'from' asset
+    if (from.toUpperCase() === 'USDT') {
+        // USDT Spot balance is stored in protocol_settlement_balance column
+        await pool.query(`
+            UPDATE users SET 
+                protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text 
+            WHERE wallet_address = $2 OR email = $2
+        `, [amt, address]);
+        console.log(`[Swap] Deducted ${amt} USDT from settlement balance of ${address}`);
+    }
+    
+    // Record outgoing transaction in ledger for all assets (including USDT for history)
     await recordTransaction({
         wallet_address: address,
         asset_symbol: from.toUpperCase(),
@@ -1383,15 +1402,17 @@ app.post('/api/swap-internal', async (req, res) => {
         status: 'completed'
     });
 
-    // Credit 'to' asset
+    // 3. Credit 'to' asset
     if (to.toUpperCase() === 'USDT') {
         await pool.query(`
             UPDATE users SET 
                 protocol_settlement_balance = (protocol_settlement_balance::numeric + $1)::text 
             WHERE wallet_address = $2 OR email = $2
         `, [tAmt, address]);
+        console.log(`[Swap] Credited ${tAmt} USDT to settlement balance of ${address}`);
     }
 
+    // Record incoming transaction in ledger for all assets (including USDT for history)
     await recordTransaction({
         wallet_address: address,
         asset_symbol: to.toUpperCase(),
@@ -1402,7 +1423,10 @@ app.post('/api/swap-internal', async (req, res) => {
     });
 
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('[Swap Error]', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 // ─── Trades ───────────────────────────────────────────────────────────────
