@@ -1536,36 +1536,38 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
     const wr = wrRes.rows[0];
     if (!wr || wr.status !== 'pending') return res.status(400).json({ error: 'Invalid request' });
 
-    // Calculate USDT equivalent for deduction
-    let usdtDeduction = parseFloat(wr.amount);
-    
-    if (wr.asset.toUpperCase() !== 'USDT') {
-        try {
-            const priceRes = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${wr.asset.toUpperCase()}USDT`);
-            if (priceRes.data && priceRes.data.price) {
-                const currentPrice = parseFloat(priceRes.data.price);
-                usdtDeduction = parseFloat(wr.amount) * currentPrice;
-                console.log(`[Withdrawal Approval] Converting ${wr.amount} ${wr.asset} to ${usdtDeduction.toFixed(2)} USDT (Price: ${currentPrice})`);
-            } else {
-                return res.status(400).json({ error: `Could not determine market price for ${wr.asset}. Please try again later.` });
-            }
-        } catch (priceErr) {
-            console.error('[Withdrawal Price Fetch Failed]', priceErr.message);
-            return res.status(400).json({ error: `Failed to fetch live price for ${wr.asset}. Approval halted for safety.` });
-        }
-    }
+    console.log(`[Admin] Approving Withdrawal Request #${requestId} for ${wr.wallet_address}`);
 
+    // Update request status first
     await pool.query('UPDATE withdrawal_requests SET status = \'approved\', processed_at = NOW() WHERE id = $1', [requestId]);
     
-    // Deduct the calculated USDT value from the total balance
-    await pool.query('UPDATE users SET protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text WHERE wallet_address = $2', [usdtDeduction.toFixed(8), wr.wallet_address]);
+    // 1. Deduct from 'Spot' Account. 
+    // For USDT, 'Spot' is the protocol_settlement_balance.
+    if (wr.asset.toUpperCase() === 'USDT') {
+        await pool.query(
+            'UPDATE users SET protocol_settlement_balance = (protocol_settlement_balance::numeric - $1)::text WHERE wallet_address = $2', 
+            [parseFloat(wr.amount).toFixed(8), wr.wallet_address]
+        );
+        console.log(`[Admin] Deducted ${wr.amount} USDT from settlement balance of ${wr.wallet_address}`);
+    }
     
+    // 2. Record the transaction in the ledger.
+    // This handles deduction for BTC, ETH, SOL, etc., as their balances are calculated from transactions.
+    // It also provides history for USDT withdrawals.
     await recordTransaction({
-      wallet_address: wr.wallet_address, asset_symbol: wr.asset, amount: -parseFloat(wr.amount), type: 'withdrawal', reference: `withdrawal-approved:${requestId}`
+      wallet_address: wr.wallet_address, 
+      asset_symbol: wr.asset, 
+      amount: -parseFloat(wr.amount), 
+      type: 'withdrawal', 
+      reference: `withdrawal-approved:${requestId}`
     });
 
-    res.json({ success: true, usdtValue: usdtDeduction.toFixed(2) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    console.log(`[Admin] Withdrawal #${requestId} processed successfully: ${wr.amount} ${wr.asset}`);
+    res.json({ success: true });
+  } catch (e) { 
+    console.error('[Admin] Withdrawal Approval Error:', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post('/api/admin/reject-withdrawal', async (req, res) => {

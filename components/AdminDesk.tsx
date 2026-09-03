@@ -317,14 +317,24 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   const handleApproveWithdrawal = async (requestId: number) => {
+    setApprovingId(requestId);
     try {
-      await fetch('/api/admin/approve-withdrawal', {
+      const res = await fetch('/api/admin/approve-withdrawal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestId })
       });
-      fetchData();
-    } catch (e) { console.error('WR Approval failed', e); }
+      if (!res.ok) {
+          const data = await res.json();
+          alert(data.error || 'Approval failed');
+      }
+      await fetchData();
+    } catch (e) { 
+        console.error('WR Approval failed', e);
+        alert('Network error while approving withdrawal');
+    } finally {
+        setApprovingId(null);
+    }
   };
 
   const handleApproveKyc = async (submissionId: number, walletAddress: string) => {
@@ -540,11 +550,12 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 </td>
                                 <td className="px-8 py-6 text-right">
                                     {wr.status === 'pending' ? (
-                                        <button 
+                                        <button
                                             onClick={() => handleApproveWithdrawal(wr.id)}
-                                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
+                                            disabled={approvingId === wr.id}
+                                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 disabled:opacity-50"
                                         >
-                                            Approve
+                                            {approvingId === wr.id ? 'Processing...' : 'Approve'}
                                         </button>
                                     ) : (
                                         <span className="text-[9px] font-black uppercase text-emerald-500 px-3 py-1 bg-emerald-500/10 rounded-full">Processed</span>
