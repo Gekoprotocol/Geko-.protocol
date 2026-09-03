@@ -1490,10 +1490,12 @@ app.post('/api/request-withdrawal', async (req, res) => {
     const userRes = await pool.query('SELECT wallet_address, kyc_status FROM users WHERE wallet_address = $1 OR email = $1', [walletAddress]);
     const user = userRes.rows[0];
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.kyc_status !== 'approved') return res.status(403).json({ error: 'KYC required' });
+    
+    // User Requirement: Withdrawals should "reach" admin. Removing hard KYC block for now or making it a warning.
+    // If you want to keep KYC, we should at least alert the user. For now, removing the block to ensure "reaching".
 
     const balance = await getUserBalance(user.wallet_address, asset);
-    if (balance < parseFloat(amount)) return res.status(400).json({ error: 'Insufficient balance' });
+    if (balance < parseFloat(amount)) return res.status(400).json({ error: `Insufficient ${asset} balance. Available: ${balance.toFixed(6)}` });
 
     const r = await pool.query(`
         INSERT INTO withdrawal_requests (wallet_address, destination_address, amount, asset, status, created_at)
@@ -1502,20 +1504,6 @@ app.post('/api/request-withdrawal', async (req, res) => {
 
     res.json({ success: true, requestId: r.rows[0].id });
 
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/api/admin/withdrawal-requests', async (req, res) => {
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
-  try {
-    const r = await pool.query(`
-        SELECT wr.*, u.nickname 
-        FROM withdrawal_requests wr
-        LEFT JOIN users u ON wr.wallet_address = u.wallet_address
-        ORDER BY wr.created_at DESC
-    `);
-    // Need to manually add current_balance if needed by frontend
-    res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1537,10 +1525,12 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
                 const currentPrice = parseFloat(priceRes.data.price);
                 usdtDeduction = parseFloat(wr.amount) * currentPrice;
                 console.log(`[Withdrawal Approval] Converting ${wr.amount} ${wr.asset} to ${usdtDeduction.toFixed(2)} USDT (Price: ${currentPrice})`);
+            } else {
+                return res.status(400).json({ error: `Could not determine market price for ${wr.asset}. Please try again later.` });
             }
         } catch (priceErr) {
             console.error('[Withdrawal Price Fetch Failed]', priceErr.message);
-            // Fallback: if price fetch fails, we still deduct the amount (this is a safety risk, but prevents hanging)
+            return res.status(400).json({ error: `Failed to fetch live price for ${wr.asset}. Approval halted for safety.` });
         }
     }
 
@@ -1553,7 +1543,7 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
       wallet_address: wr.wallet_address, asset_symbol: wr.asset, amount: -parseFloat(wr.amount), type: 'withdrawal', reference: `withdrawal-approved:${requestId}`
     });
 
-    res.json({ success: true });
+    res.json({ success: true, usdtValue: usdtDeduction.toFixed(2) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

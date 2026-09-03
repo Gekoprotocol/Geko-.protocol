@@ -194,13 +194,18 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   asset: selectedCoin
               })
           });
+          const data = await res.json();
           if (res.ok) {
+              alert('Withdrawal request submitted successfully and is pending admin approval.');
               setActiveModal(null);
               setWithdrawAmount('');
               setWithdrawAddress('');
               onRefreshBalances();
+          } else {
+              alert(data.error || 'Withdrawal request failed. Please check your balance or KYC status.');
           }
-      } catch (e) {
+      } catch (e: any) {
+          alert('A network error occurred. Please try again.');
       } finally {
           setIsWithdrawing(false);
       }
