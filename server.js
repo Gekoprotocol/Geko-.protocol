@@ -1502,9 +1502,30 @@ app.post('/api/request-withdrawal', async (req, res) => {
         VALUES ($1, $2, $3, $4, 'pending', NOW()) RETURNING id
     `, [user.wallet_address, destinationAddress.trim(), parseFloat(amount), asset]);
 
+    console.log(`[Withdrawal] SAVED_TO_DB: ID=${r.rows[0].id}`);
     res.json({ success: true, requestId: r.rows[0].id });
 
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+      console.error('[Withdrawal] CREATE_ERROR:', e.message);
+      res.status(500).json({ error: e.message }); 
+  }
+});
+
+app.get('/api/admin/withdrawal-requests', async (req, res) => {
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const r = await pool.query(`
+        SELECT wr.*, u.nickname 
+        FROM withdrawal_requests wr
+        LEFT JOIN users u ON wr.wallet_address = u.wallet_address
+        ORDER BY wr.created_at DESC
+    `);
+    console.log(`[Admin] FETCH_WITHDRAWALS: Found ${r.rows.length} records`);
+    res.json(r.rows);
+  } catch (e) { 
+      console.error('[Admin] WITHDRAWAL_FETCH_ERROR:', e.message);
+      res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post('/api/admin/approve-withdrawal', async (req, res) => {
