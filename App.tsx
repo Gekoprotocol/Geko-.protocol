@@ -75,7 +75,6 @@ export default function App() {
 function TerminalLayout() {
   const { connected, disconnect } = useWallet();
   const [activeTab, setActiveTab] = useState<'home' | 'swap' | 'pulse' | 'trade' | 'assets' | 'admin' | 'history' | 'settings'>('home');
-  const [isLoading, setIsLoading] = useState(true);
   const [customWallet, setCustomWallet] = useState<WalletData | null>(null);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -94,8 +93,7 @@ function TerminalLayout() {
         setCustomWallet(w);
         if (w?.role === 'admin' && w?.email === 'admin@gmail.com') setActiveTab('admin');
     });
-    const timer = setTimeout(() => setIsLoading(false), 2000);
-    return () => { unsub(); clearTimeout(timer); };
+    return () => { unsub(); };
   }, []);
 
   // Fetch Prices
@@ -143,7 +141,7 @@ function TerminalLayout() {
   }, [refreshData]);
 
   const isConnected = connected || !!customWallet;
-  const isApproved = connected || (!!customWallet && customWallet.status === 'approved');
+  const isApproved = connected || !!customWallet;
 
   const assets: AssetInfo[] = useMemo(() => {
     if (!prices || !prices.length) return [
@@ -168,14 +166,6 @@ function TerminalLayout() {
     if (action === 'deposit') setAutoOpenDeposit(true);
     if (action === 'transfer') setAutoOpenTransfer(true);
   };
-
-  if (isLoading) {
-    return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-center">
-            <div className="text-7xl font-black animate-web3-splash uppercase tracking-tighter italic">Web3</div>
-        </div>
-    );
-  }
 
   if (!isApproved && activeTab !== 'admin') {
     return (

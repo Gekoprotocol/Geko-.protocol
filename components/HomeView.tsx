@@ -62,7 +62,7 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
             </div>
 
             <div className="space-y-3">
-                {assets.slice(0, 4).map((asset) => (
+                {assets.slice(0, 10).map((asset) => (
                     <div 
                         key={asset.symbol}
                         onClick={() => onNavigate('trade')}
