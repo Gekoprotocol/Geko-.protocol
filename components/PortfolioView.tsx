@@ -196,7 +196,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           });
           const data = await res.json();
           if (res.ok) {
-              alert('Withdrawal request submitted successfully and is pending admin approval.');
+              alert('Successful');
               setActiveModal(null);
               setWithdrawAmount('');
               setWithdrawAddress('');
