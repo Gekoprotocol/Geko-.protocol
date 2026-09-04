@@ -252,6 +252,29 @@ const TradeView: React.FC<TradeViewProps> = ({
                     {isChartFullscreen ? <X size={20} /> : <TrendingUp size={20} />}
                 </button>
             </div>
+
+            {/* Mobile Active Trades Stream - Visible only below chart when not fullscreen */}
+            {!isChartFullscreen && (
+                <div className="lg:hidden p-4 space-y-4 bg-[#181C25] border-t border-[#2B3139]">
+                    <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 block">Live Stream</span>
+                    <div className="space-y-3">
+                        {localActiveTrades.length === 0 ? (
+                            <div className="text-center py-4 text-[9px] text-gray-600 font-black uppercase tracking-widest border border-dashed border-[#2B3139] rounded-2xl">No Active Node Trades</div>
+                        ) : localActiveTrades.map(t => {
+                            const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
+                            return (
+                                <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-2xl border border-[#2B3139]">
+                                    <div className="flex items-center space-x-3">
+                                        <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
+                                        <span className={`text-[9px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'LONG' : 'SHORT'} ${t.amount} · {timeLeft}s</span>
+                                    </div>
+                                    <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
 
         <div className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl overflow-y-auto h-full pb-40 custom-scrollbar`}>
