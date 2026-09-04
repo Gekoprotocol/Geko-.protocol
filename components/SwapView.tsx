@@ -105,7 +105,7 @@ export default function SwapView({
                         value={amount}
                         onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                         placeholder="0.00" 
-                        className="bg-transparent text-3xl font-bold text-white outline-none w-1/2" 
+                        className="bg-transparent text-2xl font-bold text-white outline-none w-1/2" 
                     />
                     <button 
                         onClick={() => setShowFromSelector(true)}
@@ -139,7 +139,7 @@ export default function SwapView({
                     <span className="text-indigo-400">AI Estimate</span>
                 </div>
                 <div className="flex items-center justify-between">
-                    <div className="text-3xl font-bold text-gray-600 outline-none w-1/2 truncate">{targetAmount}</div>
+                    <div className="text-2xl font-bold text-gray-600 outline-none w-1/2 truncate">{targetAmount}</div>
                     <button 
                         onClick={() => setShowToSelector(true)}
                         className="bg-[#1A1A1A] border border-white/5 px-4 py-2 rounded-2xl flex items-center gap-2 hover:bg-[#222222] transition-all"

@@ -132,7 +132,7 @@ function TerminalLayout() {
         const tradesRes = await fetch(`/api/user/active-trades?address=${encodeURIComponent(customWallet.address)}`);
         if (tradesRes.ok) setActiveTrades(await tradesRes.json());
     } catch (_) {}
-  }, [customWallet?.address]);
+  }, [customWallet?.address, assets]);
 
   useEffect(() => {
     refreshData();
