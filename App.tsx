@@ -109,6 +109,24 @@ function TerminalLayout() {
     return () => clearInterval(interval);
   }, []);
 
+  const assets: AssetInfo[] = useMemo(() => {
+    if (!prices || !prices.length) return [
+        { symbol: 'BTC', name: 'Bitcoin', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
+        { symbol: 'ETH', name: 'Ethereum', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
+        { symbol: 'SOL', name: 'Solana', price: 0, change24h: 0, marketCap: '0', volume24h: '0' }
+    ];
+    return prices.map(p => ({
+        symbol: p.symbol.replace('USDT', ''),
+        name: p.symbol.replace('USDT', ''),
+        price: parseFloat(p.lastPrice),
+        change24h: parseFloat(p.priceChangePercent),
+        marketCap: 'N/A',
+        volume24h: '0'
+    }));
+  }, [prices]);
+
+  const selectedAsset = assets.find(a => a.symbol === selectedSymbol) || assets[0];
+
   // Sync Data
   const refreshData = useCallback(async () => {
     if (!customWallet?.address) return;
@@ -142,24 +160,6 @@ function TerminalLayout() {
 
   const isConnected = connected || !!customWallet;
   const isApproved = connected || !!customWallet;
-
-  const assets: AssetInfo[] = useMemo(() => {
-    if (!prices || !prices.length) return [
-        { symbol: 'BTC', name: 'Bitcoin', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
-        { symbol: 'ETH', name: 'Ethereum', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
-        { symbol: 'SOL', name: 'Solana', price: 0, change24h: 0, marketCap: '0', volume24h: '0' }
-    ];
-    return prices.map(p => ({
-        symbol: p.symbol.replace('USDT', ''),
-        name: p.symbol.replace('USDT', ''),
-        price: parseFloat(p.lastPrice),
-        change24h: parseFloat(p.priceChangePercent),
-        marketCap: 'N/A',
-        volume24h: '0'
-    }));
-  }, [prices]);
-
-  const selectedAsset = assets.find(a => a.symbol === selectedSymbol) || assets[0];
 
   const handleNavigate = (t: string, action?: string) => {
     setActiveTab(t as any);
