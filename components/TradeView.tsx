@@ -44,13 +44,6 @@ const TradeView: React.FC<TradeViewProps> = ({
   const [leverage, setLeverage] = useState(20);
   const [selectedDirection, setSelectedDirection] = useState<'up' | 'down' | null>(null);
 
-  useEffect(() => {
-    const val = parseFloat(amount) || 0;
-    if (val >= 500000) setLeverage(50);
-    else if (val >= 100000) setLeverage(30);
-    else setLeverage(20);
-  }, [amount]);
-
   const [mobileView, setMobileView] = useState<'chart' | 'controls'>('chart');
   const [isChartFullscreen, setIsChartFullscreen] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -85,6 +78,12 @@ const TradeView: React.FC<TradeViewProps> = ({
   const hasSufficient = (tradingBalance || 0) >= parsedAmount;
   const canTrade      = !isBelowMin && hasSufficient && parsedAmount > 0;
   
+  // Enforce leverage limits
+  const maxLeverage = parsedAmount >= 500000 ? 50 : (parsedAmount >= 100000 ? 30 : 20);
+  useEffect(() => {
+    if (leverage > maxLeverage) setLeverage(maxLeverage);
+  }, [maxLeverage, leverage]);
+
   const executeTrade = async (dirOverride?: 'up' | 'down') => {
     const direction = dirOverride || selectedDirection;
     if (!direction) return;
@@ -93,6 +92,10 @@ const TradeView: React.FC<TradeViewProps> = ({
       return;
     }
     if (!canTrade) return;
+    if (leverage > maxLeverage) {
+        setTradeStatus({ msg: `Max leverage for this amount is ${maxLeverage}x`, ok: false });
+        return;
+    }
 
     const tradeId = Math.random().toString(36).substring(7);
     const newTrade: ActiveTrade = {
@@ -255,9 +258,9 @@ const TradeView: React.FC<TradeViewProps> = ({
 
             {/* Mobile Active Trades Stream - Visible only below chart when not fullscreen */}
             {!isChartFullscreen && (
-                <div className="lg:hidden p-4 space-y-4 bg-[#181C25] border-t border-[#2B3139]">
+                <div className="lg:hidden p-4 space-y-4 bg-[#181C25] border-t border-[#2B3139] shrink-0">
                     <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 block">Live Stream</span>
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
                         {localActiveTrades.length === 0 ? (
                             <div className="text-center py-4 text-[9px] text-gray-600 font-black uppercase tracking-widest border border-dashed border-[#2B3139] rounded-2xl">No Active Node Trades</div>
                         ) : localActiveTrades.map(t => {
@@ -307,7 +310,14 @@ const TradeView: React.FC<TradeViewProps> = ({
                     <div className="flex justify-between text-[9px] text-gray-500 font-black uppercase px-1"><span>Leverage</span><span className="text-[#10B981]">{leverage}%</span></div>
                     <div className="grid grid-cols-3 gap-2">
                         {[20, 30, 50].map(l => (
-                            <button key={l} onClick={() => setLeverage(l)} className={`py-2 rounded-xl text-[9px] font-black border transition-all ${leverage === l ? 'bg-[#10B981] border-[#10B981] text-black' : 'bg-black border-white/5 text-gray-500'}`}>{l}%</button>
+                            <button 
+                                key={l} 
+                                onClick={() => setLeverage(l)} 
+                                disabled={l > maxLeverage}
+                                className={`py-2 rounded-xl text-[9px] font-black border transition-all ${leverage === l ? 'bg-[#10B981] border-[#10B981] text-black' : 'bg-black border-white/5 text-gray-500'} ${l > maxLeverage ? 'opacity-20 cursor-not-allowed' : ''}`}
+                            >
+                                {l}%
+                            </button>
                         ))}
                     </div>
                 </div>
@@ -330,9 +340,9 @@ const TradeView: React.FC<TradeViewProps> = ({
                     <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Risk</span><span className="text-rose-500">Institutional</span></div>
                 </div>
 
-                <div className="space-y-3 pt-6">
+                <div className="space-y-3 pt-6 min-h-0 flex-1 flex flex-col">
                     <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 block">Live Stream</span>
-                    <div className="space-y-3">
+                    <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
                         {localActiveTrades.map(t => {
                             const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
                             return (

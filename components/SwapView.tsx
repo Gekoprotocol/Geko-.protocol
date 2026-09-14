@@ -99,17 +99,17 @@ export default function SwapView({
                     <span>Pay From Spot</span>
                     <span className="text-gray-400">Bal: {getSourceBalance(fromAsset?.symbol || '').toFixed(4)}</span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                     <input 
                         type="text" 
                         value={amount}
                         onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                         placeholder="0.00" 
-                        className="bg-transparent text-2xl font-bold text-white outline-none w-1/2" 
+                        className="bg-transparent text-lg md:text-xl font-bold text-white outline-none flex-1 min-w-0" 
                     />
                     <button 
                         onClick={() => setShowFromSelector(true)}
-                        className="bg-[#1A1A1A] border border-white/5 px-4 py-2 rounded-2xl flex items-center gap-2 hover:bg-[#222222] transition-all"
+                        className="bg-[#1A1A1A] border border-white/5 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl flex items-center gap-2 hover:bg-[#222222] transition-all shrink-0"
                     >
                         <SwapSymbol symbol={fromAsset?.symbol || 'BTC'} />
                         <span className="text-sm font-bold text-white">{fromAsset?.symbol || 'BTC'}</span>
@@ -138,11 +138,11 @@ export default function SwapView({
                     <span>To Spot Account</span>
                     <span className="text-indigo-400">AI Estimate</span>
                 </div>
-                <div className="flex items-center justify-between">
-                    <div className="text-2xl font-bold text-gray-600 outline-none w-1/2 truncate">{targetAmount}</div>
+                <div className="flex items-center justify-between gap-4">
+                    <div className="text-lg md:text-xl font-bold text-gray-400 outline-none flex-1 min-w-0 font-mono break-all">{targetAmount}</div>
                     <button 
                         onClick={() => setShowToSelector(true)}
-                        className="bg-[#1A1A1A] border border-white/5 px-4 py-2 rounded-2xl flex items-center gap-2 hover:bg-[#222222] transition-all"
+                        className="bg-[#1A1A1A] border border-white/5 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl flex items-center gap-2 hover:bg-[#222222] transition-all shrink-0"
                     >
                         <SwapSymbol symbol={toAsset?.symbol || 'SOL'} />
                         <span className="text-sm font-bold text-white">{toAsset?.symbol || 'SOL'}</span>
