@@ -100,8 +100,11 @@ function TerminalLayout() {
   useEffect(() => {
     const fetchPrices = async () => {
         try {
-            const res = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT"]');
-            if (res.ok) setPrices(await res.json());
+            const res = await fetch('/api/binance/prices');
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) setPrices(data);
+            }
         } catch (_) {}
     };
     fetchPrices();
@@ -110,12 +113,16 @@ function TerminalLayout() {
   }, []);
 
   const assets: AssetInfo[] = useMemo(() => {
-    if (!prices || !prices.length) return [
+    const defaultAssets = [
         { symbol: 'BTC', name: 'Bitcoin', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
         { symbol: 'ETH', name: 'Ethereum', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
-        { symbol: 'SOL', name: 'Solana', price: 0, change24h: 0, marketCap: '0', volume24h: '0' }
+        { symbol: 'SOL', name: 'Solana', price: 0, change24h: 0, marketCap: '0', volume24h: '0' },
+        { symbol: 'USDT', name: 'TetherUS', price: 1, change24h: 0, marketCap: '0', volume24h: '0' }
     ];
-    return prices.map(p => ({
+
+    if (!prices || !prices.length) return defaultAssets;
+
+    const mapped = prices.map(p => ({
         symbol: p.symbol.replace('USDT', ''),
         name: p.symbol.replace('USDT', ''),
         price: parseFloat(p.lastPrice),
@@ -123,6 +130,13 @@ function TerminalLayout() {
         marketCap: 'N/A',
         volume24h: '0'
     }));
+
+    // Ensure core assets always exist
+    const final = [...mapped];
+    defaultAssets.forEach(d => {
+        if (!final.find(f => f.symbol === d.symbol)) final.push(d);
+    });
+    return final;
   }, [prices]);
 
   const selectedAsset = assets.find(a => a.symbol === selectedSymbol) || assets[0];
@@ -138,8 +152,13 @@ function TerminalLayout() {
             if (data.balances) {
                 const enriched = data.balances.map((b: any) => {
                     const assetInfo = assets.find(a => a.symbol === b.asset);
-                    const price = assetInfo ? assetInfo.price : (b.asset === 'USDT' ? 1 : 0);
-                    return { ...b, valueUsd: (parseFloat(b.balance) * price).toFixed(2) };
+                    // Fallback to 1 for USDT, otherwise wait for assets list to populate from prices
+                    let price = 0;
+                    if (b.asset === 'USDT') price = 1;
+                    else if (assetInfo && assetInfo.price > 0) price = assetInfo.price;
+                    
+                    const valueUsd = (parseFloat(b.balance) * price).toFixed(2);
+                    return { ...b, valueUsd: price > 0 ? valueUsd : '...' };
                 });
                 setProtocolBalances(enriched);
             }

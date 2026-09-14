@@ -63,9 +63,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             const res = await authService.signupRequest(email, password, name);
             setSignupStep('verify');
             if (res.alternativeCode) {
-                setMsg(`Verification code sent. Code: ${res.alternativeCode}`);
+                setMsg(`Input this code: ${res.alternativeCode}`);
             } else {
-                setMsg('Verification code sent to your email.');
+                setMsg('Verification code sent. Please check your institutional email.');
             }
         } else {
             await authService.signupConfirm(email, verificationCode);

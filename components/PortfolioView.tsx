@@ -108,7 +108,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   if (!wallet) return null;
 
   const totalTradingBalance = wallet.trading_balance || 0;
-  const totalSpotValue = protocolBalances.reduce((acc, curr) => acc + parseFloat(curr.valueUsd || 0), 0);
+  const totalSpotValue = protocolBalances.reduce((acc, curr) => {
+      const val = parseFloat(curr.valueUsd);
+      return acc + (isNaN(val) ? 0 : val);
+  }, 0);
   const usdtSpotBalance = protocolBalances.find(b => b.asset === 'USDT')?.balance || 0;
 
   const getAddr = () => {
@@ -219,7 +222,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           {/* Main Balance Card */}
           <div className="text-center space-y-4 py-4">
               <div className="text-sm font-medium text-gray-500 uppercase tracking-[0.2em]">Institutional Value</div>
-              <div className="text-6xl font-bold tracking-tight text-white">
+              <div className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter text-white break-all px-2">
                   ${(totalTradingBalance + totalSpotValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               <div className="flex flex-col items-center gap-4">
