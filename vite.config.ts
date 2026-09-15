@@ -16,6 +16,12 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
+    resolve: {
+      alias: {
+        'process/browser': 'process/browser',
+        'buffer': 'buffer',
+      }
+    },
     define: {
       'process.env': JSON.stringify(env)
     },
