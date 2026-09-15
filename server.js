@@ -48,6 +48,24 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+const distPath = path.resolve(__dirname, 'dist');
+const publicPath = path.resolve(__dirname, 'public');
+const rootPath = __dirname;
+
+// Serve static files from dist first
+app.use(express.static(distPath));
+app.use(express.static(publicPath));
+
+// Explicitly handle assets to avoid MIME type issues with SPA fallback
+app.get('/assets/*', (req, res) => {
+  const filePath = path.join(distPath, req.path);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  console.warn(`[Static] Asset not found: ${req.path}`);
+  res.status(404).send('Asset not found');
+});
+
 let pool = null;
 let dbAvailable = false;
 let lastInitError = null;
@@ -1655,21 +1673,15 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 // ─── Static files & SPA ───────────────────────────────────────────────────
-const distPath = path.resolve(__dirname, 'dist');
-const publicPath = path.resolve(__dirname, 'public');
-const rootPath = __dirname;
-
-app.use(express.static(distPath));
-app.use(express.static(publicPath));
-app.use(express.static(rootPath));
 
 app.get('*', (req, res) => {
   if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found' });
+  
+  // Always prioritize dist/index.html for SPA fallback
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
-  const rootIndexPath = path.join(rootPath, 'index.html');
-  if (fs.existsSync(rootIndexPath)) return res.sendFile(rootIndexPath);
-  res.status(404).send("Build not found");
+  
+  res.status(404).send("Build not found. Please run 'npm run build' first.");
 });
 
 app.listen(port, '0.0.0.0', () => {
