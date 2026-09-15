@@ -52,25 +52,21 @@ const distPath = path.resolve(__dirname, 'dist');
 const publicPath = path.resolve(__dirname, 'public');
 
 // ─── Static files & SPA ───────────────────────────────────────────────────
-// Serve static files with explicit extensions and no-cache for development
+// 1. Serve static files from dist first
 app.use(express.static(distPath, {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript');
-        }
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
     }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
 }));
+
+// 2. Serve static files from public
 app.use(express.static(publicPath));
 
-// Explicitly handle assets to avoid MIME type issues with SPA fallback
-app.get(['/assets/*', '/*.js', '/*.css'], (req, res) => {
-  const filePath = path.join(distPath, req.path);
-  if (fs.existsSync(filePath)) {
-    if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
-    if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css');
-    return res.sendFile(filePath);
-  }
-  console.warn(`[Static] Missing Asset: ${req.path}`);
+// 3. Prevent HTML fallback for missing assets
+app.use('/assets', (req, res) => {
   res.status(404).send('Asset not found');
 });
 
@@ -1683,16 +1679,19 @@ app.get('/api/leaderboard', async (req, res) => {
 // ─── SPA Fallback ─────────────────────────────────────────────────────────
 
 app.get('*', (req, res) => {
+  // If it's an API call that reached here, it's a 404
   if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found' });
   
-  // NEVER serve HTML for JS/CSS requests
-  if (req.url.endsWith('.js') || req.url.endsWith('.css')) {
-      console.warn(`[Static] Fallback blocked for: ${req.url}`);
+  // If it's a request for a file (has an extension), but wasn't caught by express.static
+  if (req.url.includes('.')) {
       return res.status(404).send('Not found');
   }
 
   const indexPath = path.join(distPath, 'index.html');
-  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  if (fs.existsSync(indexPath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      return res.sendFile(indexPath);
+  }
   
   res.status(404).send("Build not found. Please run 'npm run build' first.");
 });
