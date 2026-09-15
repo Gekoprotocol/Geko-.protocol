@@ -53,6 +53,13 @@ import { WalletData, AssetInfo, ActiveTrade } from './types';
 export default function App() {
   const network = WalletAdapterNetwork.Mainnet;
   const endpoint = clusterApiUrl(network);
+  
+  // Explicitly hide fallback loader when React takes over
+  useEffect(() => {
+    const loader = document.getElementById('fallback-loader');
+    if (loader) loader.style.display = 'none';
+  }, []);
+
   const wallets = useMemo(() => [
     new PhantomWalletAdapter(),
     new SolflareWalletAdapter(),

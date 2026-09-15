@@ -1,13 +1,8 @@
 
+import './polyfills';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { Buffer } from 'buffer';
-
-// Polyfills for browser environment
-window.global = window;
-window.Buffer = Buffer;
-window.process = { env: {} } as any;
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -15,8 +10,4 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+root.render(<App />);
