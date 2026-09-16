@@ -30,12 +30,13 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  // Do not intercept API calls
   if (event.request.url.includes('/api/')) return;
 
-  // ONLY handle http and https requests to avoid chrome-extension:// errors
+  // Only handle http/https schemes
   if (!event.request.url.startsWith('http')) return;
 
-  // Network-First strategy for HTML and Root to avoid stale index.html
   const isHtmlRequest = event.request.mode === 'navigate' || 
                        event.request.url.endsWith('/') || 
                        event.request.url.endsWith('/index.html');
@@ -45,9 +46,7 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .then((response) => {
           const clonedResponse = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clonedResponse);
-          });
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clonedResponse));
           return response;
         })
         .catch(() => caches.match(event.request))
@@ -55,17 +54,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-First for other assets
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((res) => {
-        if (!res || res.status !== 200 || res.type !== 'basic') return res;
-        const resClone = res.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, resClone);
-        });
-        return res;
-      }).catch(() => null);
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+
+      return fetch(event.request).then((networkResponse) => {
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          return networkResponse;
+        }
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+        return networkResponse;
+      }).catch(() => {
+        // Fallback for failed fetch
+        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+      });
     })
   );
 });
