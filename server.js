@@ -39,6 +39,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Path Normalization for Vercel ────────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/')) {
+    // Prefix already present
+  } else if (req.url !== '/' && !req.url.includes('.') && !req.url.startsWith('/assets/')) {
+    // Prepend /api if missing (common in Vercel Serverless Functions)
+    const normalizedPath = '/api' + (req.url.startsWith('/') ? '' : '/') + req.url;
+    console.log(`[Path Normalization] ${req.url} -> ${normalizedPath}`);
+    req.url = normalizedPath;
+  }
+  next();
+});
+
 app.use(cors());
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'ALLOWALL');
