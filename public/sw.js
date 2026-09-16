@@ -1,7 +1,5 @@
-const CACHE_NAME = 'geko-v2.1'; // Bumped version for update force
+const CACHE_NAME = 'geko-v2.2'; // Bumped version for update force
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/favicon.ico'
 ];
@@ -31,18 +29,40 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only cache GET requests
   if (event.request.method !== 'GET') return;
-  
-  // Skip caching for API calls
   if (event.request.url.includes('/api/')) return;
 
+  // Network-First strategy for HTML and Root to avoid stale index.html
+  const isHtmlRequest = event.request.mode === 'navigate' || 
+                       event.request.url.endsWith('/') || 
+                       event.request.url.endsWith('/index.html');
+
+  if (isHtmlRequest) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const clonedResponse = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, clonedResponse);
+          });
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache-First for other assets
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => {
-          // If fetch fails and no cache, just let it fail
-          return null;
-      });
+      return response || fetch(event.request).then((res) => {
+        if (!res || res.status !== 200 || res.type !== 'basic') return res;
+        const resClone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, resClone);
+        });
+        return res;
+      }).catch(() => null);
     })
   );
 });
