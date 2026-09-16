@@ -1678,9 +1678,20 @@ app.get('/api/leaderboard', async (req, res) => {
 
 // ─── SPA Fallback ─────────────────────────────────────────────────────────
 
+// ─── Global Error & 404 Handlers ──────────────────────────────────────────
+
+app.use((err, req, res, next) => {
+  console.error('[Global Error]', err);
+  res.status(500).json({ error: 'Internal Server Error', details: err.message });
+});
+
+app.post('*', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found', path: req.url, method: req.method });
+});
+
 app.get('*', (req, res) => {
   // If it's an API call that reached here, it's a 404
-  if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found' });
+  if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found', path: req.url });
   
   // If it's a request for a file (has an extension), but wasn't caught by express.static
   if (req.url.includes('.')) {
