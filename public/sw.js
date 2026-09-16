@@ -32,6 +32,9 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (event.request.url.includes('/api/')) return;
 
+  // ONLY handle http and https requests to avoid chrome-extension:// errors
+  if (!event.request.url.startsWith('http')) return;
+
   // Network-First strategy for HTML and Root to avoid stale index.html
   const isHtmlRequest = event.request.mode === 'navigate' || 
                        event.request.url.endsWith('/') || 

@@ -35,20 +35,7 @@ const port = 8080;
 
 // ─── Debug Logger ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {
-  console.log(`[Request] ${req.method} ${req.url}`);
-  next();
-});
-
-// ─── Path Normalization for Vercel ────────────────────────────────────────
-app.use((req, res, next) => {
-  if (req.url.startsWith('/api/')) {
-    // Prefix already present
-  } else if (req.url !== '/' && !req.url.includes('.') && !req.url.startsWith('/assets/')) {
-    // Prepend /api if missing (common in Vercel Serverless Functions)
-    const normalizedPath = '/api' + (req.url.startsWith('/') ? '' : '/') + req.url;
-    console.log(`[Path Normalization] ${req.url} -> ${normalizedPath}`);
-    req.url = normalizedPath;
-  }
+  console.log(`[DEBUG] Incoming: ${req.method} ${req.url}`);
   next();
 });
 
@@ -64,23 +51,23 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const distPath = path.resolve(__dirname, 'dist');
 const publicPath = path.resolve(__dirname, 'public');
 
-// ─── Static files & SPA ───────────────────────────────────────────────────
-// 1. Serve static files from dist first
-app.use(express.static(distPath, {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    }
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+// ─── Path Normalization & DB Initialization ──────────────────────────────
+app.use(async (req, res, next) => {
+  // 1. Path Normalization
+  if (!req.url.startsWith('/api/') && req.url !== '/' && !req.url.includes('.') && !req.url.startsWith('/assets/')) {
+    req.url = '/api' + (req.url.startsWith('/') ? '' : '/') + req.url;
   }
-}));
 
-// 2. Serve static files from public
-app.use(express.static(publicPath));
-
-// 3. Prevent HTML fallback for missing assets
-app.use('/assets', (req, res) => {
-  res.status(404).send('Asset not found');
+  // 2. DB Initialization Wait (Only for API routes)
+  if (req.url.startsWith('/api/') && dbInitPromise && !dbAvailable) {
+    try {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_INIT_TIMEOUT')), 30000));
+      await Promise.race([dbInitPromise, timeout]);
+    } catch (e) {
+      console.warn('[DB Wait] Ended:', e.message);
+    }
+  }
+  next();
 });
 
 let pool = null;
@@ -451,21 +438,6 @@ app.get('/api/health', async (req, res) => {
     error: lastInitError,
     time: new Date().toISOString() 
   });
-});
-
-app.use(async (req, res, next) => {
-  // Wait for DB initialization if it's still in progress
-  if (dbInitPromise && !dbAvailable) {
-    try {
-      console.log(`[DB Middleware] Waiting for database initialization for ${req.url}...`);
-      // Wait up to 30 seconds for DB to be ready
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_INIT_TIMEOUT')), 30000));
-      await Promise.race([dbInitPromise, timeout]);
-    } catch (e) {
-      console.warn('[DB Middleware] Database initialization wait ended:', e.message);
-    }
-  }
-  next();
 });
 
 // ─── Config endpoints ──────────────────────────────────────────────────────
@@ -1687,6 +1659,26 @@ app.get('/api/leaderboard', async (req, res) => {
         balance: parseFloat(u.balance)
     })));
   } catch (e) { res.json([]); }
+});
+
+// ─── Static files ─────────────────────────────────────────────────────────
+
+// 1. Serve static files from dist first
+app.use(express.static(distPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
+
+// 2. Serve static files from public
+app.use(express.static(publicPath));
+
+// 3. Prevent HTML fallback for missing assets
+app.use('/assets', (req, res) => {
+  res.status(404).send('Asset not found');
 });
 
 // ─── SPA Fallback ─────────────────────────────────────────────────────────
