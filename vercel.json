@@ -28,7 +28,7 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api/|assets/|sw.js|favicon.ico|manifest.json|.*\\.).*)",
+      "source": "/((?!api/|assets/|sw.js|favicon.ico|manifest.json).*)",
       "destination": "/index.html"
     }
   ],
