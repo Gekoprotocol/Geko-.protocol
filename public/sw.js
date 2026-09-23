@@ -60,14 +60,14 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(event.request).then((networkResponse) => {
         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
+          return networkResponse || new Response('Network error', { status: 404 });
         }
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         return networkResponse;
       }).catch(() => {
         // Fallback for failed fetch
-        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+        return caches.match(event.request) || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
       });
     })
   );
