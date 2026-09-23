@@ -56,14 +56,20 @@ let dbAvailable = false;
 let lastInitError = null;
 let dbInitPromise = null;
 
-const apiRouter = express.Router();
+// ─── Path Normalization & DB Initialization ──────────────────────────────
+app.use(async (req, res, next) => {
+  // Normalize path: Ensure API requests are handled consistently whether they have /api prefix or not
+  const originalUrl = req.url;
+  if (req.url.startsWith('/api/')) {
+    req.url = req.url.replace('/api', '');
+    if (req.url === '') req.url = '/';
+    console.log(`[DEBUG] Stripped /api: ${originalUrl} -> ${req.url}`);
+  }
 
-// ─── Router Middlewares ──────────────────────────────────────────────────
-apiRouter.use(async (req, res, next) => {
   // DB Initialization Wait
   if (dbInitPromise && !dbAvailable) {
     try {
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_INIT_TIMEOUT')), 30000));
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_INIT_TIMEOUT')), 10000));
       await Promise.race([dbInitPromise, timeout]);
     } catch (e) {
       console.warn('[DB Wait] Ended:', e.message);
@@ -72,15 +78,14 @@ apiRouter.use(async (req, res, next) => {
   next();
 });
 
-// ─── Mount Router Early ──────────────────────────────────────────────────
-app.use('/api', apiRouter);
-// app.use(apiRouter); // Removed redundant mount to prevent collisions
+const apiRouter = express.Router();
+
+// ─── Mount Router ────────────────────────────────────────────────────────
+// Since we normalize the path above (stripping /api), we mount at root.
+app.use(apiRouter); 
 
 // ─── CRITICAL DIRECT FALLBACK ROUTES ─────────────────────────────────────
-// These routes handle the most essential functions directly on the app object
-// to ensure they are reachable regardless of router matching variations.
-
-app.get(['/api/binance/prices', '/binance/prices'], async (req, res) => {
+apiRouter.get('/binance/prices', async (req, res) => {
   try {
     const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD';
     const krakenRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${krakenPairs}`, {
@@ -1783,14 +1788,19 @@ app.post('*', (req, res) => {
 
 app.get('*', (req, res) => {
   // If it's a request for a file (has an extension), but wasn't caught by static middleware
-  if (req.url.includes('.')) {
+  if (req.url.includes('.') && !req.url.includes('?')) {
       return res.status(404).json({ error: 'File not found', path: req.url });
   }
 
-  // If it was intended to be an API call (non-root, non-asset)
-  if (req.url !== '/' && !req.url.startsWith('/assets/')) {
+  // If it was intended to be an API call (starts with /api or no extension)
+  if (req.url.startsWith('/api/') || (!req.url.includes('.') && req.url !== '/')) {
     console.log(`[404 API] ${req.url}`);
-    return res.status(404).json({ error: 'API route not found', path: req.url });
+    return res.status(404).json({ 
+        error: 'API route not found', 
+        path: req.url, 
+        method: req.method,
+        suggestion: 'Ensure the route is defined in server.js and mounted correctly.'
+    });
   }
 
   const indexPath = path.join(distPath, 'index.html');
