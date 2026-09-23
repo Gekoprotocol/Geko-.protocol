@@ -33,18 +33,22 @@ process.on('unhandledRejection', (reason, promise) => {
 const app = express();
 const port = 8080;
 
-// ─── Vercel Path Recovery & Debug Logger ──────────────────────────────────
+// ─── ULTIMATE VERCEL API ROUTING FIX ─────────────────────────────────────
 app.use((req, res, next) => {
   const originalUrl = req.url;
   
-  // Vercel Fix: Recover original path if Vercel rewrote it to the entry point
+  // 1. Recover original path if Vercel rewrote it to index.js
   const forwardedPath = req.headers['x-now-route-matches'] || req.headers['x-vercel-forwarded-path'];
   if (forwardedPath && (req.url.includes('index.js') || req.url.includes('sw.js'))) {
       req.url = forwardedPath;
-      console.log(`[Vercel Fix] Recovered path: ${originalUrl} -> ${req.url}`);
   }
 
-  console.log(`[DEBUG] Incoming: ${req.method} ${req.url}`);
+  // 2. Strip /api prefix if present so it matches /auth/login, /binance/prices, etc.
+  if (req.url.startsWith('/api/')) {
+      req.url = req.url.substring(4);
+  }
+
+  console.log(`[ROUTING] ${req.method} ${originalUrl} -> ${req.url}`);
   next();
 });
 
@@ -125,22 +129,6 @@ app.get(['/api/binance/prices', '/binance/prices'], async (req, res) => {
   }
 });
 
-app.post('/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (email.toLowerCase().trim() === 'admin@gmail.com' && password === '12345678') {
-      return res.json({ 
-          success: true, 
-          user: { address: 'ADMIN_GATEWAY', email: 'admin@gmail.com', nickname: 'ADMIN_ROOT', status: 'approved', role: 'admin' }
-      });
-  }
-  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
-  try {
-    const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email.toLowerCase().trim(), password]);
-    const user = r.rows[0];
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    if (user.status === 'rejected') return res.status(403).json({ error: 'Account rejected by admin', status: 'rejected' });
-    await pool.query('UPDATE users SET last_seen = NOW() WHERE id = $1', [user.id]);
     return res.json({ success: true, user: { ...user, address: user.wallet_address, role: 'user' } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -543,7 +531,7 @@ app.get('/config', async (req, res) => {
   });
 });
 
-app.post('/admin/config', async (req, res) => {
+app.post(['/api/admin/config', '/admin/config'], async (req, res) => {
   const { solana_deposit_address, btc_deposit_address, eth_deposit_address, usdt_deposit_address } = req.body;
 
   if (dbAvailable && pool) {
@@ -919,7 +907,7 @@ app.get('/admin/forgot-passwords', async (req, res) => {
   }
 });
 
-app.post('/auth/signup-request', async (req, res) => {
+app.post(['/api/auth/signup-request', '/auth/signup-request'], async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -970,7 +958,7 @@ app.post('/auth/signup-request', async (req, res) => {
   }
 });
 
-app.post('/auth/signup-confirm', async (req, res) => {
+app.post(['/api/auth/signup-confirm', '/auth/signup-confirm'], async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -1007,7 +995,7 @@ app.post('/auth/signup-confirm', async (req, res) => {
   }
 });
 
-app.post('/auth/wallet-login', async (req, res) => {
+app.post(['/api/auth/wallet-login', '/auth/wallet-login'], async (req, res) => {
   const { address } = req.body;
   if (!address) return res.status(400).json({ error: 'Wallet address required' });
 
@@ -1031,7 +1019,7 @@ app.post('/auth/wallet-login', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/auth/login', async (req, res) => {
+app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
@@ -1375,7 +1363,7 @@ app.get('/user/transactions', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/user/balance', async (req, res) => {
+app.get(['/api/user/balance', '/user/balance'], async (req, res) => {
   const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -1601,7 +1589,7 @@ app.post('/settle-trade', async (req, res) => {
 });
 
 // ─── Withdrawals ──────────────────────────────────────────────────────────
-app.post('/request-withdrawal', async (req, res) => {
+app.post(['/api/request-withdrawal', '/request-withdrawal'], async (req, res) => {
   const { walletAddress, destinationAddress, amount, asset } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1778,8 +1766,13 @@ app.use((err, req, res, next) => {
 });
 
 app.post('*', (req, res) => {
-  console.log(`[404 POST] ${req.url}`);
-  res.status(404).json({ error: 'API endpoint not found', path: req.url, method: req.method, note: 'Check route definitions in server.js' });
+  console.log(`[404 POST] No route for: ${req.url} (Original headers: ${JSON.stringify(req.headers)})`);
+  res.status(404).json({ 
+    error: 'API endpoint not found', 
+    path: req.url, 
+    method: req.method, 
+    tip: 'The server normalized the path but still found no match. Check server.js for app.post definitions.' 
+  });
 });
 
 app.get('*', (req, res) => {
@@ -1788,15 +1781,18 @@ app.get('*', (req, res) => {
       return res.status(404).json({ error: 'File not found', path: req.url });
   }
 
-  // If it was intended to be an API call (starts with /api or no extension)
-  if (req.url.startsWith('/api/') || (!req.url.includes('.') && req.url !== '/')) {
-    console.log(`[404 API] ${req.url}`);
-    return res.status(404).json({ 
-        error: 'API route not found', 
-        path: req.url, 
-        method: req.method,
-        suggestion: 'Ensure the route is defined in server.js and mounted correctly.'
-    });
+  // If it was intended to be an API call
+  if (req.url.startsWith('/api/') || !req.url.includes('.')) {
+    // If not root
+    if (req.url !== '/') {
+        console.log(`[404 API] No GET route for: ${req.url}`);
+        return res.status(404).json({ 
+            error: 'API route not found', 
+            path: req.url, 
+            method: req.method,
+            tip: 'The server normalized the path but still found no match.'
+        });
+    }
   }
 
   const indexPath = path.join(distPath, 'index.html');
