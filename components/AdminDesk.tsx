@@ -7,12 +7,13 @@ interface UserCardProps {
   onSave: (user: any, balance: any) => void;
   onDelete: (userId: number) => void;
   onLogoutUser: (userId: number) => void;
+  onFlagUser: (userId: number, flagged: boolean) => void;
   onCreditBalance: (walletAddress: string, currency: string, amount: string) => Promise<void>;
   savingId: string | null;
   savedId: string | null;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onCreditBalance, savingId, savedId }) => {
+const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onFlagUser, onCreditBalance, savingId, savedId }) => {
   const currentBalance = user.trading_balance ?? '0.00';
   const currentDemoBalance = user.demo_balance ?? '100000.00';
   const currentProtocolBalance = user.protocol_settlement_balance ?? '0.00';
@@ -21,6 +22,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   const [localDemoBal, setLocalDemoBal] = useState(String(currentDemoBalance));
   const [localProtocolBal, setLocalProtocolBal] = useState(String(currentProtocolBalance));
   const [localSwapSent, setLocalSwapSent] = useState(user.swap_sent || false);
+  const [isFlagged, setIsFlagged] = useState(user.is_flagged || false);
   
   const [depositCurrency, setDepositCurrency] = useState(user.pending_deposit_currency || 'BTC');
   const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
@@ -45,7 +47,8 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
     setLocalDemoBal(String(currentDemoBalance));
     setLocalProtocolBal(String(currentProtocolBalance));
     setLocalSwapSent(user.swap_sent || false);
-  }, [currentBalance, currentDemoBalance, currentProtocolBalance, user.swap_sent]);
+    setIsFlagged(user.is_flagged || false);
+  }, [currentBalance, currentDemoBalance, currentProtocolBalance, user.swap_sent, user.is_flagged]);
 
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
   const isOnline = lastSeenMs < 90_000;
@@ -75,7 +78,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   };
 
   return (
-    <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'}`}>
+    <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'} ${isFlagged ? 'ring-2 ring-rose-500' : ''}`}>
       <div className="flex justify-between items-start">
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
@@ -83,8 +86,17 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
           {localSwapSent && (
               <div className="bg-amber-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-bounce">USER SENT SWAP</div>
           )}
+          {isFlagged && (
+              <div className="bg-rose-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">FLAGGED</div>
+          )}
         </div>
         <div className="flex items-center space-x-2">
+            <button 
+                onClick={() => onFlagUser(user.id, !isFlagged)}
+                className={`px-2 py-0.5 border rounded text-[8px] font-black uppercase transition-all ${isFlagged ? 'bg-rose-600 text-white border-rose-600' : 'bg-rose-900/20 text-rose-500 border-rose-500/20 hover:bg-rose-600 hover:text-white'}`}
+            >
+                {isFlagged ? 'Unflag' : 'Flag'}
+            </button>
             <button 
                 onClick={() => { if(confirm(`Force Logout user ${user.email || user.id}?`)) onLogoutUser(user.id); }}
                 className="px-2 py-0.5 bg-amber-900/20 text-amber-500 border border-amber-500/20 rounded text-[8px] font-black uppercase hover:bg-amber-600 hover:text-white transition-all"
@@ -384,6 +396,17 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     finally { setConfigSaving(false); }
   };
 
+  const handleFlagUser = async (userId: number, flagged: boolean) => {
+    try {
+      await fetch('/api/admin/users/flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, flagged })
+      });
+      fetchData();
+    } catch (e) { console.error('Flagging failed', e); }
+  };
+
   const guestUsers = dbUsers.filter(u => u.status === 'guest' || u.status === 'pending_approval');
   const approvedUsers = dbUsers.filter(u => u.status !== 'guest' && u.status !== 'pending_approval');
 
@@ -419,6 +442,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onSave={handleSaveBalance}
                 onDelete={handleDeleteUser}
                 onLogoutUser={handleLogoutUser}
+                onFlagUser={handleFlagUser}
                 onCreditBalance={handleCreditBalance}
                 savingId={savingId}
                 savedId={savedId}
