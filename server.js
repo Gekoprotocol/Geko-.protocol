@@ -129,10 +129,6 @@ app.get(['/api/binance/prices', '/binance/prices'], async (req, res) => {
   }
 });
 
-    return res.json({ success: true, user: { ...user, address: user.wallet_address, role: 'user' } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 app.post('/admin/users/flag', async (req, res) => {
   const { userId, flagged } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
@@ -198,7 +194,8 @@ const initializeDatabase = async () => {
           pending_swap_source_amount TEXT,
           swap_sent BOOLEAN DEFAULT FALSE,
           last_interest_at TIMESTAMPTZ,
-          is_flagged BOOLEAN DEFAULT FALSE
+          is_flagged BOOLEAN DEFAULT FALSE,
+          role TEXT DEFAULT 'user'
         );
 
         CREATE TABLE IF NOT EXISTS config (
@@ -297,6 +294,9 @@ const initializeDatabase = async () => {
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_flagged') THEN
               ALTER TABLE users ADD COLUMN is_flagged BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='role') THEN
+              ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
             END IF;
           END $$;
         `);
@@ -1015,7 +1015,7 @@ app.post(['/api/auth/wallet-login', '/auth/wallet-login'], async (req, res) => {
         user = newUser.rows[0];
     }
     
-    res.json({ success: true, user: { ...user, address: user.wallet_address } });
+    res.json({ success: true, user: { ...user, address: user.wallet_address, role: user.role || 'user' } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1804,8 +1804,10 @@ app.get('*', (req, res) => {
   res.status(404).send("Build not found. Please run 'npm run build' first.");
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Geko Protocols Server: http://0.0.0.0:${port}`);
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Geko Protocols Server: http://0.0.0.0:${port}`);
+  });
+}
 
 export default app;
