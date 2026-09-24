@@ -37,18 +37,33 @@ const port = 8080;
 app.use((req, res, next) => {
   const originalUrl = req.url;
   
-  // 1. Recover original path if Vercel rewrote it to index.js
-  const forwardedPath = req.headers['x-now-route-matches'] || req.headers['x-vercel-forwarded-path'];
-  if (forwardedPath && (req.url.includes('index.js') || req.url.includes('sw.js'))) {
+  // 1. Attempt to recover original path from various Vercel headers
+  let forwardedPath = req.headers['x-vercel-forwarded-path'] || req.headers['x-matched-path'];
+  
+  // Fallback to x-now-route-matches if above fail (parse 1=...)
+  if (!forwardedPath && req.headers['x-now-route-matches']) {
+      const matches = req.headers['x-now-route-matches'];
+      const part = matches.split('&').find(p => p.startsWith('1=') || p.includes('=/api/'));
+      if (part) {
+          forwardedPath = decodeURIComponent(part.split('=')[1]);
+      }
+  }
+
+  if (forwardedPath) {
       req.url = forwardedPath;
   }
 
-  // 2. Strip /api prefix if present so it matches /auth/login, /binance/prices, etc.
+  // 2. Normalize: remove /api prefix if present
   if (req.url.startsWith('/api/')) {
       req.url = req.url.substring(4);
   }
+  
+  // Ensure we don't have double slashes and handle /index.js fallback
+  if (req.url === '/index.js' || req.url === '/api/index.js') {
+      req.url = '/';
+  }
 
-  console.log(`[ROUTING] ${req.method} ${originalUrl} -> ${req.url}`);
+  console.log(`[ROUTING] ${req.method} ${originalUrl} -> ${req.url} (Forwarded: ${forwardedPath || 'NONE'})`);
   next();
 });
 
