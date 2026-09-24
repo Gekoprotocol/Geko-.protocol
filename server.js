@@ -37,33 +37,37 @@ const port = 8080;
 app.use((req, res, next) => {
   const originalUrl = req.url;
   
-  // 1. Attempt to recover original path from various Vercel headers
-  let forwardedPath = req.headers['x-vercel-forwarded-path'] || req.headers['x-matched-path'];
+  // 1. Recover original path from Vercel's internal routing headers
+  // Order of reliability: x-vercel-forwarded-path > x-forwarded-uri > x-matched-path
+  let forwardedPath = req.headers['x-vercel-forwarded-path'] || 
+                      req.headers['x-forwarded-uri'] || 
+                      req.headers['x-matched-path'];
   
-  // Fallback to x-now-route-matches if above fail (parse 1=...)
+  // Fallback: Parse x-now-route-matches (format: 1=/path&...)
   if (!forwardedPath && req.headers['x-now-route-matches']) {
-      const matches = req.headers['x-now-route-matches'];
-      const part = matches.split('&').find(p => p.startsWith('1=') || p.includes('=/api/'));
-      if (part) {
-          forwardedPath = decodeURIComponent(part.split('=')[1]);
-      }
+      const match = req.headers['x-now-route-matches'].match(/1=([^&]+)/);
+      if (match) forwardedPath = decodeURIComponent(match[1]);
   }
 
+  // If we recovered a path, use it. Otherwise keep current.
   if (forwardedPath) {
       req.url = forwardedPath;
   }
 
-  // 2. Normalize: remove /api prefix if present
+  // 2. Normalize: Remove /api prefix and handle internal index.js mapping
   if (req.url.startsWith('/api/')) {
       req.url = req.url.substring(4);
   }
   
-  // Ensure we don't have double slashes and handle /index.js fallback
+  // If the URL is still index.js, it means no path was recovered
   if (req.url === '/index.js' || req.url === '/api/index.js') {
       req.url = '/';
   }
 
-  console.log(`[ROUTING] ${req.method} ${originalUrl} -> ${req.url} (Forwarded: ${forwardedPath || 'NONE'})`);
+  // Ensure path starts with /
+  if (!req.url.startsWith('/')) req.url = '/' + req.url;
+
+  console.log(`[ROUTING] ${req.method} ${originalUrl} -> ${req.url} (Recov: ${forwardedPath || 'NONE'})`);
   next();
 });
 
