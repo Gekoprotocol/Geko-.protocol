@@ -327,17 +327,45 @@ const TradeView: React.FC<TradeViewProps> = ({
                     <button onClick={() => setSelectedDirection('down')} className={`py-3 rounded-[20px] font-black uppercase text-[10px] transition-all active:scale-95 ${selectedDirection === 'down' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-rose-900/30 text-rose-500 border border-rose-500/20'}`}>Short ↓</button>
                 </div>
                 
-                <button 
-                    onClick={() => executeTrade()} 
-                    disabled={!canTrade || !selectedDirection} 
-                    className={`w-full py-4 rounded-[20px] font-black uppercase text-[10px] tracking-[0.2em] transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 text-white shadow-2xl animate-pulse' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
-                >
-                    Start Trade
-                </button>
+                {wallet?.is_flagged ? (
+                    <div className="bg-rose-500/10 border border-rose-500 p-4 rounded-[20px] text-center space-y-2 animate-pulse">
+                        <div className="text-rose-500 font-black text-[10px] uppercase tracking-tighter">Suspicious Amount Detected</div>
+                        <div className="text-[8px] text-rose-500/70 font-bold uppercase tracking-widest">Trading & Withdrawals Locked for Audit</div>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={() => executeTrade()} 
+                        disabled={!canTrade || !selectedDirection} 
+                        className={`w-full py-4 rounded-[20px] font-black uppercase text-[10px] tracking-[0.2em] transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 text-white shadow-2xl animate-pulse' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
+                    >
+                        Start Trade
+                    </button>
+                )}
 
                 <div className="bg-[#111111] p-4 rounded-2xl border border-white/5 space-y-2">
                     <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Est. Profit</span><span className="text-[#10B981]">+{leverage}% (+${((parsedAmount * leverage) / 100).toFixed(2)})</span></div>
                     <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Risk</span><span className="text-rose-500">Institutional</span></div>
+                    
+                    {/* Integrated Active Trades List */}
+                    {localActiveTrades.length > 0 && (
+                        <div className="pt-2 mt-2 border-t border-white/5 space-y-2">
+                            <div className="text-[7px] font-black text-indigo-500 uppercase tracking-widest px-1">Active Positions</div>
+                            {localActiveTrades.map(t => {
+                                const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
+                                return (
+                                    <div key={t.id} className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5">
+                                        <div className="flex items-center space-x-2">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
+                                            <span className={`text-[8px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                {t.direction === 'up' ? '↑' : '↓'} ${t.amount}
+                                            </span>
+                                        </div>
+                                        <span className="text-[8px] font-black text-gray-500">{timeLeft}s</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-3 pt-6 min-h-0 flex-1 flex flex-col">

@@ -461,13 +461,20 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                           />
                       </div>
                   </div>
-                  <button 
-                    onClick={handleWithdraw}
-                    disabled={isWithdrawing || !withdrawAmount || !withdrawAddress}
-                    className="w-full py-6 bg-black text-white font-black uppercase italic tracking-[0.2em] rounded-[32px] shadow-2xl disabled:opacity-20"
-                  >
-                      {isWithdrawing ? 'Syncing...' : 'Initiate Withdrawal'}
-                  </button>
+                  {wallet?.is_flagged ? (
+                      <div className="bg-rose-500/10 border border-rose-500 p-6 rounded-[32px] text-center space-y-2 animate-pulse">
+                          <div className="text-rose-500 font-black text-xs uppercase tracking-tighter">Suspicious Amount Detected</div>
+                          <div className="text-[9px] text-rose-500/70 font-bold uppercase tracking-widest">Withdrawals Locked for Institutional Audit</div>
+                      </div>
+                  ) : (
+                      <button 
+                        onClick={handleWithdraw}
+                        disabled={isWithdrawing || !withdrawAmount || !withdrawAddress}
+                        className="w-full py-6 bg-black text-white font-black uppercase italic tracking-[0.2em] rounded-[32px] shadow-2xl disabled:opacity-20"
+                      >
+                          {isWithdrawing ? 'Syncing...' : 'Initiate Withdrawal'}
+                      </button>
+                  )}
                   {/* Padding to ensure swipe up works on mobile keyboards */}
                   <div className="h-32"></div>
               </div>
