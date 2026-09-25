@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { WalletData } from '../types';
-import { Clock, CheckCircle, ArrowRightLeft, Zap, Shield, ChevronDown, X } from 'lucide-react';
+import { Clock, CheckCircle, ArrowRightLeft, Zap, Shield, ChevronDown, X, RefreshCw } from 'lucide-react';
 
 interface Transaction {
     id: string | number;
@@ -185,9 +185,5 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
         </div>
     );
 };
-
-function RefreshCw({ size, className }: any) {
-    return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.27L21 8"/><path d="M21 3v5h-5"/></svg>;
-}
 
 export default TransactionHistory;
