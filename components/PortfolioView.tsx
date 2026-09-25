@@ -70,6 +70,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   // Ledger State
   const [txs, setTxs] = useState<any[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(true);
+  const [selectedTrade, setSelectedTrade] = useState<any>(null); // Added state
+
 
   // Transfer State
   const [transferAmount, setTransferAmount] = useState('');
