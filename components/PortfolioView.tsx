@@ -104,24 +104,38 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   const fetchTradeDetails = async (tx: any) => {
-    if (!tx.reference || !tx.reference.startsWith('trade-settle:')) {
-        console.log('[DEBUG] Invalid trade reference:', tx.reference);
-        return;
+    let tradeId = tx.trade_id;
+    if (!tradeId && tx.reference) {
+      if (tx.reference.includes(':')) {
+        tradeId = tx.reference.split(':')[1];
+      } else {
+        tradeId = tx.reference;
+      }
     }
-    const tradeId = tx.reference.split(':')[1];
-    console.log('[DEBUG] Fetching trade details for ID:', tradeId);
+
+    // Immediately pre-populate tradeDetails with available tx data for instantaneous UI rendering
+    setTradeDetails({
+      id: tradeId,
+      symbol: tx.asset_symbol,
+      entry_price: tx.entry_price,
+      settlement_price: tx.settlement_price,
+      direction: tx.direction,
+      duration: tx.options_duration ? parseInt(tx.options_duration) : null,
+      status: tx.status,
+      amount: tx.trade_amount || Math.abs(parseFloat(tx.amount || 0)),
+      pnl: tx.amount,
+      fees: tx.fees !== undefined ? tx.fees : 0,
+      created_at: tx.created_at
+    });
+
+    if (!tradeId) return;
     setLoadingTradeDetails(true);
-    setTradeDetails(null);
     try {
         const url = `/api/trade-details?id=${tradeId}`;
-        console.log('[DEBUG] Calling API:', url);
         const res = await fetch(url);
         if (res.ok) {
             const data = await res.json();
-            console.log('[DEBUG] API Response:', data);
             setTradeDetails(data);
-        } else {
-            console.error('[DEBUG] API failed with status:', res.status);
         }
     } catch (e) {
         console.error('Failed to fetch details', e);
@@ -386,7 +400,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                               <div className="text-right">
                                   {tx.type === 'trade' && tx.amount && (
                                       <div className={`text-sm font-bold tabular-nums ${parseFloat(tx.amount) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
-                                          {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString()} PnL
+                                          {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
                                       </div>
                                   )}
                                   <div className="text-[9px] text-gray-600 font-black uppercase">{tx.asset_symbol}</div>
@@ -617,61 +631,59 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   </div>
                   
                   <div className="text-center mb-8">
-                      <div className="text-3xl font-black text-[#10B981] mb-1">
-                          {selectedTrade.amount !== undefined ? (parseFloat(selectedTrade.amount) >= 0 ? '+' : '') + parseFloat(selectedTrade.amount || 0).toLocaleString() : 'N/A'}
+                      <div className={`text-3xl font-black mb-1 ${parseFloat(selectedTrade.amount || 0) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                          {selectedTrade.amount !== undefined ? (parseFloat(selectedTrade.amount) >= 0 ? '+' : '') + parseFloat(selectedTrade.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A'} USDT
                       </div>
-                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">PnL</div>
+                      <div className={`text-[10px] font-bold uppercase tracking-widest ${parseFloat(selectedTrade.amount || 0) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                          {parseFloat(selectedTrade.amount || 0) >= 0 ? 'Profit (Win)' : 'Loss'}
+                      </div>
                   </div>
 
                   <div className="space-y-4 mb-8 text-sm">
                       <div className="flex justify-between">
-                          <span className="text-gray-500 uppercase font-bold tracking-widest">Time</span>
-                          <span className="font-bold">{selectedTrade.created_at ? new Date(selectedTrade.created_at).toLocaleString() : 'N/A'}</span>
+                          <span className="text-gray-500 uppercase font-bold tracking-widest">Pair</span>
+                          <span className="font-bold text-white">{tradeDetails?.symbol || selectedTrade.asset_symbol || 'BTC/USDT'}</span>
                       </div>
-                      
-                      {loadingTradeDetails ? (
-                          <div className="text-center text-gray-500">Loading details...</div>
-                      ) : tradeDetails ? (
-                          <>
-                              {/* --- DEBUG DATA DUMP --- */}
-                              <div className="text-[8px] text-yellow-500 bg-black p-2 rounded overflow-x-auto text-left mb-4">
-                                  DEBUG RAW DATA: {JSON.stringify(tradeDetails)}
-                              </div>
-                              {/* ----------------------- */}
-                              {tradeDetails.entry_price && (
-                                  <div className="flex justify-between">
-                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Entry</span>
-                                      <span className="font-bold">{parseFloat(tradeDetails.entry_price || 0).toLocaleString()}</span>
-                                  </div>
-                              )}
-                              {tradeDetails.settlement_price && (
-                                  <div className="flex justify-between">
-                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Settled</span>
-                                      <span className="font-bold">{parseFloat(tradeDetails.settlement_price || 0).toLocaleString()}</span>
-                                  </div>
-                              )}
-                              {tradeDetails.duration && (
-                                  <div className="flex justify-between">
-                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Duration</span>
-                                      <span className="font-bold">{tradeDetails.duration}s</span>
-                                  </div>
-                              )}
-                              {tradeDetails.direction && (
-                                  <div className="flex justify-between">
-                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Direction</span>
-                                      <span className={`font-bold ${tradeDetails.direction.toString().toUpperCase() === 'LONG' ? 'text-[#10B981]' : 'text-rose-500'}`}>{tradeDetails.direction}</span>
-                                  </div>
-                              )}
-                              {tradeDetails.fees !== undefined && (
-                                  <div className="flex justify-between">
-                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Fees</span>
-                                      <span className="font-bold">{parseFloat(tradeDetails.fees || 0).toFixed(2)} USDT</span>
-                                  </div>
-                              )}
-                          </>
-                      ) : (
-                          <div className="text-center text-gray-500">No details available.</div>
+
+                      {((tradeDetails?.direction || selectedTrade.direction)) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Direction</span>
+                              <span className={`font-bold ${((tradeDetails?.direction || selectedTrade.direction || '').toString().toUpperCase().includes('LONG')) ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                                  {(tradeDetails?.direction || selectedTrade.direction || 'LONG').toUpperCase()}
+                              </span>
+                          </div>
                       )}
+
+                      {(tradeDetails?.entry_price || selectedTrade.entry_price) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Entry Price</span>
+                              <span className="font-bold text-white">${parseFloat(tradeDetails?.entry_price || selectedTrade.entry_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                      )}
+
+                      {(tradeDetails?.settlement_price || selectedTrade.settlement_price) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Closing Price</span>
+                              <span className="font-bold text-white">${parseFloat(tradeDetails?.settlement_price || selectedTrade.settlement_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                      )}
+
+                      {(tradeDetails?.duration || selectedTrade.options_duration) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Duration</span>
+                              <span className="font-bold text-white">{tradeDetails?.duration ? `${tradeDetails.duration}s` : selectedTrade.options_duration}</span>
+                          </div>
+                      )}
+
+                      <div className="flex justify-between">
+                          <span className="text-gray-500 uppercase font-bold tracking-widest">Fees</span>
+                          <span className="font-bold text-white">{parseFloat(tradeDetails?.fees || selectedTrade.fees || 0).toFixed(2)} USDT</span>
+                      </div>
+
+                      <div className="flex justify-between">
+                          <span className="text-gray-500 uppercase font-bold tracking-widest">Time</span>
+                          <span className="font-bold text-white">{selectedTrade.created_at ? new Date(selectedTrade.created_at).toLocaleString() : 'N/A'}</span>
+                      </div>
                   </div>
 
                   <button 

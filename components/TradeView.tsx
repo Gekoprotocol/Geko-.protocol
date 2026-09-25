@@ -146,20 +146,25 @@ const TradeView: React.FC<TradeViewProps> = ({
         // User Requirement: DEFAULT to loss unless admin grants a win
         let isWin = trade.forceOutcome === 'win';
         const pnl = isWin ? parseFloat(trade.amount) * (trade.leverage / 100) : 0;
+        const currentLivePrice = assets?.find(a => a.symbol === trade.symbol)?.price || selectedAsset?.price || trade.entryPrice;
 
         if (wallet?.address) {
-          await fetch('/api/settle-trade', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress: wallet.address,
-              asset: trade.symbol,
-              payout: (isWin ? parseFloat(trade.amount) + pnl : 0).toFixed(2),
-              tradeRef: trade.id,
-              isDemo: wallet?.isDemo,
-              status: isWin ? 'won' : 'lost'
-            })
-          }).catch(() => {});
+          try {
+            await fetch('/api/settle-trade', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                walletAddress: wallet.address,
+                asset: trade.symbol,
+                payout: (isWin ? parseFloat(trade.amount) + pnl : 0).toFixed(2),
+                tradeRef: trade.id,
+                isDemo: wallet?.isDemo,
+                status: isWin ? 'won' : 'lost',
+                closingPrice: currentLivePrice
+              })
+            });
+            if (onRefreshBalances) onRefreshBalances();
+          } catch (e) {}
         }
 
         const displayAmount = isWin ? parseFloat(trade.amount) + pnl : parseFloat(trade.amount);
