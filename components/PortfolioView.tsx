@@ -329,24 +329,37 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               
               <div className="space-y-3">
                   {txs.slice(0, 50).map((tx) => (
-                      <div key={tx.id} className="bg-[#111111] border border-white/5 p-5 rounded-[24px] flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-black border border-white/5 rounded-xl flex items-center justify-center">
-                                  {tx.type === 'deposit' ? <Zap size={14} className="text-emerald-500" /> : <RefreshCw size={14} className="text-indigo-400" />}
-                              </div>
-                              <div className="text-left">
-                                  <div className="text-sm font-bold text-white uppercase tracking-tight">
-                                      {tx.type === 'deposit' ? 'Funded' : (tx.type === 'swap' ? 'Swap' : (tx.type === 'trade' ? 'Trade' : tx.type))}
+                      <div key={tx.id} className="bg-[#111111] border border-white/5 p-5 rounded-[24px] flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-black border border-white/5 rounded-xl flex items-center justify-center">
+                                      {tx.type === 'deposit' ? <Zap size={14} className="text-emerald-500" /> : <RefreshCw size={14} className="text-indigo-400" />}
                                   </div>
-                                  <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                  <div className="text-left">
+                                      <div className="text-sm font-bold text-white uppercase tracking-tight">
+                                          {tx.type === 'deposit' ? 'Funded' : (tx.type === 'swap' ? 'Swap' : (tx.type === 'trade' ? 'Trade' : tx.type))}
+                                      </div>
+                                      <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                  </div>
+                              </div>
+                              <div className="text-right">
+                                  {tx.type === 'trade' && tx.amount && (
+                                      <div className={`text-sm font-bold tabular-nums ${parseFloat(tx.amount) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                                          {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString()} PnL
+                                      </div>
+                                  )}
+                                  <div className="text-[9px] text-gray-600 font-black uppercase">{tx.asset_symbol}</div>
                               </div>
                           </div>
-                          <div className="text-right">
-                              <div className={`text-sm font-bold tabular-nums ${parseFloat(tx.amount) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
-                                  {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString()}
+
+                          {tx.type === 'trade' && (
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                                  {tx.entry_price && <div>Entry: <span className="text-white">{parseFloat(tx.entry_price).toLocaleString()}</span></div>}
+                                  {tx.settlement_price && <div>Settled: <span className="text-white">{parseFloat(tx.settlement_price).toLocaleString()}</span></div>}
+                                  {tx.duration && <div>Duration: <span className="text-white">{tx.duration}s</span></div>}
+                                  {tx.direction && <div>Direction: <span className={tx.direction === 'Long' ? 'text-[#10B981]' : 'text-rose-500'}>{tx.direction}</span></div>}
                               </div>
-                              <div className="text-[9px] text-gray-600 font-black uppercase">{tx.asset_symbol}</div>
-                          </div>
+                          )}
                       </div>
                   ))}
                   {txs.length === 0 && !loadingLedger && (
