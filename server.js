@@ -1378,6 +1378,7 @@ apiRouter.get('/user/transactions', async (req, res) => {
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
+    console.log(`[DEBUG] Fetching transactions for: ${address}`);
     const r = await pool.query(`
         SELECT t.*, tr.entry_price, tr.settlement_price, tr.duration as options_duration, tr.direction, 0 as fees
         FROM transactions t 
@@ -1386,8 +1387,12 @@ apiRouter.get('/user/transactions', async (req, res) => {
         ORDER BY t.created_at DESC 
         LIMIT $2
     `, [address, parseInt(limit || '50')]);
+    console.log(`[DEBUG] Found ${r.rows.length} transactions.`);
     res.json({ success: true, transactions: r.rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[API Error] /user/transactions:', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 apiRouter.get('/user/balance', async (req, res) => {
