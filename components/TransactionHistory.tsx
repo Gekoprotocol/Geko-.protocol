@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { WalletData } from '../types';
-import { Clock, CheckCircle, ArrowRightLeft, Zap, Shield, ChevronDown } from 'lucide-react';
+import { Clock, CheckCircle, ArrowRightLeft, Zap, Shield, ChevronDown, X } from 'lucide-react';
 
 interface Transaction {
     id: string | number;
@@ -12,6 +12,11 @@ interface Transaction {
     created_at: string;
     reference?: string;
     tx_signature?: string;
+    entry_price?: number;
+    settlement_price?: number;
+    options_duration?: string;
+    direction?: 'Long' | 'Short';
+    fees?: number;
 }
 
 interface TransactionHistoryProps {
@@ -21,6 +26,7 @@ interface TransactionHistoryProps {
 const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
     const [txs, setTxs] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedTrade, setSelectedTrade] = useState<Transaction | null>(null);
 
     const fetchHistory = async () => {
         if (!wallet?.address) return;
@@ -69,7 +75,11 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
 
             <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-3 pb-32">
                 {txs.map((tx) => (
-                    <div key={tx.id} className="bg-[#111111] border border-white/5 p-5 rounded-[24px] flex items-center justify-between group hover:bg-[#1A1A1A] transition-all">
+                    <div 
+                        key={tx.id} 
+                        className={`bg-[#111111] border border-white/5 p-5 rounded-[24px] flex items-center justify-between group transition-all ${tx.type === 'trade' ? 'hover:bg-[#1A1A1A] cursor-pointer' : ''}`}
+                        onClick={() => tx.type === 'trade' && setSelectedTrade(tx)}
+                    >
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-black border border-white/5 rounded-2xl flex items-center justify-center">
                                 {getIcon(tx.type)}
@@ -84,9 +94,11 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                             </div>
                         </div>
                         <div className="text-right">
-                            <div className={`text-sm font-bold tabular-nums ${parseFloat(tx.amount as string) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
-                                {parseFloat(tx.amount as string) >= 0 ? '+' : ''}{parseFloat(tx.amount as string).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </div>
+                            {tx.type === 'trade' && tx.amount && (
+                                <div className={`text-xs font-black uppercase tracking-wider ${parseFloat(tx.amount as string) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                                    {parseFloat(tx.amount as string) >= 0 ? '+' : ''}{tx.amount} PnL
+                                </div>
+                            )}
                             <div className="text-[10px] text-gray-500 font-black uppercase">{tx.asset_symbol}</div>
                         </div>
                     </div>
@@ -102,6 +114,74 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                     </div>
                 )}
             </div>
+
+            {selectedTrade && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+                    <div className="bg-[#111111] border border-white/10 rounded-[32px] p-8 w-full max-w-sm text-white">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold uppercase tracking-tight">{selectedTrade.asset_symbol}</h3>
+                            <button onClick={() => setSelectedTrade(null)} className="text-gray-500 hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        <div className="text-center mb-8">
+                            <div className="text-4xl font-black text-[#10B981] mb-1">
+                                {parseFloat(selectedTrade.amount as string) >= 0 ? '+' : ''}{parseFloat(selectedTrade.amount as string).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </div>
+                            <div className="text-sm text-gray-500 font-bold uppercase tracking-widest">Settled</div>
+                        </div>
+
+                        <div className="space-y-4 mb-8">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500 uppercase font-bold tracking-widest">Time</span>
+                                <span className="font-bold">{new Date(selectedTrade.created_at).toLocaleString()}</span>
+                            </div>
+                            {selectedTrade.entry_price && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Entry Price</span>
+                                    <span className="font-bold">{selectedTrade.entry_price.toLocaleString()}</span>
+                                </div>
+                            )}
+                            {selectedTrade.settlement_price && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Settlement Price</span>
+                                    <span className="font-bold">{selectedTrade.settlement_price.toLocaleString()}</span>
+                                </div>
+                            )}
+                            {selectedTrade.options_duration && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Options Duration</span>
+                                    <span className="font-bold">{selectedTrade.options_duration}</span>
+                                </div>
+                            )}
+                            {selectedTrade.direction && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Direction</span>
+                                    <span className={`font-bold ${selectedTrade.direction === 'Long' ? 'text-[#10B981]' : 'text-rose-500'}`}>{selectedTrade.direction}</span>
+                                </div>
+                            )}
+                            {selectedTrade.fees !== undefined && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Fees</span>
+                                    <span className="font-bold">{selectedTrade.fees.toFixed(2)} USDT</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500 uppercase font-bold tracking-widest">Type</span>
+                                <span className="font-bold uppercase">{selectedTrade.type}</span>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={() => setSelectedTrade(null)}
+                            className="w-full py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-gray-200 transition-all"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
