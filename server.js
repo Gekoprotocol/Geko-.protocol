@@ -1372,13 +1372,38 @@ apiRouter.get('/admin/active-trades', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Trade Details ─────────────────────────────────────────────────────────
+apiRouter.get('/trade-details', async (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ error: 'Trade ID required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const r = await pool.query('SELECT entry_price, direction, duration, status, amount FROM trades WHERE id = $1', [id]);
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Trade not found' });
+    
+    const trade = r.rows[0];
+    const fee = (trade.status === 'won') ? parseFloat(trade.amount) * 0.05 : 0;
+    
+    res.json({
+        entry_price: trade.entry_price,
+        direction: trade.direction,
+        duration: trade.duration,
+        status: trade.status,
+        amount: trade.amount,
+        fees: fee
+    });
+  } catch (e) {
+    console.error('[API Error] /trade-details:', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
+});
+
 // ─── Transactions ──────────────────────────────────────────────────────────
 apiRouter.get('/user/transactions', async (req, res) => {
   const { address, limit } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    // Revert to a simple, reliable query to ensure the ledger loads.
     const r = await pool.query(`
         SELECT * FROM transactions 
         WHERE wallet_address = $1 
