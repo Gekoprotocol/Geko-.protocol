@@ -601,7 +601,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           <div className="fixed inset-0 z-[2000] bg-black/80 flex items-center justify-center p-4">
               <div className="bg-[#111111] border border-white/10 rounded-[32px] p-8 w-full max-w-sm text-white">
                   <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-bold uppercase tracking-tight">{selectedTrade.asset_symbol}</h3>
+                      <h3 className="text-lg font-bold uppercase tracking-tight">{selectedTrade.asset_symbol || 'Trade'}</h3>
                       <button onClick={() => { setActiveModal(null); setSelectedTrade(null); }} className="text-gray-500 hover:text-white">
                           <X size={20} />
                       </button>
@@ -609,7 +609,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   
                   <div className="text-center mb-8">
                       <div className="text-3xl font-black text-[#10B981] mb-1">
-                          {parseFloat(selectedTrade.amount) >= 0 ? '+' : ''}{parseFloat(selectedTrade.amount).toLocaleString()}
+                          {selectedTrade.amount !== undefined ? (parseFloat(selectedTrade.amount) >= 0 ? '+' : '') + parseFloat(selectedTrade.amount || 0).toLocaleString() : 'N/A'}
                       </div>
                       <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">PnL</div>
                   </div>
@@ -617,7 +617,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   <div className="space-y-4 mb-8 text-sm">
                       <div className="flex justify-between">
                           <span className="text-gray-500 uppercase font-bold tracking-widest">Time</span>
-                          <span className="font-bold">{new Date(selectedTrade.created_at).toLocaleString()}</span>
+                          <span className="font-bold">{selectedTrade.created_at ? new Date(selectedTrade.created_at).toLocaleString() : 'N/A'}</span>
                       </div>
                       
                       {loadingTradeDetails ? (
@@ -627,25 +627,31 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                               {tradeDetails.entry_price && (
                                   <div className="flex justify-between">
                                       <span className="text-gray-500 uppercase font-bold tracking-widest">Entry</span>
-                                      <span className="font-bold">{parseFloat(tradeDetails.entry_price).toLocaleString()}</span>
+                                      <span className="font-bold">{parseFloat(tradeDetails.entry_price || 0).toLocaleString()}</span>
                                   </div>
                               )}
                               {tradeDetails.settlement_price && (
                                   <div className="flex justify-between">
                                       <span className="text-gray-500 uppercase font-bold tracking-widest">Settled</span>
-                                      <span className="font-bold">{parseFloat(tradeDetails.settlement_price).toLocaleString()}</span>
+                                      <span className="font-bold">{parseFloat(tradeDetails.settlement_price || 0).toLocaleString()}</span>
                                   </div>
                               )}
-                              {tradeDetails.options_duration && (
+                              {tradeDetails.duration && (
                                   <div className="flex justify-between">
                                       <span className="text-gray-500 uppercase font-bold tracking-widest">Duration</span>
-                                      <span className="font-bold">{tradeDetails.options_duration}s</span>
+                                      <span className="font-bold">{tradeDetails.duration}s</span>
                                   </div>
                               )}
                               {tradeDetails.direction && (
                                   <div className="flex justify-between">
                                       <span className="text-gray-500 uppercase font-bold tracking-widest">Direction</span>
-                                      <span className={`font-bold ${tradeDetails.direction === 'Long' ? 'text-[#10B981]' : 'text-rose-500'}`}>{tradeDetails.direction}</span>
+                                      <span className={`font-bold ${tradeDetails.direction.toString().toUpperCase() === 'LONG' ? 'text-[#10B981]' : 'text-rose-500'}`}>{tradeDetails.direction}</span>
+                                  </div>
+                              )}
+                              {tradeDetails.fees !== undefined && (
+                                  <div className="flex justify-between">
+                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Fees</span>
+                                      <span className="font-bold">{parseFloat(tradeDetails.fees || 0).toFixed(2)} USDT</span>
                                   </div>
                               )}
                           </>
