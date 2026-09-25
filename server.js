@@ -1378,21 +1378,9 @@ apiRouter.get('/user/transactions', async (req, res) => {
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    console.log(`[DEBUG] Fetching transactions for: ${address}`);
-    const r = await pool.query(`
-        SELECT t.*, tr.entry_price, tr.settlement_price, tr.duration as options_duration, tr.direction, 0 as fees
-        FROM transactions t 
-        LEFT JOIN trades tr ON t.reference = 'trade-auto-settle:' || tr.id 
-        WHERE t.wallet_address = $1 
-        ORDER BY t.created_at DESC 
-        LIMIT $2
-    `, [address, parseInt(limit || '50')]);
-    console.log(`[DEBUG] Found ${r.rows.length} transactions.`);
+    const r = await pool.query('SELECT * FROM transactions WHERE wallet_address = $1 ORDER BY created_at DESC LIMIT $2', [address, parseInt(limit || '50')]);
     res.json({ success: true, transactions: r.rows });
-  } catch (e) {
-    console.error('[API Error] /user/transactions:', e.message);
-    res.status(500).json({ error: e.message }); 
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 apiRouter.get('/user/balance', async (req, res) => {
