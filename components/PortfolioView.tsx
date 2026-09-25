@@ -624,6 +624,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                           <div className="text-center text-gray-500">Loading details...</div>
                       ) : tradeDetails ? (
                           <>
+                              {/* --- DEBUG DATA DUMP --- */}
+                              <div className="text-[8px] text-yellow-500 bg-black p-2 rounded overflow-x-auto text-left mb-4">
+                                  DEBUG RAW DATA: {JSON.stringify(tradeDetails)}
+                              </div>
+                              {/* ----------------------- */}
                               {tradeDetails.entry_price && (
                                   <div className="flex justify-between">
                                       <span className="text-gray-500 uppercase font-bold tracking-widest">Entry</span>
