@@ -104,15 +104,24 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   const fetchTradeDetails = async (tx: any) => {
-    if (!tx.reference || !tx.reference.startsWith('trade-settle:')) return;
+    if (!tx.reference || !tx.reference.startsWith('trade-settle:')) {
+        console.log('[DEBUG] Invalid trade reference:', tx.reference);
+        return;
+    }
     const tradeId = tx.reference.split(':')[1];
+    console.log('[DEBUG] Fetching trade details for ID:', tradeId);
     setLoadingTradeDetails(true);
     setTradeDetails(null);
     try {
-        const res = await fetch(`/api/trade-details?id=${tradeId}`);
+        const url = `/api/trade-details?id=${tradeId}`;
+        console.log('[DEBUG] Calling API:', url);
+        const res = await fetch(url);
         if (res.ok) {
             const data = await res.json();
+            console.log('[DEBUG] API Response:', data);
             setTradeDetails(data);
+        } else {
+            console.error('[DEBUG] API failed with status:', res.status);
         }
     } catch (e) {
         console.error('Failed to fetch details', e);
