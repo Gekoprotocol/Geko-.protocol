@@ -78,7 +78,10 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                     <div 
                         key={tx.id} 
                         className={`bg-[#111111] border border-white/5 p-5 rounded-[24px] flex items-center justify-between group transition-all ${tx.type === 'trade' ? 'hover:bg-[#1A1A1A] cursor-pointer' : ''}`}
-                        onClick={() => tx.type === 'trade' && setSelectedTrade(tx)}
+                                                onClick={() => {
+                            console.log('Clicked trade:', tx);
+                            if (tx.type === 'trade') setSelectedTrade(tx);
+                        }}
                     >
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-black border border-white/5 rounded-2xl flex items-center justify-center">
