@@ -62,7 +62,7 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
         <div className="h-full bg-black flex flex-col font-sans">
             <div className="p-6 flex justify-between items-center shrink-0 pt-12">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Node Ledger</h2>
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Node Ledger <span className="text-xs text-red-500">(DEBUG: V2)</span></h2>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Record Stream</p>
                 </div>
                 <button 
