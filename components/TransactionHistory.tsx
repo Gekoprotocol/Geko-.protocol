@@ -137,40 +137,6 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                                 <span className="text-gray-500 uppercase font-bold tracking-widest">Time</span>
                                 <span className="font-bold">{new Date(selectedTrade.created_at).toLocaleString()}</span>
                             </div>
-                            {selectedTrade.entry_price && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Entry Price</span>
-                                    <span className="font-bold">{selectedTrade.entry_price.toLocaleString()}</span>
-                                </div>
-                            )}
-                            {selectedTrade.settlement_price && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Settlement Price</span>
-                                    <span className="font-bold">{selectedTrade.settlement_price.toLocaleString()}</span>
-                                </div>
-                            )}
-                            {selectedTrade.options_duration && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Options Duration</span>
-                                    <span className="font-bold">{selectedTrade.options_duration}</span>
-                                </div>
-                            )}
-                            {selectedTrade.direction && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Direction</span>
-                                    <span className={`font-bold ${selectedTrade.direction === 'Long' ? 'text-[#10B981]' : 'text-rose-500'}`}>{selectedTrade.direction}</span>
-                                </div>
-                            )}
-                            {selectedTrade.fees !== undefined && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Fees</span>
-                                    <span className="font-bold">{selectedTrade.fees.toFixed(2)} USDT</span>
-                                </div>
-                            )}
-                            <div className="flex justify-between text-sm">
-                                <span className="text-gray-500 uppercase font-bold tracking-widest">Type</span>
-                                <span className="font-bold uppercase">{selectedTrade.type}</span>
-                            </div>
                         </div>
 
                         <button 
