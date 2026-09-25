@@ -1,4 +1,4 @@
-const CACHE_NAME = 'geko-v2.2'; // Bumped version for update force
+const CACHE_NAME = 'geko-v2.3'; // Bumped version
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/favicon.ico'
@@ -19,7 +19,6 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -29,12 +28,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // CRITICAL: Absolutely do not intercept API calls
+  if (event.request.url.includes('/api/')) {
+    return; 
+  }
+
   if (event.request.method !== 'GET') return;
-
-  // Do not intercept API calls
-  if (event.request.url.includes('/api/')) return;
-
-  // Only handle http/https schemes
   if (!event.request.url.startsWith('http')) return;
 
   const isHtmlRequest = event.request.mode === 'navigate' || 
@@ -49,7 +48,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clonedResponse));
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request) || new Response('Offline', { status: 503 }))
     );
     return;
   }
@@ -60,14 +59,13 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(event.request).then((networkResponse) => {
         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse || new Response('Network error', { status: 404 });
+          return networkResponse;
         }
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         return networkResponse;
       }).catch(() => {
-        // Fallback for failed fetch
-        return caches.match(event.request) || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
       });
     })
   );
