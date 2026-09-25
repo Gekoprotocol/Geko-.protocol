@@ -70,7 +70,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   // Ledger State
   const [txs, setTxs] = useState<any[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(true);
-  const [selectedTrade, setSelectedTrade] = useState<any>(null); // Added state
+  const [selectedTrade, setSelectedTrade] = useState<any>(null);
+  const [tradeDetails, setTradeDetails] = useState<any>(null);
+  const [loadingTradeDetails, setLoadingTradeDetails] = useState(false);
 
 
   // Transfer State
@@ -99,6 +101,24 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             setTxs(data.transactions || []);
         }
     } catch (e) {} finally { setLoadingLedger(false); }
+  };
+
+  const fetchTradeDetails = async (tx: any) => {
+    if (!tx.reference || !tx.reference.startsWith('trade-settle:')) return;
+    const tradeId = tx.reference.split(':')[1];
+    setLoadingTradeDetails(true);
+    setTradeDetails(null);
+    try {
+        const res = await fetch(`/api/trade-details?id=${tradeId}`);
+        if (res.ok) {
+            const data = await res.json();
+            setTradeDetails(data);
+        }
+    } catch (e) {
+        console.error('Failed to fetch details', e);
+    } finally {
+        setLoadingTradeDetails(false);
+    }
   };
 
   useEffect(() => {
@@ -333,7 +353,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   {txs.slice(0, 50).map((tx) => (
                       <div 
                         key={tx.id} 
-                        onClick={() => tx.type === 'trade' && setActiveModal('trade_details')}
+                        onClick={() => {
+                            if (tx.type === 'trade') {
+                                setSelectedTrade(tx);
+                                setActiveModal('trade_details');
+                                fetchTradeDetails(tx);
+                            }
+                        }}
                         className={`bg-[#111111] border border-white/5 p-5 rounded-[24px] flex flex-col gap-3 ${tx.type === 'trade' ? 'cursor-pointer hover:bg-[#1A1A1A]' : ''}`}
                       >
                           <div className="flex items-center justify-between">
@@ -571,19 +597,69 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               </div>
           </div>
       )}
-      {activeModal === 'trade_details' && (
+      {activeModal === 'trade_details' && selectedTrade && (
           <div className="fixed inset-0 z-[2000] bg-black/80 flex items-center justify-center p-4">
               <div className="bg-[#111111] border border-white/10 rounded-[32px] p-8 w-full max-w-sm text-white">
                   <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-bold uppercase tracking-tight">Trade Details</h3>
-                      <button onClick={() => setActiveModal(null)} className="text-gray-500 hover:text-white">
+                      <h3 className="text-lg font-bold uppercase tracking-tight">{selectedTrade.asset_symbol}</h3>
+                      <button onClick={() => { setActiveModal(null); setSelectedTrade(null); }} className="text-gray-500 hover:text-white">
                           <X size={20} />
                       </button>
                   </div>
-                  <div className="space-y-4 text-center">
-                    <p>Details will be populated here.</p>
+                  
+                  <div className="text-center mb-8">
+                      <div className="text-3xl font-black text-[#10B981] mb-1">
+                          {parseFloat(selectedTrade.amount) >= 0 ? '+' : ''}{parseFloat(selectedTrade.amount).toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">PnL</div>
                   </div>
-                  <button onClick={() => setActiveModal(null)} className="w-full py-4 mt-8 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-gray-200">Close</button>
+
+                  <div className="space-y-4 mb-8 text-sm">
+                      <div className="flex justify-between">
+                          <span className="text-gray-500 uppercase font-bold tracking-widest">Time</span>
+                          <span className="font-bold">{new Date(selectedTrade.created_at).toLocaleString()}</span>
+                      </div>
+                      
+                      {loadingTradeDetails ? (
+                          <div className="text-center text-gray-500">Loading details...</div>
+                      ) : tradeDetails ? (
+                          <>
+                              {tradeDetails.entry_price && (
+                                  <div className="flex justify-between">
+                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Entry</span>
+                                      <span className="font-bold">{parseFloat(tradeDetails.entry_price).toLocaleString()}</span>
+                                  </div>
+                              )}
+                              {tradeDetails.settlement_price && (
+                                  <div className="flex justify-between">
+                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Settled</span>
+                                      <span className="font-bold">{parseFloat(tradeDetails.settlement_price).toLocaleString()}</span>
+                                  </div>
+                              )}
+                              {tradeDetails.options_duration && (
+                                  <div className="flex justify-between">
+                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Duration</span>
+                                      <span className="font-bold">{tradeDetails.options_duration}s</span>
+                                  </div>
+                              )}
+                              {tradeDetails.direction && (
+                                  <div className="flex justify-between">
+                                      <span className="text-gray-500 uppercase font-bold tracking-widest">Direction</span>
+                                      <span className={`font-bold ${tradeDetails.direction === 'Long' ? 'text-[#10B981]' : 'text-rose-500'}`}>{tradeDetails.direction}</span>
+                                  </div>
+                              )}
+                          </>
+                      ) : (
+                          <div className="text-center text-gray-500">No details available.</div>
+                      )}
+                  </div>
+
+                  <button 
+                    onClick={() => { setActiveModal(null); setSelectedTrade(null); }} 
+                    className="w-full py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-gray-200"
+                  >
+                      Close
+                  </button>
               </div>
           </div>
       )}
