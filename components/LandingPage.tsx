@@ -96,7 +96,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <div className="space-y-2">
                     <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Account Pending</h2>
-                    <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">Your account is under institutional review. Access will be granted shortly.</p>
+                    <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">Your account is under trading review. Access will be granted shortly.</p>
                 </div>
                 <button onClick={() => setView('login')} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-400">Return to Login</button>
             </div>
@@ -118,7 +118,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <div className="space-y-1">
                 <h1 className="text-4xl font-black text-white italic uppercase tracking-tighter">Log in</h1>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Node Access</p>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Trading Node Access</p>
             </div>
         </div>
 

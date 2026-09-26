@@ -1,4 +1,4 @@
-const CACHE_NAME = 'geko-v2.2'; // Bumped version for update force
+const CACHE_NAME = 'geko-v2.3'; // Bumped version
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/favicon.ico'
@@ -19,7 +19,6 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -29,10 +28,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('/api/')) return;
+  // CRITICAL: Absolutely do not intercept API calls
+  if (event.request.url.includes('/api/')) {
+    return; 
+  }
 
-  // Network-First strategy for HTML and Root to avoid stale index.html
+  if (event.request.method !== 'GET') return;
+  if (!event.request.url.startsWith('http')) return;
+
   const isHtmlRequest = event.request.mode === 'navigate' || 
                        event.request.url.endsWith('/') || 
                        event.request.url.endsWith('/index.html');
@@ -42,27 +45,28 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .then((response) => {
           const clonedResponse = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clonedResponse);
-          });
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clonedResponse));
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request) || new Response('Offline', { status: 503 }))
     );
     return;
   }
 
-  // Cache-First for other assets
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((res) => {
-        if (!res || res.status !== 200 || res.type !== 'basic') return res;
-        const resClone = res.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, resClone);
-        });
-        return res;
-      }).catch(() => null);
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+
+      return fetch(event.request).then((networkResponse) => {
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          return networkResponse;
+        }
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+        return networkResponse;
+      }).catch(() => {
+        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+      });
     })
   );
 });

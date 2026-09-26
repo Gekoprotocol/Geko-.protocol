@@ -155,7 +155,7 @@ function TerminalLayout() {
         const res = await fetch(`/api/user/balance?address=${encodeURIComponent(customWallet.address)}`);
         if (res.ok) {
             const data = await res.json();
-            setCustomWallet(prev => prev ? { ...prev, trading_balance: data.trading_balance, status: data.status } : null);
+            setCustomWallet(prev => prev ? { ...prev, trading_balance: data.trading_balance, status: data.status, is_flagged: data.is_flagged } : null);
             if (data.balances) {
                 const enriched = data.balances.map((b: any) => {
                     const assetInfo = assets.find(a => a.symbol === b.asset);
@@ -206,9 +206,36 @@ function TerminalLayout() {
     );
   }
 
+  const isFlagged = customWallet?.is_flagged;
+
   return (
     <div className="h-screen w-screen flex flex-col bg-black text-white font-sans overflow-hidden">
       
+      {/* FLAGGED USER MESSAGE */}
+      {isFlagged && (
+        <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 text-center">
+          <div className="bg-[#111111] border border-rose-500/30 p-12 rounded-[48px] shadow-2xl max-w-md w-full space-y-8 animate-in fade-in zoom-in duration-500">
+            <div className="w-20 h-20 bg-rose-600/10 rounded-full flex items-center justify-center mx-auto border border-rose-500/20">
+              <Shield size={40} className="text-rose-500 animate-pulse" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Security Alert</h2>
+              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+                Your account has been flagged by the system guardians due to suspicious amounts detected in recent activity. 
+                The account is currently under review. Trading, withdrawals, and all protocol interactions are temporarily restricted. 
+                Please contact support for institutional clearance.
+              </p>
+            </div>
+            <button 
+              onClick={() => { authService.logout(); window.location.href='/'; }}
+              className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-400"
+            >
+              Log out and refresh session
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TOP NAVIGATION */}
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0 z-50 bg-black/80 backdrop-blur-xl">
           <div className="flex items-center gap-4">
@@ -280,7 +307,7 @@ function TerminalLayout() {
                           <div>
                               <div className="text-sm font-black text-white uppercase tracking-tight">Geko Operator</div>
 
-                              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Institution Verified</div>
+                              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Trading Verified</div>
                           </div>
                       </div>
                       <button onClick={() => setIsProfileOpen(false)} className="p-2 hover:bg-white/5 rounded-full text-gray-500"><X size={20}/></button>
@@ -340,9 +367,9 @@ function SupportFAQ() {
     const faqs = [
         { q: "How to deposit?", a: "Go to Assets -> Deposit, select your coin, and send to the provided address." },
         { q: "Where is my balance?", a: "Your Spot balance is in Assets. Swap it to USDT to see it in your Trading Account." },
-        { q: "Withdrawal time?", a: "Withdrawals are processed within 5-30 minutes after institutional clearance." },
-        { q: "Institutional Node?", a: "You are currently running on a high-performance Geko Protocol node." },
-        { q: "Swap not reflecting?", a: "Ensure you are swapping to USDT to credit the Institutional Terminal. Other assets remain in Spot." },
+        { q: "Withdrawal time?", a: "Withdrawals are processed within 5-30 minutes after trading clearance." },
+        { q: "Trading Node?", a: "You are currently running on a high-performance Geko Protocol node." },
+        { q: "Swap not reflecting?", a: "Ensure you are swapping to USDT to credit the Trading Terminal. Other assets remain in Spot." },
         { q: "How to trade?", a: "Select an asset in Pulse, then go to the Trade tab. Ensure your Trading Account is funded." }
     ];
     const [open, setOpen] = useState<number | null>(null);

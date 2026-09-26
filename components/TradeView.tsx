@@ -69,6 +69,21 @@ const TradeView: React.FC<TradeViewProps> = ({
     }
   }, [activeTrades]);
 
+  // Fast real-time polling while trades are active so admin actions reflect immediately
+  useEffect(() => {
+    if (!wallet?.address || localActiveTrades.length === 0) return;
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/user/active-trades?address=${encodeURIComponent(wallet.address)}`);
+        if (res.ok) {
+          const freshTrades: ActiveTrade[] = await res.json();
+          setLocalActiveTrades(freshTrades);
+        }
+      } catch (_) {}
+    }, 1500);
+    return () => clearInterval(pollInterval);
+  }, [wallet?.address, localActiveTrades.length]);
+
   useEffect(() => {
     if (wallet) setTradingBalance(wallet.trading_balance || 0);
   }, [wallet?.trading_balance]);
@@ -146,23 +161,29 @@ const TradeView: React.FC<TradeViewProps> = ({
         // User Requirement: DEFAULT to loss unless admin grants a win
         let isWin = trade.forceOutcome === 'win';
         const pnl = isWin ? parseFloat(trade.amount) * (trade.leverage / 100) : 0;
+        const fee = +(parseFloat(trade.amount) * 0.01).toFixed(2);
+        const currentLivePrice = assets?.find(a => a.symbol === trade.symbol)?.price || selectedAsset?.price || trade.entryPrice;
 
         if (wallet?.address) {
-          await fetch('/api/settle-trade', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress: wallet.address,
-              asset: trade.symbol,
-              payout: (isWin ? parseFloat(trade.amount) + pnl : 0).toFixed(2),
-              tradeRef: trade.id,
-              isDemo: wallet?.isDemo,
-              status: isWin ? 'won' : 'lost'
-            })
-          }).catch(() => {});
+          try {
+            await fetch('/api/settle-trade', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                walletAddress: wallet.address,
+                asset: trade.symbol,
+                payout: (isWin ? Math.max(0, parseFloat(trade.amount) + pnl - fee) : 0).toFixed(2),
+                tradeRef: trade.id,
+                isDemo: wallet?.isDemo,
+                status: isWin ? 'won' : 'lost',
+                closingPrice: currentLivePrice
+              })
+            });
+            if (onRefreshBalances) onRefreshBalances();
+          } catch (e) {}
         }
 
-        const displayAmount = isWin ? parseFloat(trade.amount) + pnl : parseFloat(trade.amount);
+        const displayAmount = isWin ? Math.max(0, parseFloat(trade.amount) + pnl - fee) : parseFloat(trade.amount);
         setSettlementNotification({ status: isWin ? 'won' : 'lost', amount: displayAmount.toFixed(2) });
         setShowResultModal(true);
 
@@ -247,7 +268,7 @@ const TradeView: React.FC<TradeViewProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-hidden flex flex-col lg:flex-row bg-[#0B0E11]">
+      <div className="flex-1 relative lg:overflow-hidden flex flex-col lg:flex-row bg-[#0B0E11] overflow-y-auto">
         <div className={`flex-1 relative h-full min-h-0 ${mobileView === 'chart' ? 'flex' : 'hidden'} lg:flex flex-col overflow-y-auto`}>
             <div className={`w-full shrink-0 relative bg-[#0B0E11] transition-all duration-300 ${isChartFullscreen ? 'fixed inset-0 z-[500] h-screen' : 'h-[300px] md:h-[500px]'}`}>
                 <MarketChart symbol={selectedSymbol} showIndicators={showIndicators} activeTrades={localActiveTrades} />
@@ -265,13 +286,14 @@ const TradeView: React.FC<TradeViewProps> = ({
                             <div className="text-center py-4 text-[9px] text-gray-600 font-black uppercase tracking-widest border border-dashed border-[#2B3139] rounded-2xl">No Active Node Trades</div>
                         ) : localActiveTrades.map(t => {
                             const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
+                            const isTradeWin = t.forceOutcome === 'win';
                             return (
                                 <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-2xl border border-[#2B3139]">
                                     <div className="flex items-center space-x-3">
-                                        <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
-                                        <span className={`text-[9px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'LONG' : 'SHORT'} ${t.amount} · {timeLeft}s</span>
+                                        <div className={`w-2 h-2 rounded-full ${isTradeWin ? 'bg-emerald-500 shadow-[0_0_8px_#10B981]' : 'bg-rose-500 shadow-[0_0_8px_#F43F5E]'} animate-pulse`}></div>
+                                        <span className={`text-[9px] font-black uppercase ${isTradeWin ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'LONG' : 'SHORT'} ${t.amount} · {timeLeft}s</span>
                                     </div>
-                                    <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
+                                    <span className={`text-[9px] font-black ${isTradeWin ? 'text-emerald-400' : 'text-rose-400'}`}>{t.symbol}</span>
                                 </div>
                             );
                         })}
@@ -283,7 +305,7 @@ const TradeView: React.FC<TradeViewProps> = ({
         <div className={`w-full lg:w-64 bg-[#181C25] border-t lg:border-t-0 lg:border-l border-[#2B3139] shrink-0 ${mobileView === 'controls' ? 'flex' : 'hidden'} lg:flex flex-col z-30 shadow-2xl overflow-y-auto h-full pb-40 custom-scrollbar`}>
             <div className="p-4 lg:p-5 space-y-4 lg:space-y-6 flex-1 flex flex-col min-h-0">
                 <div className={`rounded-2xl p-4 border ${!hasSufficient ? 'bg-rose-900/10 border-rose-500/30' : 'bg-[#0B0E11] border-[#2B3139]'}`}>
-                    <div className="text-[8px] text-[#10B981] font-black uppercase mb-1">{wallet?.isDemo ? 'Demo Account' : 'Institutional Terminal'}</div>
+                    <div className="text-[8px] text-[#10B981] font-black uppercase mb-1">{wallet?.isDemo ? 'Demo Account' : 'Trading Terminal'}</div>
                     <div className={`text-lg lg:text-xl font-black tabular-nums ${!hasSufficient ? 'text-rose-500' : 'text-gray-100'}`}>
                         ${(tradingBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
@@ -327,17 +349,46 @@ const TradeView: React.FC<TradeViewProps> = ({
                     <button onClick={() => setSelectedDirection('down')} className={`py-3 rounded-[20px] font-black uppercase text-[10px] transition-all active:scale-95 ${selectedDirection === 'down' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-rose-900/30 text-rose-500 border border-rose-500/20'}`}>Short ↓</button>
                 </div>
                 
-                <button 
-                    onClick={() => executeTrade()} 
-                    disabled={!canTrade || !selectedDirection} 
-                    className={`w-full py-4 rounded-[20px] font-black uppercase text-[10px] tracking-[0.2em] transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 text-white shadow-2xl animate-pulse' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
-                >
-                    Start Trade
-                </button>
+                {wallet?.is_flagged ? (
+                    <div className="bg-rose-500/10 border border-rose-500 p-4 rounded-[20px] text-center space-y-2 animate-pulse">
+                        <div className="text-rose-500 font-black text-[10px] uppercase tracking-tighter">Suspicious Amount Detected</div>
+                        <div className="text-[8px] text-rose-500/70 font-bold uppercase tracking-widest">Trading & Withdrawals Locked for Audit</div>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={() => executeTrade()} 
+                        disabled={!canTrade || !selectedDirection} 
+                        className={`w-full py-4 rounded-[20px] font-black uppercase text-[10px] tracking-[0.2em] transition-all active:scale-95 ${canTrade && selectedDirection ? 'bg-indigo-600 text-white shadow-2xl animate-pulse' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
+                    >
+                        Start Trade
+                    </button>
+                )}
 
                 <div className="bg-[#111111] p-4 rounded-2xl border border-white/5 space-y-2">
                     <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Est. Profit</span><span className="text-[#10B981]">+{leverage}% (+${((parsedAmount * leverage) / 100).toFixed(2)})</span></div>
                     <div className="flex justify-between text-[8px] font-black uppercase text-gray-500"><span>Risk</span><span className="text-rose-500">Institutional</span></div>
+                    
+                    {/* Integrated Active Trades List */}
+                    {localActiveTrades.length > 0 && (
+                        <div className="pt-2 mt-2 border-t border-white/5 space-y-2">
+                            <div className="text-[7px] font-black text-indigo-500 uppercase tracking-widest px-1">Active Positions</div>
+                            {localActiveTrades.map(t => {
+                                const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
+                                const isTradeWin = t.forceOutcome === 'win';
+                                return (
+                                    <div key={t.id} className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-white/5">
+                                        <div className="flex items-center space-x-2">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${isTradeWin ? 'bg-emerald-500 shadow-[0_0_6px_#10B981]' : 'bg-rose-500 shadow-[0_0_6px_#F43F5E]'} animate-pulse`}></div>
+                                            <span className={`text-[8px] font-black uppercase ${isTradeWin ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                {t.direction === 'up' ? '↑' : '↓'} ${t.amount} {isTradeWin ? '· IN PROFIT' : '· LOSING'}
+                                            </span>
+                                        </div>
+                                        <span className={`text-[8px] font-black ${isTradeWin ? 'text-emerald-400' : 'text-rose-400'}`}>{timeLeft}s</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-3 pt-6 min-h-0 flex-1 flex flex-col">
@@ -345,13 +396,14 @@ const TradeView: React.FC<TradeViewProps> = ({
                     <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
                         {localActiveTrades.map(t => {
                             const timeLeft = Math.max(0, t.duration - Math.floor((now - (t.startTime || now)) / 1000));
+                            const isTradeWin = t.forceOutcome === 'win';
                             return (
                                 <div key={t.id} className="flex items-center justify-between bg-[#0B0E11] px-4 py-3 rounded-2xl border border-[#2B3139]">
                                     <div className="flex items-center space-x-3">
-                                        <div className={`w-2 h-2 rounded-full ${t.direction === 'up' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></div>
-                                        <span className={`text-[9px] font-black uppercase ${t.direction === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'LONG' : 'SHORT'} ${t.amount} · {timeLeft}s</span>
+                                        <div className={`w-2 h-2 rounded-full ${isTradeWin ? 'bg-emerald-500 shadow-[0_0_8px_#10B981]' : 'bg-rose-500 shadow-[0_0_8px_#F43F5E]'} animate-pulse`}></div>
+                                        <span className={`text-[9px] font-black uppercase ${isTradeWin ? 'text-emerald-500' : 'text-rose-500'}`}>{t.direction === 'up' ? 'LONG' : 'SHORT'} ${t.amount} · {timeLeft}s</span>
                                     </div>
-                                    <span className="text-[9px] font-black text-gray-100">{t.symbol}</span>
+                                    <span className={`text-[9px] font-black ${isTradeWin ? 'text-emerald-400' : 'text-rose-400'}`}>{t.symbol}</span>
                                 </div>
                             );
                         })}
