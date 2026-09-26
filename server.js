@@ -342,6 +342,9 @@ const initializeDatabase = async () => {
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='fees') THEN
               ALTER TABLE transactions ADD COLUMN fees DECIMAL(24, 8);
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='trade_amount') THEN
+              ALTER TABLE transactions ADD COLUMN trade_amount DECIMAL(24, 8);
+            END IF;
           END $$;
         `);
         await pool.query(`DELETE FROM transactions WHERE reference LIKE 'trade-open:%'`);
@@ -532,8 +535,10 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
 
     // Win profit = amount * (leverage / 100), Loss = -amount
     const netProfit = isWin ? +(amount * (leverage / 100)).toFixed(2) : -amount;
-    const payout = isWin ? +(amount + netProfit).toFixed(2) : 0;
-    const fee = isWin ? +(amount * 0.05).toFixed(2) : 0;
+    // 1% fee of the trade amount
+    const fee = +(amount * 0.01).toFixed(2);
+    // Payout after deducting 1% fee on win
+    const payout = isWin ? Math.max(0, +(amount + netProfit - fee).toFixed(2)) : 0;
 
     // Closing price determination
     let closingPrice = clientClosingPrice ? parseFloat(clientClosingPrice) : null;
@@ -567,14 +572,20 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
       WHERE id = $5
     `, [finalStatus, closingPrice, netProfit, fee, trade.id]);
 
-    // 2. Credit balance if won
+    // 2. Update user balance: credit payout on win (which has 1% fee deducted), or deduct 1% fee on loss
+    const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
     if (payout > 0) {
-      const balanceField = trade.is_demo ? 'demo_balance' : 'trading_balance';
       await pool.query(`
         UPDATE users 
         SET ${balanceField} = (${balanceField}::numeric + $1)::text 
         WHERE wallet_address = $2 OR email = $2
       `, [payout, trade.wallet_address]);
+    } else if (fee > 0) {
+      await pool.query(`
+        UPDATE users 
+        SET ${balanceField} = (GREATEST(0, ${balanceField}::numeric - $1))::text 
+        WHERE wallet_address = $2 OR email = $2
+      `, [fee, trade.wallet_address]);
     }
 
     // 3. Remove any open trade transaction to prevent duplicate history entries
@@ -600,8 +611,9 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
           options_duration,
           direction,
           fees,
+          trade_amount,
           created_at
-        ) VALUES ($1, $2, $3, 'trade', $4, $5, $6, $7, $8, $9, $10, NOW())
+        ) VALUES ($1, $2, $3, 'trade', $4, $5, $6, $7, $8, $9, $10, $11, NOW())
       `, [
         trade.wallet_address,
         pair,
@@ -612,7 +624,8 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
         closingPrice,
         `${trade.duration}s`,
         directionStr,
-        fee
+        fee,
+        amount
       ]);
     }
 
@@ -1502,7 +1515,7 @@ apiRouter.get('/trade-details', async (req, res) => {
     const amount = parseFloat(trade.amount || 0);
     const leverage = parseFloat(trade.leverage || 20);
     const pnl = trade.pnl !== null && trade.pnl !== undefined ? parseFloat(trade.pnl) : (isWin ? +(amount * (leverage / 100)).toFixed(2) : -amount);
-    const fee = trade.fees !== null && trade.fees !== undefined ? parseFloat(trade.fees) : (isWin ? +(amount * 0.05).toFixed(2) : 0);
+    const fee = trade.fees !== null && trade.fees !== undefined ? parseFloat(trade.fees) : +(amount * 0.01).toFixed(2);
 
     let pair = trade.symbol || 'BTC';
     if (!pair.includes('/')) pair = `${pair}/USDT`;
@@ -1527,6 +1540,7 @@ apiRouter.get('/trade-details', async (req, res) => {
         duration: trade.duration,
         status: trade.status,
         amount: trade.amount,
+        trade_amount: trade.amount,
         pnl: pnl,
         fees: fee,
         created_at: trade.created_at,
@@ -1566,9 +1580,9 @@ apiRouter.get('/user/transactions', async (req, res) => {
           COALESCE(tx.settlement_price, tr.closing_price) as settlement_price,
           COALESCE(tx.options_duration, CASE WHEN tr.duration IS NOT NULL THEN tr.duration || 's' ELSE NULL END) as options_duration,
           COALESCE(tx.direction, tr.direction) as direction,
-          COALESCE(tx.fees, tr.fees, CASE WHEN COALESCE(tr.status, tx.status) = 'won' THEN ROUND(tr.amount * 0.05, 2) ELSE 0 END) as fees,
+          COALESCE(tx.fees, tr.fees, ROUND(COALESCE(tx.trade_amount, tr.amount, 0) * 0.01, 2)) as fees,
           tr.id as trade_id,
-          tr.amount as trade_amount
+          COALESCE(tx.trade_amount, tr.amount, ABS(tx.amount)) as trade_amount
         FROM transactions tx
         LEFT JOIN trades tr ON (
           tx.reference = 'trade-settle:' || tr.id 

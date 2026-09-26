@@ -115,6 +115,9 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
 
                             {isTrade && (
                                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                    {(tx.trade_amount !== undefined && tx.trade_amount !== null) && (
+                                        <div>Amount: <span className="text-white">${parseFloat(tx.trade_amount as any || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                                    )}
                                     {tx.entry_price !== undefined && tx.entry_price !== null && (
                                         <div>Entry: <span className="text-white">${parseFloat(tx.entry_price as any || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                                     )}
@@ -170,6 +173,13 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                                 <span className="text-gray-500 uppercase font-bold tracking-widest">Pair</span>
                                 <span className="font-bold text-white">{selectedTrade.asset_symbol}</span>
                             </div>
+
+                            {(selectedTrade.trade_amount !== undefined && selectedTrade.trade_amount !== null) && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500 uppercase font-bold tracking-widest">Trade Amount</span>
+                                    <span className="font-bold text-white">${parseFloat(selectedTrade.trade_amount as any || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                </div>
+                            )}
 
                             {selectedTrade.direction && (
                                 <div className="flex justify-between">

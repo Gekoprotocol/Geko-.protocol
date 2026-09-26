@@ -123,6 +123,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       duration: tx.options_duration ? parseInt(tx.options_duration) : null,
       status: tx.status,
       amount: tx.trade_amount || Math.abs(parseFloat(tx.amount || 0)),
+      trade_amount: tx.trade_amount || Math.abs(parseFloat(tx.amount || 0)),
       pnl: tx.amount,
       fees: tx.fees !== undefined ? tx.fees : 0,
       created_at: tx.created_at
@@ -403,7 +404,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                                           {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
                                       </div>
                                   )}
-                                  <div className="text-[9px] text-gray-600 font-black uppercase">{tx.asset_symbol}</div>
+                                  <div className="text-[9px] text-gray-600 font-black uppercase">
+                                      {tx.trade_amount ? `Stake: $${parseFloat(tx.trade_amount).toFixed(2)} • ` : ''}{tx.asset_symbol}
+                                  </div>
                               </div>
                           </div>
                       </div>
@@ -644,6 +647,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                           <span className="text-gray-500 uppercase font-bold tracking-widest">Pair</span>
                           <span className="font-bold text-white">{tradeDetails?.symbol || selectedTrade.asset_symbol || 'BTC/USDT'}</span>
                       </div>
+
+                      {(tradeDetails?.trade_amount || tradeDetails?.amount || selectedTrade.trade_amount) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Trade Amount</span>
+                              <span className="font-bold text-white">${parseFloat(tradeDetails?.trade_amount || tradeDetails?.amount || selectedTrade.trade_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                      )}
 
                       {((tradeDetails?.direction || selectedTrade.direction)) && (
                           <div className="flex justify-between">
