@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { WalletData, ActiveTrade } from '../types';
 import { authService, UserRecord } from '../services/authService';
+import { fetchRealPrices } from '../services/marketData';
 
 interface UserCardProps {
   user: any;
@@ -12,9 +13,10 @@ interface UserCardProps {
   onCreditBalance: (walletAddress: string, currency: string, amount: string, target: string, usdPrice?: string) => Promise<void>;
   savingId: string | null;
   savedId: string | null;
+  marketPrices: Record<string, { price: number, change: number }>;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onFlagUser, onToggleAutoWin, onCreditBalance, savingId, savedId }) => {
+const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onFlagUser, onToggleAutoWin, onCreditBalance, savingId, savedId, marketPrices }) => {
   const currentBalance = user.trading_balance ?? '0.00';
   const currentDemoBalance = user.demo_balance ?? '100000.00';
   const currentProtocolBalance = user.protocol_settlement_balance ?? '0.00';
@@ -32,6 +34,15 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   const [isCrediting, setIsCrediting] = useState(false);
   
   const uid = (user.id || user.wallet_address || 'unknown').toString();
+
+  // Automate price updates
+  useEffect(() => {
+    if (depositCurrency !== 'USDT' && marketPrices[depositCurrency]) {
+      setUsdPrice(marketPrices[depositCurrency].price.toString());
+    } else {
+      setUsdPrice('0');
+    }
+  }, [depositCurrency, marketPrices]);
 
   const handleCreditBalance = async (target: 'spot' | 'trade') => {
       if (!parseFloat(depositAmount)) return;
@@ -232,7 +243,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
 };
 
 export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'guests' | 'intercept' | 'withdrawals' | 'kyc' | 'support' | 'config' | 'forgot_passwords'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'guests' | 'intercept' | 'withdrawals' | 'kyc' | 'support' | 'config' | 'forgot_passwords' | 'live_prices'>('users');
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [realUserTrades, setRealUserTrades] = useState<any[]>([]);
   const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
@@ -261,9 +272,11 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [adminReply, setAdminReply] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const [marketPrices, setMarketPrices] = useState<Record<string, { price: number, change: number }>>({});
+
   const fetchData = async () => {
     try {
-      const [u, t, w, k, s, st, cfg, fp] = await Promise.all([
+      const [u, t, w, k, s, st, cfg, fp, prices] = await Promise.all([
         fetch('/api/admin/users').then(r => r.json()).catch(() => []),
         fetch('/api/admin/active-trades').then(r => r.json()).catch(() => []),
         fetch('/api/admin/withdrawal-requests').then(r => r.json()).catch(() => []),
@@ -271,7 +284,8 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         fetch('/api/admin/support/tickets').then(r => r.json()).catch(() => []),
         fetch('/api/admin/status').then(r => r.json()).catch(() => null),
         fetch('/api/config').then(r => r.json()).catch(() => null),
-        fetch('/api/admin/forgot-passwords').then(r => r.json()).catch(() => [])
+        fetch('/api/admin/forgot-passwords').then(r => r.json()).catch(() => []),
+        fetchRealPrices()
       ]);
       setDbUsers(Array.isArray(u) ? u : []);
       setRealUserTrades(Array.isArray(t) ? t : []);
@@ -286,6 +300,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           setEthAddress(cfg.eth_deposit_address || '');
           setUsdtAddress(cfg.usdt_deposit_address || '');
       }
+      setMarketPrices(prices || {});
     } catch (e) { console.error('Data fetch failed', e); }
   };
 
@@ -466,13 +481,13 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <h1 className="text-lg md:text-xl font-black italic uppercase text-[#10B981] tracking-tighter leading-none">Geko Protocols_Admin</h1>
           </div>
           <nav className="flex space-x-1 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
-            {['users', 'guests', 'intercept', 'withdrawals', 'kyc', 'support', 'forgot_passwords', 'config'].map(tab => (
+            {['users', 'guests', 'intercept', 'withdrawals', 'kyc', 'support', 'forgot_passwords', 'config', 'live_prices'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
                 className={`px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${activeTab === tab ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-[#2B3139]'}`}
               >
-                {tab === 'forgot_passwords' ? 'Forgot Pass' : tab}
+                {tab === 'forgot_passwords' ? 'Forgot Pass' : tab.replace('_', ' ')}
               </button>
             ))}
           </nav>
@@ -495,6 +510,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onCreditBalance={handleCreditBalance}
                 savingId={savingId}
                 savedId={savedId}
+                marketPrices={marketPrices}
               />
             ))}
           </div>
@@ -722,6 +738,32 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     ))}
                 </div>
                 <button onClick={handleSaveConfig} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest">{configSaving ? 'Syncing...' : 'Broadcast Node Config'}</button>
+            </div>
+        )}
+
+        {activeTab === 'live_prices' && (
+            <div className="max-w-2xl mx-auto bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
+                <div className="px-8 py-6 border-b border-[#2B3139]">
+                    <h2 className="text-sm font-black uppercase italic text-[#10B981]">Live Market Prices</h2>
+                </div>
+                <table className="w-full text-left">
+                    <thead className="bg-black text-[9px] text-gray-500 uppercase font-black">
+                        <tr>
+                            <th className="px-8 py-4">Asset</th>
+                            <th className="px-8 py-4 text-right">Price (USD)</th>
+                            <th className="px-8 py-4 text-right">24h Change</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2B3139]">
+                        {Object.entries(marketPrices).map(([symbol, data]) => (
+                            <tr key={symbol} className="hover:bg-white/5">
+                                <td className="px-8 py-4 font-black text-white tracking-widest">{symbol}</td>
+                                <td className="px-8 py-4 text-right font-mono text-emerald-400">${data.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className={`px-8 py-4 text-right font-mono ${data.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{data.change.toFixed(2)}%</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         )}
       </div>
