@@ -370,6 +370,12 @@ const initializeDatabase = async () => {
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='trade_amount') THEN
               ALTER TABLE transactions ADD COLUMN trade_amount DECIMAL(24, 8);
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='from_asset') THEN
+              ALTER TABLE transactions ADD COLUMN from_asset TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='to_asset') THEN
+              ALTER TABLE transactions ADD COLUMN to_asset TEXT;
+            END IF;
           END $$;
         `);
         await pool.query(`DELETE FROM transactions WHERE reference LIKE 'trade-open:%'`);
@@ -495,7 +501,7 @@ async function sendTelegramNotification(message) {
   }
 }
 
-async function recordTransaction({ wallet_address, asset_symbol, amount, type, payment_id = null, tx_signature = null, reference = null, status = 'completed' }) {
+async function recordTransaction({ wallet_address, asset_symbol, amount, type, payment_id = null, tx_signature = null, reference = null, status = 'completed', from_asset = null, to_asset = null }) {
   if (!dbAvailable || !pool || !wallet_address) return null;
 
   try {
@@ -504,10 +510,10 @@ async function recordTransaction({ wallet_address, asset_symbol, amount, type, p
     const actualAddress = userRes.rows[0]?.wallet_address || wallet_address;
 
     const res = await pool.query(`
-        INSERT INTO transactions (wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO transactions (wallet_address, asset_symbol, amount, type, payment_id, tx_signature, reference, status, from_asset, to_asset)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
-    `, [actualAddress, asset_symbol.toUpperCase(), parseFloat(amount), type, payment_id, tx_signature, reference, status]);
+    `, [actualAddress, asset_symbol.toUpperCase(), parseFloat(amount), type, payment_id, tx_signature, reference, status, from_asset, to_asset]);
 
     return res.rows[0];
   } catch (err) {
@@ -572,28 +578,26 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
     // Payout after deducting 1% fee on win
     const payout = isWin ? Math.max(0, +(amount + netProfit - fee).toFixed(2)) : 0;
 
-    // Closing price determination: MUST ALWAYS align with direction and win/loss outcome
-    const isLong = (trade.direction || '').toUpperCase().includes('LONG') || (trade.direction || '').toUpperCase() === 'UP';
-    const parsedClientPrice = clientClosingPrice ? parseFloat(clientClosingPrice) : null;
-    const deltaPercent = (0.20 + Math.random() * 0.35) / 100; // 0.20% - 0.55% realistic move
+    // Closing price determination:
+    // If we have a valid clientClosingPrice, use it as the baseline.
+    // Otherwise, use the entryPrice.
+    let baselinePrice = (parsedClientPrice && parsedClientPrice > 0) ? parsedClientPrice : entryPrice;
+    
+    // We add/subtract a small random delta to make the move look realistic 
+    // when not explicitly set by admin or client.
+    const deltaPercent = (0.20 + Math.random() * 0.35) / 100;
     
     let closingPrice;
-    if (isWin) {
-      if (isLong) {
-        // Long win: closing must be GREATER than entry
-        closingPrice = (parsedClientPrice && parsedClientPrice > entryPrice) ? parsedClientPrice : entryPrice * (1 + deltaPercent);
-      } else {
-        // Short win: closing must be LOWER than entry
-        closingPrice = (parsedClientPrice && parsedClientPrice < entryPrice) ? parsedClientPrice : entryPrice * (1 - deltaPercent);
-      }
+    if (isLong) {
+      // For Long: Win = price goes up, Loss = price goes down
+      closingPrice = isWin 
+        ? baselinePrice * (1 + deltaPercent) 
+        : baselinePrice * (1 - deltaPercent);
     } else {
-      if (isLong) {
-        // Long loss: closing must be LOWER than entry
-        closingPrice = (parsedClientPrice && parsedClientPrice < entryPrice) ? parsedClientPrice : entryPrice * (1 - deltaPercent);
-      } else {
-        // Short loss: closing must be GREATER than entry
-        closingPrice = (parsedClientPrice && parsedClientPrice > entryPrice) ? parsedClientPrice : entryPrice * (1 + deltaPercent);
-      }
+      // For Short: Win = price goes down, Loss = price goes up
+      closingPrice = isWin 
+        ? baselinePrice * (1 - deltaPercent) 
+        : baselinePrice * (1 + deltaPercent);
     }
 
     const decimals = entryPrice < 1 ? 6 : (entryPrice < 100 ? 4 : 2);
@@ -1627,6 +1631,8 @@ apiRouter.get('/user/transactions', async (req, res) => {
           tx.tx_signature,
           tx.reference,
           tx.created_at,
+          tx.from_asset,
+          tx.to_asset,
           COALESCE(tx.entry_price, tr.entry_price) as entry_price,
           COALESCE(tx.settlement_price, tr.closing_price) as settlement_price,
           COALESCE(tx.options_duration, CASE WHEN tr.duration IS NOT NULL THEN tr.duration || 's' ELSE NULL END) as options_duration,
@@ -1771,7 +1777,9 @@ apiRouter.post('/swap-internal', async (req, res) => {
         amount: -amt,
         type: 'swap',
         reference: `swap_internal_out_${from}_to_${to}`,
-        status: 'completed'
+        status: 'completed',
+        from_asset: from.toUpperCase(),
+        to_asset: to.toUpperCase()
     });
 
     // 3. Credit 'to' asset
@@ -1791,7 +1799,9 @@ apiRouter.post('/swap-internal', async (req, res) => {
         amount: tAmt,
         type: 'swap',
         reference: `swap_internal_in_${to}_from_${from}`,
-        status: 'completed'
+        status: 'completed',
+        from_asset: from.toUpperCase(),
+        to_asset: to.toUpperCase()
     });
 
     res.json({ success: true });

@@ -19,6 +19,8 @@ interface Transaction {
     fees?: number;
     trade_id?: string;
     trade_amount?: number | string;
+    from_asset?: string;
+    to_asset?: string;
 }
 
 interface TransactionHistoryProps {
@@ -96,7 +98,7 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-bold text-white uppercase tracking-tight">
-                                            {tx.type === 'deposit' ? 'Funded' : (tx.type === 'swap' ? 'Swap' : (tx.type === 'trade' ? 'Trade' : tx.type))}
+                                            {tx.type === 'deposit' ? 'Funded' : (tx.type === 'swap' ? `Swap ${tx.from_asset} to ${tx.to_asset}` : (tx.type === 'trade' ? 'Trade' : tx.type))}
                                         </div>
                                         <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
                                             {new Date(tx.created_at).toLocaleString()}
