@@ -87,7 +87,7 @@ app.use(apiRouter);
 // ─── CRITICAL DIRECT FALLBACK ROUTES ─────────────────────────────────────
 apiRouter.get('/binance/prices', async (req, res) => {
   try {
-    const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD';
+    const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD,BNBUSD';
     const krakenRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${krakenPairs}`, {
       headers: { 'Accept': 'application/json', 'User-Agent': 'GekoProtocol/1.0' },
       timeout: 10000
@@ -755,7 +755,7 @@ apiRouter.post('/admin/config', async (req, res) => {
 // ─── Live prices proxy ─────────────────────────────────────────────────────
 apiRouter.get('/binance/prices', async (req, res) => {
   try {
-    const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD';
+    const krakenPairs = 'XXBTZUSD,XETHZUSD,SOLUSD,XXRPZUSD,ADAUSD,AVAXUSD,XDGUSD,DOTUSD,LINKUSD,XLTCZUSD,TRXUSD,UNIUSD,ATOMUSD,AAVEUSD,BNBUSD';
     const krakenRes = await axios.get(`https://api.kraken.com/0/public/Ticker?pair=${krakenPairs}`, {
       headers: { 'Accept': 'application/json', 'User-Agent': 'GekoProtocol/1.0' },
       timeout: 10000
