@@ -32,6 +32,7 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
     { name: 'Trust Wallet', id: 'trust', type: 'evm', color: 'text-sky-500', icon: '/logos/trust.png' },
     { name: 'OKX Wallet', id: 'okx', type: 'evm', color: 'text-white', icon: '/logos/okx.png' },
     { name: 'Exodus', id: 'exodus', type: 'evm', color: 'text-indigo-400', icon: '/logos/exodus.png' },
+    { name: 'Klever Wallet', id: 'klever', type: 'evm', color: 'text-blue-600', icon: '/logos/klever.png' },
     { name: 'Backpack', id: 'backpack', type: 'svm', color: 'text-red-400', icon: '/logos/backpack.png' },
     { name: 'Magic Eden', id: 'magiceden', type: 'svm', color: 'text-pink-400', icon: '/logos/magiceden.png' },
   ];
