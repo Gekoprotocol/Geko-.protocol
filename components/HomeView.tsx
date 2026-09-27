@@ -12,15 +12,6 @@ const HomeView: React.FC<HomeViewProps> = ({ wallet, assets, onNavigate }) => {
   return (
     <div className="h-full overflow-y-auto bg-black text-white custom-scrollbar flex flex-col font-sans">
       <div className="flex-1 w-full max-w-md mx-auto p-6 space-y-12 pb-32 pt-16">
-        
-        {/* Network Badge */}
-        <div className="flex justify-center">
-            <div className="flex items-center gap-2 bg-[#1A1A1A] px-3 py-1.5 rounded-full border border-white/5 shadow-xl">
-                <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse shadow-[0_0_8px_#10B981]"></div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Solana Mainnet</span>
-            </div>
-        </div>
-
         {/* Home Title */}
         <div className="text-center space-y-2 pt-4">
             <h1 className="text-5xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-600">
