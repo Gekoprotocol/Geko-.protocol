@@ -381,7 +381,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                                         <div className="flex items-center space-x-2">
                                             <div className={`w-1.5 h-1.5 rounded-full ${isTradeWin ? 'bg-emerald-500 shadow-[0_0_6px_#10B981]' : 'bg-rose-500 shadow-[0_0_6px_#F43F5E]'} animate-pulse`}></div>
                                             <span className={`text-[8px] font-black uppercase ${isTradeWin ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                {t.direction === 'up' ? '↑' : '↓'} ${t.amount} {isTradeWin ? '· IN PROFIT' : '· LOSING'}
+                                                {t.direction === 'up' ? '↑' : '↓'} ${t.amount}
                                             </span>
                                         </div>
                                         <span className={`text-[8px] font-black ${isTradeWin ? 'text-emerald-400' : 'text-rose-400'}`}>{timeLeft}s</span>
