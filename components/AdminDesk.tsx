@@ -86,20 +86,27 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   return (
     <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'} ${isFlagged ? 'ring-2 ring-rose-500' : ''}`}>
       <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-3">
-          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
-          <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">
-            {user.wallet_address ? user.wallet_address.slice(0, 10) + '...' : (user.email || `Node_${user.id}`)}
+        <div className="flex flex-col space-y-1">
+          <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
+              <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400 truncate max-w-[150px]">
+                {user.email || 'No Email'}
+              </div>
           </div>
-          {localSwapSent && (
-              <div className="bg-amber-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-bounce">USER SENT SWAP</div>
-          )}
-          {isFlagged && (
-              <div className="bg-rose-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">FLAGGED</div>
-          )}
-          {isAutoWin && (
-              <div className="bg-emerald-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">AUTO-WIN ON</div>
-          )}
+          <div className="text-[9px] font-mono text-gray-500 truncate max-w-[150px]">
+             {user.wallet_address ? user.wallet_address.slice(0, 10) + '...' : `Node_${user.id}`}
+          </div>
+          <div className="flex items-center gap-1 mt-1">
+            {localSwapSent && (
+                <div className="bg-amber-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-bounce">USER SENT SWAP</div>
+            )}
+            {isFlagged && (
+                <div className="bg-rose-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">FLAGGED</div>
+            )}
+            {isAutoWin && (
+                <div className="bg-emerald-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">AUTO-WIN ON</div>
+            )}
+          </div>
         </div>
         <div className="flex items-center space-x-2">
             <button 
