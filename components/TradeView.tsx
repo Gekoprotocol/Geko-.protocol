@@ -183,8 +183,9 @@ const TradeView: React.FC<TradeViewProps> = ({
           } catch (e) {}
         }
 
+        const grossAmount = isWin ? Math.max(0, parseFloat(trade.amount) + pnl) : parseFloat(trade.amount);
         const displayAmount = isWin ? Math.max(0, parseFloat(trade.amount) + pnl - fee) : parseFloat(trade.amount);
-        setSettlementNotification({ status: isWin ? 'won' : 'lost', amount: displayAmount.toFixed(2) });
+        setSettlementNotification({ status: isWin ? 'won' : 'lost', amount: grossAmount.toFixed(2) });
         setShowResultModal(true);
 
         const settledTrade: ActiveTrade = {

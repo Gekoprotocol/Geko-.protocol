@@ -9,7 +9,7 @@ interface UserCardProps {
   onLogoutUser: (userId: number) => void;
   onFlagUser: (userId: number, flagged: boolean) => void;
   onToggleAutoWin: (userId: number, autoWin: boolean) => void;
-  onCreditBalance: (walletAddress: string, currency: string, amount: string) => Promise<void>;
+  onCreditBalance: (walletAddress: string, currency: string, amount: string, target: string, usdPrice?: string) => Promise<void>;
   savingId: string | null;
   savedId: string | null;
 }
@@ -28,6 +28,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   
   const [depositCurrency, setDepositCurrency] = useState(user.pending_deposit_currency || 'BTC');
   const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
+  const [usdPrice, setUsdPrice] = useState('0'); // Added Price Input
   const [isCrediting, setIsCrediting] = useState(false);
   
   const uid = (user.id || user.wallet_address || 'unknown').toString();
@@ -36,7 +37,9 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
       if (!parseFloat(depositAmount)) return;
       setIsCrediting(true);
       try {
-          await onCreditBalance(user.wallet_address, depositCurrency, depositAmount, target);
+          // Send usdPrice if not USDT
+          const priceToSend = (depositCurrency !== 'USDT') ? usdPrice : undefined;
+          await onCreditBalance(user.wallet_address, depositCurrency, depositAmount, target, priceToSend);
           setLocalSwapSent(false);
           setDepositAmount('0');
       } finally {
@@ -85,7 +88,9 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
       <div className="flex justify-between items-start">
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
-          <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">{user.email || `Node_${user.id}`}</div>
+          <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">
+            {user.wallet_address ? user.wallet_address.slice(0, 10) + '...' : (user.email || `Node_${user.id}`)}
+          </div>
           {localSwapSent && (
               <div className="bg-amber-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-bounce">USER SENT SWAP</div>
           )}
@@ -155,9 +160,18 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
                     type="text" 
                     value={depositAmount} 
                     onChange={e => setDepositAmount(e.target.value)}
-                    placeholder="Amt" 
+                    placeholder="USD Amt" 
                     className="flex-[1.5] bg-black border border-white/5 rounded-xl px-3 py-2 text-[9px] font-mono text-white outline-none focus:border-[#10B981]" 
                   />
+                  {depositCurrency !== 'USDT' && (
+                    <input 
+                        type="text" 
+                        value={usdPrice} 
+                        onChange={e => setUsdPrice(e.target.value)}
+                        placeholder="Price" 
+                        className="flex-1 bg-black border border-white/5 rounded-xl px-2 py-2 text-[9px] font-mono text-white outline-none focus:border-[#10B981]" 
+                    />
+                  )}
                   <div className="flex gap-1">
                       <button 
                         onClick={() => handleCreditBalance('spot')}
@@ -289,12 +303,12 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     finally { setSavingId(null); }
   };
 
-  const handleCreditBalance = async (walletAddress: string, currency: string, amount: string, target: 'spot' | 'trade' = 'spot') => {
+  const handleCreditBalance = async (walletAddress: string, currency: string, amount: string, target: string, usdPrice?: string) => {
     try {
         await fetch('/api/admin/credit-balance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress, currency, amount, target })
+            body: JSON.stringify({ walletAddress, currency, amount, target, usdPrice })
         });
         fetchData();
     } catch (e) { console.error('Credit failed', e); }

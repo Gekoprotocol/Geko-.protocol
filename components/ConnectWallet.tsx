@@ -25,15 +25,15 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
   const [showManual, setShowManual] = useState(false);
 
   const wallets: WalletOption[] = [
-    { name: 'Phantom', id: 'phantom', type: 'svm', color: 'text-purple-400', icon: 'P' },
-    { name: 'Solflare', id: 'solflare', type: 'svm', color: 'text-orange-400', icon: 'S' },
-    { name: 'MetaMask', id: 'metamask', type: 'evm', color: 'text-orange-500', icon: 'M' },
-    { name: 'Coinbase', id: 'coinbase', type: 'evm', color: 'text-blue-500', icon: 'C' },
-    { name: 'Trust Wallet', id: 'trust', type: 'evm', color: 'text-sky-500', icon: 'T' },
-    { name: 'OKX Wallet', id: 'okx', type: 'evm', color: 'text-white', icon: 'O' },
-    { name: 'Exodus', id: 'exodus', type: 'evm', color: 'text-indigo-400', icon: 'E' },
-    { name: 'Backpack', id: 'backpack', type: 'svm', color: 'text-red-400', icon: 'B' },
-    { name: 'Magic Eden', id: 'magiceden', type: 'svm', color: 'text-pink-400', icon: 'ME' },
+    { name: 'Phantom', id: 'phantom', type: 'svm', color: 'text-purple-400', icon: '/logos/phantom.png' },
+    { name: 'Solflare', id: 'solflare', type: 'svm', color: 'text-orange-400', icon: '/logos/solflare.png' },
+    { name: 'MetaMask', id: 'metamask', type: 'evm', color: 'text-orange-500', icon: '/logos/metamask.png' },
+    { name: 'Coinbase', id: 'coinbase', type: 'evm', color: 'text-blue-500', icon: '/logos/coinbase.png' },
+    { name: 'Trust Wallet', id: 'trust', type: 'evm', color: 'text-sky-500', icon: '/logos/trust.png' },
+    { name: 'OKX Wallet', id: 'okx', type: 'evm', color: 'text-white', icon: '/logos/okx.png' },
+    { name: 'Exodus', id: 'exodus', type: 'evm', color: 'text-indigo-400', icon: '/logos/exodus.png' },
+    { name: 'Backpack', id: 'backpack', type: 'svm', color: 'text-red-400', icon: '/logos/backpack.png' },
+    { name: 'Magic Eden', id: 'magiceden', type: 'svm', color: 'text-pink-400', icon: '/logos/magiceden.png' },
   ];
 
   const filteredWallets = useMemo(() => 
@@ -144,8 +144,8 @@ export const ConnectWallet: React.FC<ConnectWalletProps> = ({ onConnect, onClose
                                 className="w-full flex items-center justify-between p-4 bg-[#0B0E11]/50 border border-white/5 rounded-[24px] hover:bg-[#2B3139] hover:border-indigo-500/30 transition-all group"
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className={`w-12 h-12 rounded-2xl bg-[#181C25] border border-white/5 flex items-center justify-center font-black italic text-lg ${w.color} group-hover:scale-105 transition-transform`}>
-                                        {w.icon}
+                                    <div className={`w-12 h-12 rounded-2xl bg-[#181C25] border border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform overflow-hidden`}>
+                                        <img src={w.icon} alt={w.name} className="w-8 h-8 object-contain" />
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-bold text-white uppercase tracking-tight">{w.name}</div>

@@ -1303,31 +1303,36 @@ apiRouter.post('/admin/force-outcome', async (req, res) => {
 });
 
 apiRouter.post('/admin/credit-balance', async (req, res) => {
-  const { walletAddress, currency, amount, target } = req.body;
+  const { walletAddress, currency, amount, target, usdPrice } = req.body;
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
   try {
-    const amt = parseFloat(amount);
-    if (isNaN(amt) || amt === 0) return res.status(400).json({ error: 'Invalid amount' });
+    const rawAmt = parseFloat(amount);
+    if (isNaN(rawAmt) || rawAmt <= 0) return res.status(400).json({ error: 'Invalid amount' });
 
+    // Calculate coin amount if usdPrice is provided (conversion)
+    const finalAmt = usdPrice ? (rawAmt / parseFloat(usdPrice)) : rawAmt;
+    
+    // Only update balances for USDT (as protocol_settlement_balance/trading_balance)
+    // For other assets, they are derived from transaction history.
     if (currency.toUpperCase() === 'USDT') {
       const field = target === 'trade' ? 'trading_balance' : 'protocol_settlement_balance';
       await pool.query(`
           UPDATE users SET 
             ${field} = (${field}::numeric + $1)::text 
           WHERE wallet_address = $2
-      `, [amt, walletAddress]);
+      `, [finalAmt, walletAddress]);
     }
 
     await recordTransaction({
       wallet_address: walletAddress,
       asset_symbol: currency.toUpperCase(),
-      amount: amt,
+      amount: finalAmt,
       type: 'deposit',
       reference: `admin_credit_${target || 'spot'}`,
       status: 'completed'
     });
 
-    res.json({ success: true });
+    res.json({ success: true, creditedAmount: finalAmt });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

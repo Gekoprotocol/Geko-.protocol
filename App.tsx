@@ -32,7 +32,9 @@ import {
   HelpCircle,
   User,
   CheckCircle,
-  ChevronDown
+  ChevronDown,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 import { LandingPage } from './components/LandingPage';
@@ -85,6 +87,11 @@ function TerminalLayout() {
   const [customWallet, setCustomWallet] = useState<WalletData | null>(null);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    document.body.className = theme === 'dark' ? 'bg-black text-white' : 'bg-white text-black';
+  }, [theme]);
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
   const [prices, setPrices] = useState<any[]>([]);
   const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([]);
@@ -247,6 +254,9 @@ function TerminalLayout() {
                       <Zap size={20} className="text-black fill-black" />
                   </div>
                   <span className="font-black italic uppercase tracking-tighter text-lg text-[#10B981]">Geko</span>
+                  <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 ml-2 hover:bg-white/5 rounded-full transition-colors text-gray-400">
+                    {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                  </button>
               </div>
           </div>
           <div className="flex items-center gap-3">
