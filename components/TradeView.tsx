@@ -157,13 +157,26 @@ const TradeView: React.FC<TradeViewProps> = ({
       if (toSettle.length === 0) return;
 
       const settledIds = new Set(toSettle.map(t => t.id));
+      let lastSettlement = null;
+
       for (const trade of toSettle) {
         // User Requirement: DEFAULT to loss unless admin grants a win
         let isWin = trade.forceOutcome === 'win';
+        
+        // Calculate realistic price deviation (0.5 to 3.0 points)
+        const deviation = (Math.random() * 2.5 + 0.5).toFixed(2);
+        
+        // Determine realistic closing price based on direction and outcome
+        let closingPrice = parseFloat(trade.entryPrice);
+        if (trade.direction === 'up') {
+            closingPrice += isWin ? parseFloat(deviation) : -parseFloat(deviation);
+        } else {
+            closingPrice += isWin ? -parseFloat(deviation) : parseFloat(deviation);
+        }
+
         const pnl = isWin ? parseFloat(trade.amount) * (trade.leverage / 100) : 0;
         const fee = +(parseFloat(trade.amount) * 0.01).toFixed(2);
-        const currentLivePrice = assets?.find(a => a.symbol === trade.symbol)?.price || selectedAsset?.price || trade.entryPrice;
-
+        
         if (wallet?.address) {
           try {
             await fetch('/api/settle-trade', {
@@ -176,7 +189,7 @@ const TradeView: React.FC<TradeViewProps> = ({
                 tradeRef: trade.id,
                 isDemo: wallet?.isDemo,
                 status: isWin ? 'won' : 'lost',
-                closingPrice: currentLivePrice
+                closingPrice: closingPrice
               })
             });
             if (onRefreshBalances) onRefreshBalances();
@@ -184,9 +197,7 @@ const TradeView: React.FC<TradeViewProps> = ({
         }
 
         const grossAmount = isWin ? Math.max(0, parseFloat(trade.amount) + pnl) : parseFloat(trade.amount);
-        const displayAmount = isWin ? Math.max(0, parseFloat(trade.amount) + pnl - fee) : parseFloat(trade.amount);
-        setSettlementNotification({ status: isWin ? 'won' : 'lost', amount: grossAmount.toFixed(2) });
-        setShowResultModal(true);
+        lastSettlement = { status: isWin ? 'won' : 'lost', amount: grossAmount.toFixed(2) };
 
         const settledTrade: ActiveTrade = {
           ...trade,
@@ -196,6 +207,12 @@ const TradeView: React.FC<TradeViewProps> = ({
         };
         setLocalSettledTrades(prev => [settledTrade, ...prev].slice(0, 50));
       }
+      
+      if (lastSettlement) {
+        setSettlementNotification(lastSettlement);
+        setShowResultModal(true);
+      }
+      
       setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
     }, 1000);
     return () => clearInterval(interval);
