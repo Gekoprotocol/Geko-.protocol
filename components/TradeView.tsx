@@ -151,44 +151,42 @@ const TradeView: React.FC<TradeViewProps> = ({
   };
 
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const interval = setInterval(() => {
       const now = Date.now();
-      const toSettle = localActiveTrades.filter(t => (now - (t.startTime || now)) >= (t.duration * 1000));
-      if (toSettle.length === 0) return;
-
-      const settledIds = new Set(toSettle.map(t => t.id));
       
-      // Immediately remove from active trades to prevent re-processing
-      setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
+      setLocalActiveTrades(prevTrades => {
+        const toSettle = prevTrades.filter(t => (now - (t.startTime || now)) >= (t.duration * 1000));
+        if (toSettle.length === 0) return prevTrades;
 
-      let lastSettlement = null;
+        const settledIds = new Set(toSettle.map(t => t.id));
+        
+        let lastSettlement = null;
 
-      for (const trade of toSettle) {
-        // User Requirement: DEFAULT to loss unless admin grants a win
-        let isWin = trade.forceOutcome === 'win';
-        
-        // Duration-based price shift rules
-        const durationShiftMap: Record<number, number> = {
-            30: 2,
-            60: 4,
-            120: 30
-        };
-        const shift = durationShiftMap[trade.duration] || 1;
-        
-        // Determine realistic closing price based on direction and outcome
-        let closingPrice = parseFloat(trade.entryPrice);
-        if (trade.direction === 'up') {
-            closingPrice += isWin ? shift : -shift;
-        } else {
-            closingPrice += isWin ? -shift : shift;
-        }
+        for (const trade of toSettle) {
+          // User Requirement: DEFAULT to loss unless admin grants a win
+          let isWin = trade.forceOutcome === 'win';
+          
+          // Duration-based price shift rules
+          const durationShiftMap: Record<number, number> = {
+              30: 2,
+              60: 4,
+              120: 30
+          };
+          const shift = durationShiftMap[trade.duration] || 1;
+          
+          // Determine realistic closing price based on direction and outcome
+          let closingPrice = parseFloat(trade.entryPrice);
+          if (trade.direction === 'up') {
+              closingPrice += isWin ? shift : -shift;
+          } else {
+              closingPrice += isWin ? -shift : shift;
+          }
 
-        const pnl = isWin ? parseFloat(trade.amount) * (trade.leverage / 100) : 0;
-        const fee = +(parseFloat(trade.amount) * 0.01).toFixed(2);
-        
-        if (wallet?.address) {
-          try {
-            await fetch('/api/settle-trade', {
+          const pnl = isWin ? parseFloat(trade.amount) * (trade.leverage / 100) : 0;
+          const fee = +(parseFloat(trade.amount) * 0.01).toFixed(2);
+          
+          if (wallet?.address) {
+            fetch('/api/settle-trade', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -200,30 +198,33 @@ const TradeView: React.FC<TradeViewProps> = ({
                 status: isWin ? 'won' : 'lost',
                 closingPrice: closingPrice
               })
-            });
-            if (onRefreshBalances) onRefreshBalances();
-          } catch (e) {}
+            }).then(() => {
+                if (onRefreshBalances) onRefreshBalances();
+            }).catch(e => console.error("Settlement error:", e));
+          }
+
+          const grossAmount = isWin ? Math.max(0, parseFloat(trade.amount) + pnl) : parseFloat(trade.amount);
+          lastSettlement = { status: isWin ? 'won' : 'lost', amount: grossAmount.toFixed(2) };
+
+          const settledTrade: ActiveTrade = {
+            ...trade,
+            status: isWin ? 'won' : 'lost',
+            pnl: isWin ? pnl : -parseFloat(trade.amount),
+            settledAt: now
+          };
+          setLocalSettledTrades(prev => [settledTrade, ...prev].slice(0, 50));
+        }
+        
+        if (lastSettlement) {
+          setSettlementNotification(lastSettlement);
+          setShowResultModal(true);
         }
 
-        const grossAmount = isWin ? Math.max(0, parseFloat(trade.amount) + pnl) : parseFloat(trade.amount);
-        lastSettlement = { status: isWin ? 'won' : 'lost', amount: grossAmount.toFixed(2) };
-
-        const settledTrade: ActiveTrade = {
-          ...trade,
-          status: isWin ? 'won' : 'lost',
-          pnl: isWin ? pnl : -parseFloat(trade.amount),
-          settledAt: now
-        };
-        setLocalSettledTrades(prev => [settledTrade, ...prev].slice(0, 50));
-      }
-      
-      if (lastSettlement) {
-        setSettlementNotification(lastSettlement);
-        setShowResultModal(true);
-      }
+        return prevTrades.filter(t => !settledIds.has(t.id));
+      });
     }, 1000);
     return () => clearInterval(interval);
-  }, [localActiveTrades, wallet?.address]);
+  }, [wallet?.address, onRefreshBalances]);
 
   return (
     <div className="flex flex-col h-full bg-[#0B0E11] text-gray-300 font-mono select-none relative overflow-y-auto">

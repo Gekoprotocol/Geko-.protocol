@@ -1414,7 +1414,9 @@ apiRouter.post('/user/swap', async (req, res) => {
             amount: -sourceAmt,
             type: 'swap',
             reference: `swap_out_${fromCurrency}_to_${targetCurrency}`,
-            status: 'completed'
+            status: 'completed',
+            from_asset: fromCurrency,
+            to_asset: targetCurrency
         });
         console.log(`[Swap] Source deduction recorded. Tx ID: ${deductTx?.id}`);
     }
@@ -1436,7 +1438,9 @@ apiRouter.post('/user/swap', async (req, res) => {
         amount: targetAmt,
         type: 'swap',
         reference: `swap_in_${targetCurrency}_from_${fromCurrency}`,
-        status: 'completed'
+        status: 'completed',
+        from_asset: fromCurrency,
+        to_asset: targetCurrency
     });
     console.log(`[Swap] Target credit recorded. Tx ID: ${creditTx?.id}`);
 
