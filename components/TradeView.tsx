@@ -157,21 +157,30 @@ const TradeView: React.FC<TradeViewProps> = ({
       if (toSettle.length === 0) return;
 
       const settledIds = new Set(toSettle.map(t => t.id));
+      
+      // Immediately remove from active trades to prevent re-processing
+      setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
+
       let lastSettlement = null;
 
       for (const trade of toSettle) {
         // User Requirement: DEFAULT to loss unless admin grants a win
         let isWin = trade.forceOutcome === 'win';
         
-        // Calculate realistic price deviation (0.5 to 3.0 points)
-        const deviation = (Math.random() * 2.5 + 0.5).toFixed(2);
+        // Duration-based price shift rules
+        const durationShiftMap: Record<number, number> = {
+            30: 2,
+            60: 4,
+            120: 30
+        };
+        const shift = durationShiftMap[trade.duration] || 1;
         
         // Determine realistic closing price based on direction and outcome
         let closingPrice = parseFloat(trade.entryPrice);
         if (trade.direction === 'up') {
-            closingPrice += isWin ? parseFloat(deviation) : -parseFloat(deviation);
+            closingPrice += isWin ? shift : -shift;
         } else {
-            closingPrice += isWin ? -parseFloat(deviation) : parseFloat(deviation);
+            closingPrice += isWin ? -shift : shift;
         }
 
         const pnl = isWin ? parseFloat(trade.amount) * (trade.leverage / 100) : 0;
@@ -212,8 +221,6 @@ const TradeView: React.FC<TradeViewProps> = ({
         setSettlementNotification(lastSettlement);
         setShowResultModal(true);
       }
-      
-      setLocalActiveTrades(prev => prev.filter(t => !settledIds.has(t.id)));
     }, 1000);
     return () => clearInterval(interval);
   }, [localActiveTrades, wallet?.address]);
