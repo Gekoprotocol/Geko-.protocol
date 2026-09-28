@@ -69,12 +69,33 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ wallet }) => {
                     <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Node Ledger</h2>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em]">Institutional Record Stream</p>
                 </div>
-                <button 
-                    onClick={fetchHistory}
-                    className="p-3 bg-[#111111] border border-white/5 rounded-2xl text-gray-500 hover:text-white transition-all"
-                >
-                    <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
-                </button>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={async () => {
+                            if (confirm('Are you sure you want to delete all transaction history?')) {
+                                try {
+                                    const res = await fetch('/api/user/transactions/delete-all', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ address: wallet.address })
+                                    });
+                                    if (res.ok) fetchHistory();
+                                } catch (e) {
+                                    console.error('Failed to delete history', e);
+                                }
+                            }
+                        }}
+                        className="p-3 bg-[#111111] border border-rose-900/30 rounded-2xl text-rose-500 hover:text-rose-400 transition-all"
+                    >
+                        <X size={20} />
+                    </button>
+                    <button 
+                        onClick={fetchHistory}
+                        className="p-3 bg-[#111111] border border-white/5 rounded-2xl text-gray-500 hover:text-white transition-all"
+                    >
+                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-3 pb-32">

