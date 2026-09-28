@@ -1630,6 +1630,8 @@ apiRouter.post('/user/transactions/delete-all', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+apiRouter.get('/user/transactions', async (req, res) => {
   const { address, limit } = req.query;
   if (!address) return res.status(400).json({ error: 'Address required' });
   if (!dbAvailable || !pool) return res.status(503).json({ error: 'Database unavailable' });
