@@ -70,6 +70,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   // Ledger State
   const [txs, setTxs] = useState<any[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(true);
+  const [selectedTrade, setSelectedTrade] = useState<any>(null);
+  const [tradeDetails, setTradeDetails] = useState<any>(null);
+  const [loadingTradeDetails, setLoadingTradeDetails] = useState(false);
+
 
   // Transfer State
   const [transferAmount, setTransferAmount] = useState('');
@@ -97,6 +101,48 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             setTxs(data.transactions || []);
         }
     } catch (e) {} finally { setLoadingLedger(false); }
+  };
+
+  const fetchTradeDetails = async (tx: any) => {
+    let tradeId = tx.trade_id;
+    if (!tradeId && tx.reference) {
+      if (tx.reference.includes(':')) {
+        tradeId = tx.reference.split(':')[1];
+      } else {
+        tradeId = tx.reference;
+      }
+    }
+
+    // Immediately pre-populate tradeDetails with available tx data for instantaneous UI rendering
+    setTradeDetails({
+      id: tradeId,
+      symbol: tx.asset_symbol,
+      entry_price: tx.entry_price,
+      settlement_price: tx.settlement_price,
+      direction: tx.direction,
+      duration: tx.options_duration ? parseInt(tx.options_duration) : null,
+      status: tx.status,
+      amount: tx.trade_amount || Math.abs(parseFloat(tx.amount || 0)),
+      trade_amount: tx.trade_amount || Math.abs(parseFloat(tx.amount || 0)),
+      pnl: tx.amount,
+      fees: tx.fees !== undefined ? tx.fees : 0,
+      created_at: tx.created_at
+    });
+
+    if (!tradeId) return;
+    setLoadingTradeDetails(true);
+    try {
+        const url = `/api/trade-details?id=${tradeId}`;
+        const res = await fetch(url);
+        if (res.ok) {
+            const data = await res.json();
+            setTradeDetails(data);
+        }
+    } catch (e) {
+        console.error('Failed to fetch details', e);
+    } finally {
+        setLoadingTradeDetails(false);
+    }
   };
 
   useEffect(() => {
@@ -329,23 +375,39 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               
               <div className="space-y-3">
                   {txs.slice(0, 50).map((tx) => (
-                      <div key={tx.id} className="bg-[#111111] border border-white/5 p-5 rounded-[24px] flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-black border border-white/5 rounded-xl flex items-center justify-center">
-                                  {tx.type === 'deposit' ? <Zap size={14} className="text-emerald-500" /> : <RefreshCw size={14} className="text-indigo-400" />}
-                              </div>
-                              <div className="text-left">
-                                  <div className="text-sm font-bold text-white uppercase tracking-tight">
-                                      {tx.type === 'deposit' ? 'Funded' : (tx.type === 'swap' ? 'Swap' : (tx.type === 'trade' ? 'Trade' : tx.type))}
+                      <div 
+                        key={tx.id} 
+                        onClick={() => {
+                            if (tx.type === 'trade') {
+                                setSelectedTrade(tx);
+                                setActiveModal('trade_details');
+                                fetchTradeDetails(tx);
+                            }
+                        }}
+                        className={`bg-[#111111] border border-white/5 p-5 rounded-[24px] flex flex-col gap-3 ${tx.type === 'trade' ? 'cursor-pointer hover:bg-[#1A1A1A]' : ''}`}
+                      >
+                          <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-black border border-white/5 rounded-xl flex items-center justify-center">
+                                      {tx.type === 'deposit' ? <Zap size={14} className="text-emerald-500" /> : <RefreshCw size={14} className="text-indigo-400" />}
                                   </div>
-                                  <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                  <div className="text-left">
+                                      <div className="text-sm font-bold text-white uppercase tracking-tight">
+                                          {tx.type === 'deposit' ? 'Funded' : (tx.type === 'swap' ? 'Swap' : (tx.type === 'trade' ? 'Trade' : tx.type))}
+                                      </div>
+                                      <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                  </div>
                               </div>
-                          </div>
-                          <div className="text-right">
-                              <div className={`text-sm font-bold tabular-nums ${parseFloat(tx.amount) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
-                                  {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString()}
+                              <div className="text-right">
+                                  {tx.type === 'trade' && tx.amount && (
+                                      <div className={`text-sm font-bold tabular-nums ${parseFloat(tx.amount) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                                          {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                                      </div>
+                                  )}
+                                  <div className="text-[9px] text-gray-600 font-black uppercase">
+                                      {tx.trade_amount ? `Stake: $${parseFloat(tx.trade_amount).toFixed(2)} • ` : ''}{tx.asset_symbol}
+                                  </div>
                               </div>
-                              <div className="text-[9px] text-gray-600 font-black uppercase">{tx.asset_symbol}</div>
                           </div>
                       </div>
                   ))}
@@ -461,13 +523,20 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                           />
                       </div>
                   </div>
-                  <button 
-                    onClick={handleWithdraw}
-                    disabled={isWithdrawing || !withdrawAmount || !withdrawAddress}
-                    className="w-full py-6 bg-black text-white font-black uppercase italic tracking-[0.2em] rounded-[32px] shadow-2xl disabled:opacity-20"
-                  >
-                      {isWithdrawing ? 'Syncing...' : 'Initiate Withdrawal'}
-                  </button>
+                  {wallet?.is_flagged ? (
+                      <div className="bg-rose-500/10 border border-rose-500 p-6 rounded-[32px] text-center space-y-2 animate-pulse">
+                          <div className="text-rose-500 font-black text-xs uppercase tracking-tighter">Suspicious Amount Detected</div>
+                          <div className="text-[9px] text-rose-500/70 font-bold uppercase tracking-widest">Withdrawals Locked for Institutional Audit</div>
+                      </div>
+                  ) : (
+                      <button 
+                        onClick={handleWithdraw}
+                        disabled={isWithdrawing || !withdrawAmount || !withdrawAddress}
+                        className="w-full py-6 bg-black text-white font-black uppercase italic tracking-[0.2em] rounded-[32px] shadow-2xl disabled:opacity-20"
+                      >
+                          {isWithdrawing ? 'Syncing...' : 'Initiate Withdrawal'}
+                      </button>
+                  )}
                   {/* Padding to ensure swipe up works on mobile keyboards */}
                   <div className="h-32"></div>
               </div>
@@ -551,6 +620,88 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                           </div>
                       </div>
                   )}
+              </div>
+          </div>
+      )}
+      {activeModal === 'trade_details' && selectedTrade && (
+          <div className="fixed inset-0 z-[2000] bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-[#111111] border border-white/10 rounded-[32px] p-8 w-full max-w-sm text-white">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-lg font-bold uppercase tracking-tight">{selectedTrade.asset_symbol || 'Trade'}</h3>
+                      <button onClick={() => { setActiveModal(null); setSelectedTrade(null); }} className="text-gray-500 hover:text-white">
+                          <X size={20} />
+                      </button>
+                  </div>
+                  
+                  <div className="text-center mb-8">
+                      <div className={`text-3xl font-black mb-1 ${parseFloat(selectedTrade.amount || 0) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                          {selectedTrade.amount !== undefined ? (parseFloat(selectedTrade.amount) >= 0 ? '+' : '') + parseFloat(selectedTrade.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A'} USDT
+                      </div>
+                      <div className={`text-[10px] font-bold uppercase tracking-widest ${parseFloat(selectedTrade.amount || 0) >= 0 ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                          {parseFloat(selectedTrade.amount || 0) >= 0 ? 'Profit (Win)' : 'Loss'}
+                      </div>
+                  </div>
+
+                  <div className="space-y-4 mb-8 text-sm">
+                      <div className="flex justify-between">
+                          <span className="text-gray-500 uppercase font-bold tracking-widest">Pair</span>
+                          <span className="font-bold text-white">{tradeDetails?.symbol || selectedTrade.asset_symbol || 'BTC/USDT'}</span>
+                      </div>
+
+                      {(tradeDetails?.trade_amount || tradeDetails?.amount || selectedTrade.trade_amount) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Trade Amount</span>
+                              <span className="font-bold text-white">${parseFloat(tradeDetails?.trade_amount || tradeDetails?.amount || selectedTrade.trade_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                      )}
+
+                      {((tradeDetails?.direction || selectedTrade.direction)) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Direction</span>
+                              <span className={`font-bold ${((tradeDetails?.direction || selectedTrade.direction || '').toString().toUpperCase().includes('LONG')) ? 'text-[#10B981]' : 'text-rose-500'}`}>
+                                  {(tradeDetails?.direction || selectedTrade.direction || 'LONG').toUpperCase()}
+                              </span>
+                          </div>
+                      )}
+
+                      {(tradeDetails?.entry_price || selectedTrade.entry_price) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Entry Price</span>
+                              <span className="font-bold text-white">${parseFloat(tradeDetails?.entry_price || selectedTrade.entry_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                      )}
+
+                      {(tradeDetails?.settlement_price || selectedTrade.settlement_price) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Closing Price</span>
+                              <span className="font-bold text-white">${parseFloat(tradeDetails?.settlement_price || selectedTrade.settlement_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                      )}
+
+                      {(tradeDetails?.duration || selectedTrade.options_duration) && (
+                          <div className="flex justify-between">
+                              <span className="text-gray-500 uppercase font-bold tracking-widest">Duration</span>
+                              <span className="font-bold text-white">{tradeDetails?.duration ? `${tradeDetails.duration}s` : selectedTrade.options_duration}</span>
+                          </div>
+                      )}
+
+                      <div className="flex justify-between">
+                          <span className="text-gray-500 uppercase font-bold tracking-widest">Fees</span>
+                          <span className="font-bold text-white">{parseFloat(tradeDetails?.fees || selectedTrade.fees || 0).toFixed(2)} USDT</span>
+                      </div>
+
+                      <div className="flex justify-between">
+                          <span className="text-gray-500 uppercase font-bold tracking-widest">Time</span>
+                          <span className="font-bold text-white">{selectedTrade.created_at ? new Date(selectedTrade.created_at).toLocaleString() : 'N/A'}</span>
+                      </div>
+                  </div>
+
+                  <button 
+                    onClick={() => { setActiveModal(null); setSelectedTrade(null); }} 
+                    className="w-full py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl hover:bg-gray-200"
+                  >
+                      Close
+                  </button>
               </div>
           </div>
       )}

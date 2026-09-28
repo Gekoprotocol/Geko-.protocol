@@ -10,10 +10,14 @@ interface MarketChartProps {
 const MarketChart: React.FC<MarketChartProps> = ({ symbol, showIndicators = false }) => {
   const [loaded, setLoaded] = useState(false);
   const [key, setKey] = useState(0);
+  const lastSymbol = React.useRef(symbol);
 
   useEffect(() => {
-    setLoaded(false);
-    setKey(k => k + 1);
+    if (lastSymbol.current !== symbol) {
+        setLoaded(false);
+        setKey(k => k + 1);
+        lastSymbol.current = symbol;
+    }
   }, [symbol]);
 
   const studies = showIndicators

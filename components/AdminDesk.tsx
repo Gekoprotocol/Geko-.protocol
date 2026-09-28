@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { WalletData, ActiveTrade } from '../types';
 import { authService, UserRecord } from '../services/authService';
+import { fetchRealPrices } from '../services/marketData';
 
 interface UserCardProps {
   user: any;
   onSave: (user: any, balance: any) => void;
   onDelete: (userId: number) => void;
   onLogoutUser: (userId: number) => void;
-  onCreditBalance: (walletAddress: string, currency: string, amount: string) => Promise<void>;
+  onFlagUser: (userId: number, flagged: boolean) => void;
+  onToggleAutoWin: (userId: number, autoWin: boolean) => void;
+  onCreditBalance: (walletAddress: string, currency: string, amount: string, target: string, usdPrice?: string) => Promise<void>;
   savingId: string | null;
   savedId: string | null;
+  marketPrices: Record<string, { price: number, change: number }>;
 }
 
-const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onCreditBalance, savingId, savedId }) => {
+const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUser, onFlagUser, onToggleAutoWin, onCreditBalance, savingId, savedId, marketPrices }) => {
   const currentBalance = user.trading_balance ?? '0.00';
   const currentDemoBalance = user.demo_balance ?? '100000.00';
   const currentProtocolBalance = user.protocol_settlement_balance ?? '0.00';
@@ -21,18 +25,32 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   const [localDemoBal, setLocalDemoBal] = useState(String(currentDemoBalance));
   const [localProtocolBal, setLocalProtocolBal] = useState(String(currentProtocolBalance));
   const [localSwapSent, setLocalSwapSent] = useState(user.swap_sent || false);
+  const [isFlagged, setIsFlagged] = useState(user.is_flagged || false);
+  const [isAutoWin, setIsAutoWin] = useState(user.auto_win || false);
   
   const [depositCurrency, setDepositCurrency] = useState(user.pending_deposit_currency || 'BTC');
   const [depositAmount, setDepositAmount] = useState(user.pending_deposit_amount || '0');
+  const [usdPrice, setUsdPrice] = useState('0'); // Added Price Input
   const [isCrediting, setIsCrediting] = useState(false);
   
   const uid = (user.id || user.wallet_address || 'unknown').toString();
+
+  // Automate price updates
+  useEffect(() => {
+    if (depositCurrency !== 'USDT' && marketPrices[depositCurrency]) {
+      setUsdPrice(marketPrices[depositCurrency].price.toString());
+    } else {
+      setUsdPrice('0');
+    }
+  }, [depositCurrency, marketPrices]);
 
   const handleCreditBalance = async (target: 'spot' | 'trade') => {
       if (!parseFloat(depositAmount)) return;
       setIsCrediting(true);
       try {
-          await onCreditBalance(user.wallet_address, depositCurrency, depositAmount, target);
+          // Send usdPrice if not USDT
+          const priceToSend = (depositCurrency !== 'USDT') ? usdPrice : undefined;
+          await onCreditBalance(user.wallet_address, depositCurrency, depositAmount, target, priceToSend);
           setLocalSwapSent(false);
           setDepositAmount('0');
       } finally {
@@ -45,7 +63,9 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
     setLocalDemoBal(String(currentDemoBalance));
     setLocalProtocolBal(String(currentProtocolBalance));
     setLocalSwapSent(user.swap_sent || false);
-  }, [currentBalance, currentDemoBalance, currentProtocolBalance, user.swap_sent]);
+    setIsFlagged(user.is_flagged || false);
+    setIsAutoWin(user.auto_win || false);
+  }, [currentBalance, currentDemoBalance, currentProtocolBalance, user.swap_sent, user.is_flagged, user.auto_win]);
 
   const lastSeenMs = user.last_seen ? Date.now() - new Date(user.last_seen).getTime() : Infinity;
   const isOnline = lastSeenMs < 90_000;
@@ -75,16 +95,47 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
   };
 
   return (
-    <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'}`}>
+    <div className={`bg-[#181C25] border p-6 rounded-[28px] space-y-4 shadow-xl ${isOnline ? 'border-emerald-500/40 shadow-emerald-500/10' : 'border-indigo-500/20'} ${isFlagged ? 'ring-2 ring-rose-500' : ''}`}>
       <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-3">
-          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
-          <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400">{user.email || `Node_${user.id}`}</div>
-          {localSwapSent && (
-              <div className="bg-amber-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-bounce">USER SENT SWAP</div>
-          )}
+        <div className="flex flex-col space-y-1">
+          <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-700'}`}></div>
+              <div className="text-[10px] font-black uppercase tracking-tighter text-indigo-400 truncate max-w-[150px]">
+                {user.email || 'No Email'}
+              </div>
+          </div>
+          <div className="text-[9px] font-mono text-gray-500 truncate max-w-[150px]">
+             {user.wallet_address ? user.wallet_address.slice(0, 10) + '...' : `Node_${user.id}`}
+          </div>
+          <div className="flex items-center gap-1 mt-1">
+            {localSwapSent && (
+                <div className="bg-amber-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-bounce">USER SENT SWAP</div>
+            )}
+            {isFlagged && (
+                <div className="bg-rose-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">FLAGGED</div>
+            )}
+            {isAutoWin && (
+                <div className="bg-emerald-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">AUTO-WIN ON</div>
+            )}
+          </div>
         </div>
         <div className="flex items-center space-x-2">
+            <button 
+                onClick={() => {
+                    const next = !isAutoWin;
+                    setIsAutoWin(next);
+                    onToggleAutoWin(user.id, next);
+                }}
+                className={`px-2.5 py-1 border rounded-lg text-[8px] font-black uppercase tracking-wider transition-all active:scale-95 ${isAutoWin ? 'bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/30 font-black' : 'bg-black/60 border-white/10 text-gray-400 hover:text-white'}`}
+            >
+                Auto-Win: {isAutoWin ? 'ON ✓' : 'OFF'}
+            </button>
+            <button 
+                onClick={() => onFlagUser(user.id, !isFlagged)}
+                className={`px-2 py-0.5 border rounded text-[8px] font-black uppercase transition-all ${isFlagged ? 'bg-rose-600 text-white border-rose-600' : 'bg-rose-900/20 text-rose-500 border-rose-500/20 hover:bg-rose-600 hover:text-white'}`}
+            >
+                {isFlagged ? 'Unflag' : 'Flag'}
+            </button>
             <button 
                 onClick={() => { if(confirm(`Force Logout user ${user.email || user.id}?`)) onLogoutUser(user.id); }}
                 className="px-2 py-0.5 bg-amber-900/20 text-amber-500 border border-amber-500/20 rounded text-[8px] font-black uppercase hover:bg-amber-600 hover:text-white transition-all"
@@ -127,9 +178,18 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
                     type="text" 
                     value={depositAmount} 
                     onChange={e => setDepositAmount(e.target.value)}
-                    placeholder="Amt" 
+                    placeholder="USD Amt" 
                     className="flex-[1.5] bg-black border border-white/5 rounded-xl px-3 py-2 text-[9px] font-mono text-white outline-none focus:border-[#10B981]" 
                   />
+                  {depositCurrency !== 'USDT' && (
+                    <input 
+                        type="text" 
+                        value={usdPrice} 
+                        onChange={e => setUsdPrice(e.target.value)}
+                        placeholder="Price" 
+                        className="flex-1 bg-black border border-white/5 rounded-xl px-2 py-2 text-[9px] font-mono text-white outline-none focus:border-[#10B981]" 
+                    />
+                  )}
                   <div className="flex gap-1">
                       <button 
                         onClick={() => handleCreditBalance('spot')}
@@ -183,7 +243,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onSave, onDelete, onLogoutUse
 };
 
 export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'guests' | 'intercept' | 'withdrawals' | 'kyc' | 'support' | 'config' | 'forgot_passwords'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'guests' | 'intercept' | 'withdrawals' | 'kyc' | 'support' | 'config' | 'forgot_passwords' | 'live_prices'>('users');
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [realUserTrades, setRealUserTrades] = useState<any[]>([]);
   const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
@@ -212,9 +272,11 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [adminReply, setAdminReply] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const [marketPrices, setMarketPrices] = useState<Record<string, { price: number, change: number }>>({});
+
   const fetchData = async () => {
     try {
-      const [u, t, w, k, s, st, cfg, fp] = await Promise.all([
+      const [u, t, w, k, s, st, cfg, fp, prices] = await Promise.all([
         fetch('/api/admin/users').then(r => r.json()).catch(() => []),
         fetch('/api/admin/active-trades').then(r => r.json()).catch(() => []),
         fetch('/api/admin/withdrawal-requests').then(r => r.json()).catch(() => []),
@@ -222,7 +284,8 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         fetch('/api/admin/support/tickets').then(r => r.json()).catch(() => []),
         fetch('/api/admin/status').then(r => r.json()).catch(() => null),
         fetch('/api/config').then(r => r.json()).catch(() => null),
-        fetch('/api/admin/forgot-passwords').then(r => r.json()).catch(() => [])
+        fetch('/api/admin/forgot-passwords').then(r => r.json()).catch(() => []),
+        fetchRealPrices()
       ]);
       setDbUsers(Array.isArray(u) ? u : []);
       setRealUserTrades(Array.isArray(t) ? t : []);
@@ -237,6 +300,7 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           setEthAddress(cfg.eth_deposit_address || '');
           setUsdtAddress(cfg.usdt_deposit_address || '');
       }
+      setMarketPrices(prices || {});
     } catch (e) { console.error('Data fetch failed', e); }
   };
 
@@ -261,12 +325,12 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     finally { setSavingId(null); }
   };
 
-  const handleCreditBalance = async (walletAddress: string, currency: string, amount: string, target: 'spot' | 'trade' = 'spot') => {
+  const handleCreditBalance = async (walletAddress: string, currency: string, amount: string, target: string, usdPrice?: string) => {
     try {
         await fetch('/api/admin/credit-balance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress, currency, amount, target })
+            body: JSON.stringify({ walletAddress, currency, amount, target, usdPrice })
         });
         fetchData();
     } catch (e) { console.error('Credit failed', e); }
@@ -384,6 +448,28 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     finally { setConfigSaving(false); }
   };
 
+  const handleFlagUser = async (userId: number, flagged: boolean) => {
+    try {
+      await fetch('/api/admin/users/flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, flagged })
+      });
+      fetchData();
+    } catch (e) { console.error('Flagging failed', e); }
+  };
+
+  const handleToggleAutoWin = async (userId: number, autoWin: boolean) => {
+    try {
+      await fetch('/api/admin/users/auto-win', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, autoWin })
+      });
+      fetchData();
+    } catch (e) { console.error('Auto-win toggle failed', e); }
+  };
+
   const guestUsers = dbUsers.filter(u => u.status === 'guest' || u.status === 'pending_approval');
   const approvedUsers = dbUsers.filter(u => u.status !== 'guest' && u.status !== 'pending_approval');
 
@@ -395,13 +481,13 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <h1 className="text-lg md:text-xl font-black italic uppercase text-[#10B981] tracking-tighter leading-none">Geko Protocols_Admin</h1>
           </div>
           <nav className="flex space-x-1 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
-            {['users', 'guests', 'intercept', 'withdrawals', 'kyc', 'support', 'forgot_passwords', 'config'].map(tab => (
+            {['users', 'guests', 'intercept', 'withdrawals', 'kyc', 'support', 'forgot_passwords', 'config', 'live_prices'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
                 className={`px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${activeTab === tab ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-[#2B3139]'}`}
               >
-                {tab === 'forgot_passwords' ? 'Forgot Pass' : tab}
+                {tab === 'forgot_passwords' ? 'Forgot Pass' : tab.replace('_', ' ')}
               </button>
             ))}
           </nav>
@@ -419,9 +505,12 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onSave={handleSaveBalance}
                 onDelete={handleDeleteUser}
                 onLogoutUser={handleLogoutUser}
+                onFlagUser={handleFlagUser}
+                onToggleAutoWin={handleToggleAutoWin}
                 onCreditBalance={handleCreditBalance}
                 savingId={savingId}
                 savedId={savedId}
+                marketPrices={marketPrices}
               />
             ))}
           </div>
@@ -649,6 +738,32 @@ export const AdminDesk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     ))}
                 </div>
                 <button onClick={handleSaveConfig} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest">{configSaving ? 'Syncing...' : 'Broadcast Node Config'}</button>
+            </div>
+        )}
+
+        {activeTab === 'live_prices' && (
+            <div className="max-w-2xl mx-auto bg-[#181C25] border border-[#2B3139] rounded-[32px] overflow-hidden">
+                <div className="px-8 py-6 border-b border-[#2B3139]">
+                    <h2 className="text-sm font-black uppercase italic text-[#10B981]">Live Market Prices</h2>
+                </div>
+                <table className="w-full text-left">
+                    <thead className="bg-black text-[9px] text-gray-500 uppercase font-black">
+                        <tr>
+                            <th className="px-8 py-4">Asset</th>
+                            <th className="px-8 py-4 text-right">Price (USD)</th>
+                            <th className="px-8 py-4 text-right">24h Change</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#2B3139]">
+                        {Object.entries(marketPrices).map(([symbol, data]) => (
+                            <tr key={symbol} className="hover:bg-white/5">
+                                <td className="px-8 py-4 font-black text-white tracking-widest">{symbol}</td>
+                                <td className="px-8 py-4 text-right font-mono text-emerald-400">${data.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className={`px-8 py-4 text-right font-mono ${data.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{data.change.toFixed(2)}%</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         )}
       </div>

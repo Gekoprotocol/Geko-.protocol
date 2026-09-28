@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Dark background -->
+  <rect width="512" height="512" fill="#0B0E11" rx="80"/>
+  <!-- Simplified Lizard/Gecko shape -->
+  <path d="M160 380 Q 256 120 352 380 Q 256 300 160 380 Z" fill="#10B981"/>
+  <!-- Candlesticks -->
+  <rect x="380" y="180" width="40" height="180" fill="#10B981" rx="5"/>
+  <rect x="440" y="140" width="40" height="220" fill="#F43F5E" rx="5"/>
+</svg>

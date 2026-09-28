@@ -58,23 +58,25 @@ const generateMockCandles = (symbol: string, count: number = 100): MarketData[] 
 
 export async function fetchRealPrices(): Promise<Partial<Record<string, { price: number, change: number }>>> {
   try {
-    const response = await fetch('https://api.coincap.io/v2/assets?limit=50');
+    const response = await fetch('/api/binance/prices');
     if (response.ok) {
-        const json = await response.json();
+        const data = await response.json();
         const results: Record<string, { price: number, change: number }> = {};
-        if (json && json.data) {
-            json.data.forEach((asset: any) => {
-                const symbol = asset.symbol.toUpperCase();
+        if (Array.isArray(data)) {
+            data.forEach((item: any) => {
+                const symbol = item.symbol.replace('USDT', '').toUpperCase();
                 results[symbol] = {
-                    price: parseFloat(asset.priceUsd),
-                    change: parseFloat(asset.changePercent24Hr)
+                    price: parseFloat(item.lastPrice),
+                    change: parseFloat(item.priceChangePercent)
                 };
             });
         }
-        if (Object.keys(results).length > 0) return results;
+        if (Object.keys(results).length > 0) {
+            return results;
+        }
     }
   } catch (e) {
-    console.warn('Real price feed error:', e);
+    console.warn('Real price feed error (proxy):', e);
   }
 
   // Baseline February 2026 prices if external feeds are blocked
